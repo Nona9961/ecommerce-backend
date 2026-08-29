@@ -17,3 +17,10 @@ management:
     web:
       exposure:
         include: health,info
+
+# 认证安全链配置（无 profile 依赖：测试上下文不激活 dev，默认配置必须可独立构建）
+nona:
+  security:
+    jwt-secret: ${JWT_SECRET:dev-only-jwt-secret-0123456789abcdef}
+    jwt-ttl-seconds: 7200
+    user-context-cache-ttl-seconds: 3600
