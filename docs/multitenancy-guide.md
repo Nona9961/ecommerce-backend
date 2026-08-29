@@ -30,7 +30,7 @@
 |---|-----------|----------|
 | 内容 | `tenantID` / `role` / `identity` | 是否处于提权 / 读放行作用域（布尔） |
 | 载体 | `ThreadContext`（request-scoped bean）+
-  异步快照 `ContextSnapshot` | `TenantPrivilege` 内的两个 `ScopedValue<Boolean>`
+  异步快照 `ContextSnapshot`（ScopedValue 载体，作用域自动恢复） | `TenantPrivilege` 内的两个 `ScopedValue<Boolean>`
   （`ELEVATED` / `READ_BYPASS`） |
 | 跟随谁 | **随人走**：请求带着它流转，
   异步经快照传播到 worker | **跟代码位置走**：仅在 `elevated { ... }` /
@@ -442,7 +442,8 @@ flush 就不落库」；「注解内读到的实体仅供读取」（红线④�
 ### 5.1 快照只传身份三元组
 
 `RequestContextPropagatingTaskDecorator` 在提交线程捕获 `ContextSnapshot`
-（仅 `tenantID` / `role` / `identity`），worker 线程开头恢复、结尾清理：
+（仅 `tenantID` / `role` / `identity`），worker 线程经 ScopedValue 结构化作用域绑定快照
+执行任务——作用域退出（含异常路径）自动恢复 unbound，无需手动清理：
 
 ```java
 executor.setTaskDecorator(new RequestContextPropagatingTaskDecorator(tenantContextAccessor));
@@ -475,22 +476,15 @@ CompletableFuture.runAsync(() ->
 目标租户缺失时 worker 会 fail-fast（写入抛 `BusinessException`，读取返回空集），
 不会静默落到错误的租户。
 
-### 5.3 手动使用快照必须配对
+### 5.3 手动使用快照：withSnapshot 包裹任务
 
 不经 TaskDecorator 的自管线程（原生 `ExecutorService`、虚拟线程等）手动传播时，
-`saveSnapshot` / `clearSnapshot` 必须配对，否则线程复用会串上下文：
+用 `withSnapshot` 声明绑定作用域——作用域退出（含异常路径）自动恢复，无需配对清理：
 
 ```java
-// ✅ 标准配对模板
+// ✅ 标准传播模板
 TenantContextAccessor.ContextSnapshot snapshot = accessor.captureSnapshot();
-executor.submit(() -> {
-    TenantContextAccessor.saveSnapshot(snapshot);
-    try {
-        doWork();
-    } finally {
-        TenantContextAccessor.clearSnapshot();
-    }
-});
+executor.submit(() -> TenantContextAccessor.withSnapshot(snapshot, () -> doWork()));
 ```
 
 ---
@@ -514,7 +508,7 @@ noteRepository.count();        // 0
 
 1. 当前线程 `tenantContextAccessor.getTenantID()` 返回什么？
 2. 若是异步 worker：executor 绑定 TaskDecorator 了吗？快照里的 `tenantID` 是 null 吗？
-   `saveSnapshot` / `clearSnapshot` 配对了吗？
+   （快照经 `withSnapshot` 作用域自动恢复，无手动清理负担）
 3. 若是 Web 请求：鉴权层往 `ThreadContext` 写租户了吗？
 
 当前实现对此场景**没有专门的告警日志**（宁可静默也不中断正常请求流），上述三步是唯一的定位
@@ -610,8 +604,8 @@ spring:
 | 异步任务里查不到数据 / 写入抛 `tenantID is required...` | worker 无身份快照
   （decorator 未绑定）或提权未随线程传播而任务依赖它 | §5：绑定 decorator；任务体内显式
   `elevated` + 显式目标租户 |
-| 线程池偶发串租户 | 手动 `saveSnapshot` / `clearSnapshot` 未配对，ThreadLocal 残留 | 按 §5.3
-  配对模板改造，清理放进 `finally` |
+| 线程池偶发串租户 | 自管线程传播未用 `withSnapshot` 包裹任务，绑定作用域外残留 | 一律经
+  TaskDecorator 或 §5.3 的 `withSnapshot` 模板传播，绑定随作用域退出自动消失 |
 | 升级/换依赖后 `findById` 能读到其他租户 | Hibernate 降级到 ≤ 6.4，HHH-16830 修复丢失 |
   锁定 ≥ 7.4.x 并回归 `tenantScopedFindByIdShouldBeFiltered`（§8） |
 | `@CrossTenant` 标注了却不生效（读仍是单租户过滤） | ① Spring AOP 代理语义：同 bean 内自调用

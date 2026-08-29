@@ -11,7 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import com.nona.annotation.ScaffoldGenerated;
 
 /**
- * 由Spring管理的线程上下文，可以理解为一个ThreadLocal。 在bean中注入该类其实是一个proxy，每个线程之间是隔离的，和注入HttpServletRequest类似。
+ * Spring 管理的请求作用域上下文（每请求隔离，与注入 HttpServletRequest 类似）：
+ * 注入的其实是 scoped proxy，请求结束后状态随之释放。
  *
  * @author nona
  */
