@@ -21,6 +21,7 @@ class ElevatedTenantTestService {
 
     private final TestTenantNoteRepository tenantNoteRepository;
     private final TestGlobalNoteRepository globalNoteRepository;
+    private final TenantPrivilege tenantPrivilege;
 
     /**
      * 进入提权作用域执行有返回值操作；repository 操作不抛受检异常，此处收拢以免污染调用方签名。
@@ -29,9 +30,9 @@ class ElevatedTenantTestService {
      * @param <T> 返回类型
      * @return 操作结果
      */
-    private static <T> T elevate(Callable<T> action) {
+    private <T> T elevate(Callable<T> action) {
         try {
-            return TenantPrivilege.elevated(action);
+            return tenantPrivilege.elevated(action);
         }
         catch (RuntimeException e) {
             throw e;
@@ -46,17 +47,21 @@ class ElevatedTenantTestService {
      *
      * @param tenantNoteRepository 租户隔离 note 仓库
      * @param globalNoteRepository 全局 note 仓库
+     * @param tenantPrivilege     租户提权 bean（构造注入）
      */
-    ElevatedTenantTestService(TestTenantNoteRepository tenantNoteRepository, TestGlobalNoteRepository globalNoteRepository) {
+    ElevatedTenantTestService(TestTenantNoteRepository tenantNoteRepository,
+                              TestGlobalNoteRepository globalNoteRepository,
+                              TenantPrivilege tenantPrivilege) {
         this.tenantNoteRepository = tenantNoteRepository;
         this.globalNoteRepository = globalNoteRepository;
+        this.tenantPrivilege = tenantPrivilege;
     }
 
     /**
      * 在提权作用域内清理所有测试数据。
      */
     void deleteAllNotes() {
-        TenantPrivilege.elevated(() -> {
+        tenantPrivilege.elevated(() -> {
             tenantNoteRepository.deleteAll();
             globalNoteRepository.deleteAll();
         });
@@ -108,7 +113,7 @@ class ElevatedTenantTestService {
      * @param content note 内容
      */
     void saveNoteForTenant(String tenantID, Long id, String content) {
-        TenantPrivilege.elevated(() -> {
+        tenantPrivilege.elevated(() -> {
             LocalDateTime now = LocalDateTime.now();
 
             TestTenantNotePO po = new TestTenantNotePO();
@@ -128,7 +133,7 @@ class ElevatedTenantTestService {
      * @param content note 内容
      */
     void saveNoteWithoutTenantID(Long id, String content) {
-        TenantPrivilege.elevated(() -> {
+        tenantPrivilege.elevated(() -> {
             final LocalDateTime now = LocalDateTime.now();
 
             final TestTenantNotePO po = new TestTenantNotePO();

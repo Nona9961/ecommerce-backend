@@ -1,12 +1,11 @@
 package com.nona.inf.persistence.tenant;
 
 import com.nona.annotation.ScaffoldGenerated;
-import com.nona.inf.context.TenantPrivilege;
 import com.nona.tenant.TenantScopeExitHandler;
-import jakarta.annotation.PostConstruct;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.orm.jpa.EntityManagerHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -25,7 +24,15 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * 无绑定 EM（无事务/无 session）→ 空操作（缓存随事务消亡，无泄露可清）；等价于
  * {@code elevatedInTransaction} 场景（作用域退出晚于事务提交，EM 已解绑——空转属预期）。
  * <p>
- * 自注册先例：{@link TenantContextAccessor#registerToTenantPrivilege()}（静态 volatile + {@code @PostConstruct}）。
+ * 注册机制：本类为普通 {@code @Component}，由 Spring 容器收集注入
+ * {@code TenantPrivilege} 的 {@code List<TenantScopeExitHandler>}——每个容器收集自己的
+ * 列表，多容器并存互不覆盖（每个容器按收集注入自身完整的退出处理器列表）。
+ * <p>
+ * 依赖延迟：{@link EntityManagerFactory} 经 {@link ObjectProvider} 注入，构造期不解析
+ * （仅在 {@link #onScopeExited()} 首次调用时解析）——打破初始化期循环依赖：
+ * {@code EntityManagerFactory → HibernateMultiTenancyConfig → ThreadContextTenantIdentifierResolver
+ * → TenantPrivilege → JpaTenantScopeExitHandler → EntityManagerFactory}。
+ * {@code onScopeExited} 仅在运行时作用域退出时触发，彼时 EMF 必然已就绪。
  *
  * @author nona9961
  */
@@ -34,26 +41,18 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @ScaffoldGenerated
 public class JpaTenantScopeExitHandler implements TenantScopeExitHandler {
 
-    private final EntityManagerFactory entityManagerFactory;
-
-    /**
-     * 注册自身到 {@link TenantPrivilege}（作用域退出通知），幂等；纯单测环境无本组件 → handler 保持 null。
-     */
-    @PostConstruct
-    void register() {
-        TenantPrivilege.registerScopeExitHandler(this);
-    }
+    private final ObjectProvider<EntityManagerFactory> entityManagerFactoryProvider;
 
     @Override
     public void onScopeExited() {
+        final EntityManagerFactory entityManagerFactory = entityManagerFactoryProvider.getObject();
         if (!TransactionSynchronizationManager.hasResource(entityManagerFactory)) {
-            // 无绑定 EM → 无缓存可清（hasResource 先于 getResource，防 ClassCast）
             return;
         }
         final EntityManagerHolder holder =
                 (EntityManagerHolder) TransactionSynchronizationManager.getResource(entityManagerFactory);
         final EntityManager em = holder.getEntityManager();
-        em.flush();  // ① 挂起写先落库（不清丢写）
-        em.clear();  // ② 一级缓存失效（缓存与视角一致）
+        em.flush();
+        em.clear();
     }
 }

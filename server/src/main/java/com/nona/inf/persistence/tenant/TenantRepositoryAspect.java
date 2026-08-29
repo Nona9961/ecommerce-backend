@@ -33,6 +33,11 @@ public class TenantRepositoryAspect {
     private final TenantContextAccessor tenantContextAccessor;
 
     /**
+     * 租户提权/读放行作用域状态（构造注入的 bean；作用域退出处理器按容器收集）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 存储无关的租户读隔离适配层（JPA 实现）：每次数据访问前按当前状态启停租户 filter。
      */
     private final TenantReadIsolationAdapter tenantReadIsolationAdapter;
@@ -67,7 +72,7 @@ public class TenantRepositoryAspect {
             return;
         }
         final String contextTenant = tenantContextAccessor.getTenantID();
-        final boolean elevated = TenantPrivilege.isActive();
+        final boolean elevated = tenantPrivilege.isActive();
         for (Object arg : args) {
             if (arg instanceof TenantScopedBasePO po) {
                 applyGate(po, contextTenant, elevated);

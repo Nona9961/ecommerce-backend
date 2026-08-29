@@ -3,6 +3,7 @@ package com.nona.inf.persistence.tenant;
 import com.nona.annotation.ScaffoldGenerated;
 import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
+import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -24,8 +25,11 @@ import org.springframework.stereotype.Component;
 @Aspect
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@RequiredArgsConstructor
 @ScaffoldGenerated
 public class CrossTenantAspect {
+
+    private final TenantPrivilege tenantPrivilege;
 
     /**
      * 在 {@link CrossTenant} 标注的方法/类作用域内建立读放行状态，退出后自动恢复。
@@ -36,7 +40,7 @@ public class CrossTenantAspect {
      */
     @Around("@within(com.nona.inf.context.CrossTenant) || @annotation(com.nona.inf.context.CrossTenant)")
     public Object withReadBypass(ProceedingJoinPoint joinPoint) throws Throwable {
-        return TenantPrivilege.withReadBypass(() -> {
+        return tenantPrivilege.withReadBypass(() -> {
             try {
                 return joinPoint.proceed();
             }

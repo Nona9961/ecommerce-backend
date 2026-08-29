@@ -72,7 +72,7 @@
 ```java
 // ThreadContextTenantIdentifierResolver —— session 打开的瞬间调用一次
 public String resolveCurrentTenantIdentifier() {
-    if (TenantPrivilege.isAnyReadBypassActive()) {
+    if (tenantPrivilege.isAnyReadBypassActive()) {
         return ROOT_TENANT_ID;          // 提权或读放行 → root 视角，不启用过滤
     }
     return tenantContextAccessor.getTenantIDOrMissing();  // 缺失 → __MISSING_TENANT__（fail-closed）
@@ -104,12 +104,12 @@ public String resolveCurrentTenantIdentifier() {
 // ✅ 读：已定型 session 内提权查询也放行（第二重保险生效）
 @Transactional
 public List<Order> listAllOrders() {
-    return TenantPrivilege.elevated(() -> orderRepository.findAll());   // 全量可见
+    return tenantPrivilege.elevated(() -> orderRepository.findAll());   // 全量可见
 }
 
 // ✅ 更简洁的正确姿势：组合 API，先提权再开事务
 public List<Order> listAllOrders() throws Exception {
-    return TenantPrivilege.elevatedInTransaction(transactionTemplate,
+    return tenantPrivilege.elevatedInTransaction(transactionTemplate,
             () -> orderRepository.findAll());
 }
 ```
@@ -128,12 +128,12 @@ public List<Order> listAllOrders() throws Exception {
 // ❌ 错误：session 已按本租户定型，写异租户实体必然 flush 失败
 @Transactional
 public void createCrossShopOrder() {
-    TenantPrivilege.elevated(() -> shopRepository.save(crossShopOrder));   // 抛 PropertyValueException
+    tenantPrivilege.elevated(() -> shopRepository.save(crossShopOrder));   // 抛 PropertyValueException
 }
 
 // ✅ 正确：先提权再开事务，session 打开时租户模式即按提权定型
 public void createCrossShopOrder() throws Exception {
-    TenantPrivilege.elevatedInTransaction(transactionTemplate,
+    tenantPrivilege.elevatedInTransaction(transactionTemplate,
             () -> shopRepository.save(crossShopOrder));
 }
 ```
@@ -215,7 +215,7 @@ po.setTenantID("t2"); /* 当前 t1 */ repo.save(po);
 
 ```java
 // ✅ 实体显式合法租户 → 放行并保留原值（上下文有没有租户都行）
-TenantPrivilege.elevated(() -> {
+tenantPrivilege.elevated(() -> {
     TestTenantNotePO po = new TestTenantNotePO();
     po.setId(100L);
     po.setTenantID("shop-B");        // 显式声明归属
@@ -223,7 +223,7 @@ TenantPrivilege.elevated(() -> {
 });
 
 // ❌ ④ 提权 + 空归属（null/空白）→ 拒绝，不再注入（fail-closed）
-TenantPrivilege.elevated(() -> {
+tenantPrivilege.elevated(() -> {
     TestTenantNotePO po = new TestTenantNotePO();   // tenantID 为 null
     noteRepository.save(po);
     // BusinessException: elevated write requires explicit tenantId but tenant is missing or blank
@@ -266,15 +266,29 @@ insert 时 Hibernate 写侧校验（`@TenantId` assigned-id）与门禁对齐：
 
 ### 4.1 API 与正确示例
 
-```java
-// 无返回值
-TenantPrivilege.elevated(() -> orderRepository.deleteAll());
+`TenantPrivilege` 是 Spring 单例 bean，**通过构造注入使用**（作用域退出处理器与
+租户上下文访问器由容器注入，不同容器各自收集、互不覆盖）：
 
+```java
+@Service
+@RequiredArgsConstructor
+public class OrderService {
+
+    private final TenantPrivilege tenantPrivilege;   // 构造注入的 bean
+
+    public void crossShopWrite() throws Exception {
+        // 无返回值
+        tenantPrivilege.elevated(() -> orderRepository.deleteAll());
+    }
+}
+```
+
+```java
 // 有返回值
-long total = TenantPrivilege.elevated(() -> orderRepository.count());
+long total = tenantPrivilege.elevated(() -> orderRepository.count());
 
 // 先提权再开事务（推荐：消灭「作用域没罩住事务边界」的时序错误）
-OrderResult result = TenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
+OrderResult result = tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
     subOrderRepo.saveAll(List.of(
             subOrderOf("shop-A", ...),      // PO 显式 tenantID=shop-A
             subOrderOf("shop-B", ...)));    // PO 显式 tenantID=shop-B
@@ -306,8 +320,8 @@ C 端跨店下单是典型形态：买家上下文**没有租户**，一次订�
 ```
 
 `alreadyActive=true` 表示嵌套提权，review 时应重点追问必要性；`identity` / `tenantID` 为
-进入提权时的调用者身份与当前租户（未注册访问器或缺失时显示 `unknown`）。生产环境建议对该日志
-关键字配置采集告警，做到「谁在什么时候进了提权」可追溯。
+进入提权时的调用者身份与当前租户（经注入的 `TenantContextAccessor` 解析；不可用时显示
+`unknown`）。生产环境建议对该日志关键字配置采集告警，做到「谁在什么时候进了提权」可追溯。
 
 ### 4.4 边界行为
 
@@ -325,7 +339,7 @@ C 端跨店下单是典型形态：买家上下文**没有租户**，一次订�
 - **写门禁不受注解影响**：注解作用域内写显式异租户实体**照常拒绝**
   （`BusinessException: cross-tenant write is forbidden`）；写仍必须显式 `elevated`（§4.1）。
 - **不写 ThreadContext**：`CrossTenantAspect`（`HIGHEST_PRECEDENCE`，先于事务拦截器）以
-  `TenantPrivilege.withReadBypass(...)` 建立独立 ScopedValue 读放行状态，退出即恢复、嵌套安全。
+  `tenantPrivilege.withReadBypass(...)` 建立独立 ScopedValue 读放行状态，退出即恢复、嵌套安全。
 - **覆盖两种 session 时序**（§2.2 双保险）：新 session 由 resolver 自查定型 root；已定型
   session 由数据访问点自查关闭 filter——同事务内注解读放行同样生效。
 
@@ -339,7 +353,7 @@ public List<Order> listAllOrders() {
 // ✅ 注解 × 提权组合：读放行 + 显式异租户写（写放行来自 elevated，不是注解）
 @CrossTenant
 public void exportAndWriteBack() throws Exception {
-    TenantPrivilege.elevated(() -> {
+    tenantPrivilege.elevated(() -> {
         orderRepository.save(crossTenantOrder);   // 显式 tenantID 保留（§3.3）
     });
 }
@@ -451,7 +465,7 @@ CompletableFuture.runAsync(() -> orderRepository.findAll());   // 只看到 work
 
 // ✅ worker 内显式声明模式与目标租户
 CompletableFuture.runAsync(() ->
-    TenantPrivilege.elevated(() -> {
+    tenantPrivilege.elevated(() -> {
         TestTenantNotePO po = new TestTenantNotePO();
         po.setTenantID(targetShopId);       // 目标租户必须显式给出
         ...
@@ -548,10 +562,12 @@ spring:
 
 - `TenantWriteGate`：写门禁纯函数判定（两条件：提权状态 × 实体归属）+ 哨兵常量
   （MISSING/ROOT）权威定义，零 Spring/JPA 依赖；
-- `TenantScopeExitHandler`：作用域退出通知 SPI（I2：缓存与视角一致），实现层自注册；
+- `TenantScopeExitHandler`：作用域退出通知 SPI（I2：缓存与视角一致），实现由容器收集注入
+  （每个容器收集自己的实现列表）；
 - `TenantContextAccessor`：身份上下文唯一读取源（两级优先级：request scope → 线程快照）；
 - `TenantPrivilege`：提权/读放行状态唯一判断源（`isActive` / `isReadBypassActive` /
-  `isAnyReadBypassActive`），纯 ScopedValue 状态，零持久化概念；
+  `isAnyReadBypassActive`），纯 ScopedValue 状态，零持久化概念；Spring 单例 bean，
+  经构造注入使用；
 - `@CrossTenant`：读放行契约声明（只关读，写门禁不受影响）。
 
 存储差异收敛进适配层：读隔离（`TenantReadIsolationAdapter`：读过滤默认生效 / 读放行显式绕过，
@@ -565,7 +581,8 @@ spring:
 2. insert 自动填充 `tenant_id` 列；缺失时的行为保持 fail-closed（追加恒假条件，返回空集）；
 3. 写入门禁沿用 §3 的两条件判定——interceptor 遍历参数中的租户实体，调 common
    `TenantWriteGate.decideInjection`，按返回值执行注入，判断源用 `TenantPrivilege.isActive()`；
-4. 作用域退出通知复用 `TenantScopeExitHandler`（MyBatis 侧实现清 SqlSession 缓存）；
+4. 作用域退出通知复用 `TenantScopeExitHandler`（MyBatis 侧实现清 SqlSession 缓存，作为
+   bean 被容器收集注入）；
 5. 核心层与业务代码零改动——只要业务侧只依赖上述契约。
 
 与框架耦合的技术点（resolver 单次调用、filter 启停时序、`@TenantId` 校验、H1-H3 偏差）全部

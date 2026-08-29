@@ -50,6 +50,9 @@ class TenantRepositoryAspectTest {
     private ElevatedTenantTestService elevatedTenantTestService;
 
     @Autowired
+    private TenantPrivilege tenantPrivilege;
+
+    @Autowired
     private CrossTenantTestService crossTenantTestService;
 
     @Autowired
@@ -492,11 +495,11 @@ class TenantRepositoryAspectTest {
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             final Session sessionBefore = entityManager.unwrap(Session.class);
-            assertThat(TenantPrivilege.isActive()).isFalse();
+            assertThat(tenantPrivilege.isActive()).isFalse();
 
             assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            TenantPrivilege.elevated(() -> {
+            tenantPrivilege.elevated(() -> {
                 assertThat(tenantNoteRepository.count())
                         .as("elevated query within already-stabilized session should bypass tenant filter")
                         .isEqualTo(2);
@@ -650,9 +653,9 @@ class TenantRepositoryAspectTest {
 
         assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             entityManager.unwrap(Session.class);
-            assertThat(TenantPrivilege.isActive()).isFalse();
+            assertThat(tenantPrivilege.isActive()).isFalse();
 
-            TenantPrivilege.elevated(() -> {
+            tenantPrivilege.elevated(() -> {
                 final TestTenantNotePO po = new TestTenantNotePO();
                 po.setId(202L);
                 po.setTenantID("tenant-B");
@@ -688,7 +691,7 @@ class TenantRepositoryAspectTest {
         final LocalDateTime now = LocalDateTime.now();
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            TenantPrivilege.withReadBypass(() -> {
+            tenantPrivilege.withReadBypass(() -> {
                 final TestTenantNotePO po = new TestTenantNotePO();
                 po.setId(601L);
                 po.setContent("note-current");
@@ -786,7 +789,7 @@ class TenantRepositoryAspectTest {
         poB.setCreateTime(now);
         poB.setUpdateTime(now);
 
-        TenantPrivilege.elevated(() -> tenantNoteRepository.delete(poB));
+        tenantPrivilege.elevated(() -> tenantNoteRepository.delete(poB));
 
         assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
     }

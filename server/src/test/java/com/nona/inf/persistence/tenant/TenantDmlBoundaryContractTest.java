@@ -53,6 +53,9 @@ class TenantDmlBoundaryContractTest {
     private ElevatedTenantTestService elevatedTenantTestService;
 
     @Autowired
+    private TenantPrivilege tenantPrivilege;
+
+    @Autowired
     private CrossTenantTestService crossTenantTestService;
 
     @Autowired
@@ -76,9 +79,9 @@ class TenantDmlBoundaryContractTest {
     /**
      * 提权调用包装（受检异常收拢）。
      */
-    private static <T> T elevate(Callable<T> action) {
+    private <T> T elevate(Callable<T> action) {
         try {
-            return TenantPrivilege.elevated(action);
+            return tenantPrivilege.elevated(action);
         }
         catch (RuntimeException e) {
             throw e;
@@ -152,7 +155,7 @@ class TenantDmlBoundaryContractTest {
             // 找到 421 的真实归属：非提权 findById 应被 filter 挡（应为空），提权内可加载
             assertThat(tenantNoteRepository.findById(421L)).isEmpty();
 
-            TenantPrivilege.elevated(() -> {
+            tenantPrivilege.elevated(() -> {
                 TestTenantNotePO foreign = tenantNoteRepository.findById(421L).orElseThrow();
                 foreign.setTenantID("tenant-A");   // 尝试改写归属（同事务内按需修改）
                 entityManager.flush();             // flush 落下 UPDATE

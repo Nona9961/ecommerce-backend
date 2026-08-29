@@ -35,6 +35,11 @@ public class ThreadContextTenantIdentifierResolver implements CurrentTenantIdent
     private final TenantContextAccessor tenantContextAccessor;
 
     /**
+     * 租户提权/读放行作用域状态（构造注入的 bean；作用域退出处理器按容器收集）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 为 Hibernate 解析当前会话的 tenant identifier。
      *
      * @return 当前 tenant identifier；任一读放行作用域（提权或 {@code @CrossTenant}）内返回
@@ -42,7 +47,7 @@ public class ThreadContextTenantIdentifierResolver implements CurrentTenantIdent
      */
     @Override
     public String resolveCurrentTenantIdentifier() {
-        if (TenantPrivilege.isAnyReadBypassActive()) {
+        if (tenantPrivilege.isAnyReadBypassActive()) {
             return ROOT_TENANT_ID;
         }
         return tenantContextAccessor.getTenantIDOrMissing();

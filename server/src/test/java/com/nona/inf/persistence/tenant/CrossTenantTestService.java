@@ -23,16 +23,21 @@ class CrossTenantTestService {
 
     private final InnerCrossTenantService innerCrossTenantService;
 
+    private final TenantPrivilege tenantPrivilege;
+
     /**
      * 构造测试服务。
      *
      * @param tenantNoteRepository  租户隔离 note 仓库
      * @param innerCrossTenantService 内层跨租户读服务（嵌套注解场景）
+     * @param tenantPrivilege      租户提权 bean（构造注入）
      */
     CrossTenantTestService(TestTenantNoteRepository tenantNoteRepository,
-                           InnerCrossTenantService innerCrossTenantService) {
+                           InnerCrossTenantService innerCrossTenantService,
+                           TenantPrivilege tenantPrivilege) {
         this.tenantNoteRepository = tenantNoteRepository;
         this.innerCrossTenantService = innerCrossTenantService;
+        this.tenantPrivilege = tenantPrivilege;
     }
 
     /**
@@ -42,9 +47,9 @@ class CrossTenantTestService {
      * @param <T>    返回类型
      * @return 操作结果
      */
-    private static <T> T elevate(Callable<T> action) {
+    private <T> T elevate(Callable<T> action) {
         try {
-            return TenantPrivilege.elevated(action);
+            return tenantPrivilege.elevated(action);
         }
         catch (RuntimeException e) {
             throw e;
@@ -134,7 +139,7 @@ class CrossTenantTestService {
     void saveForeignTenantNoteWithElevation(String tenantID, Long id, String content) {
         final LocalDateTime now = LocalDateTime.now();
 
-        TenantPrivilege.elevated(() -> {
+        tenantPrivilege.elevated(() -> {
             final TestTenantNotePO po = new TestTenantNotePO();
             po.setId(id);
             po.setTenantID(tenantID);

@@ -48,6 +48,9 @@ class TenantCacheLeakContractTest {
     private ElevatedTenantTestService elevatedTenantTestService;
 
     @Autowired
+    private TenantPrivilege tenantPrivilege;
+
+    @Autowired
     private CrossTenantTestService crossTenantTestService;
 
     @Autowired
@@ -68,9 +71,9 @@ class TenantCacheLeakContractTest {
     /**
      * 包装提权调用（收拢受检异常，与现有测试服务同式）。
      */
-    private static <T> T elevateWrap(Callable<T> action) {
+    private <T> T elevateWrap(Callable<T> action) {
         try {
-            return TenantPrivilege.elevated(action);
+            return tenantPrivilege.elevated(action);
         }
         catch (RuntimeException e) {
             throw e;

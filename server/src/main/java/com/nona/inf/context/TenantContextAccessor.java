@@ -3,7 +3,6 @@ package com.nona.inf.context;
 import com.nona.annotation.ScaffoldGenerated;
 import com.nona.tenant.TenantWriteGate;
 import jakarta.annotation.Nullable;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -38,14 +37,6 @@ public class TenantContextAccessor {
      * 请求作用域 ThreadContext 的懒加载提供者
      */
     private final ObjectProvider<ThreadContext> threadContextProvider;
-
-    /**
-     * 注册自身到 {@link TenantPrivilege}（审计日志解析身份与租户用），幂等。
-     */
-    @PostConstruct
-    void registerToTenantPrivilege() {
-        TenantPrivilege.registerTenantContextAccessor(this);
-    }
 
     /**
      * Saves a {@link ContextSnapshot} into the static {@link ThreadLocal} fallback store.

@@ -2,6 +2,7 @@ package com.nona.inf.context;
 
 import com.nona.annotation.ScaffoldGenerated;
 import com.nona.exceptions.BusinessException;
+import com.nona.tenant.TenantScopeExitHandler;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -16,7 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -27,54 +30,59 @@ import static org.mockito.Mockito.when;
 @ScaffoldGenerated
 class TenantPrivilegeTest {
 
+    /**
+     * 被测对象 fixture：空 handler 列表 + 无访问器（纯单测环境，退出通知 no-op、日志身份 unknown）。
+     */
+    private final TenantPrivilege tenantPrivilege = new TenantPrivilege(List.of(), null);
+
     @Test
     void runnableScopeActivatesAndRestores() {
         AtomicBoolean inside = new AtomicBoolean(false);
 
-        TenantPrivilege.elevated(() -> inside.set(TenantPrivilege.isActive()));
+        tenantPrivilege.elevated(() -> inside.set(tenantPrivilege.isActive()));
 
         assertThat(inside).isTrue();
-        assertThat(TenantPrivilege.isActive()).isFalse();
+        assertThat(tenantPrivilege.isActive()).isFalse();
     }
 
     @Test
     void callableScopeReturnsValue() throws Exception {
-        String result = TenantPrivilege.elevated(() -> {
-            assertThat(TenantPrivilege.isActive()).isTrue();
+        String result = tenantPrivilege.elevated(() -> {
+            assertThat(tenantPrivilege.isActive()).isTrue();
             return "ok";
         });
 
         assertThat(result).isEqualTo("ok");
-        assertThat(TenantPrivilege.isActive()).isFalse();
+        assertThat(tenantPrivilege.isActive()).isFalse();
     }
 
     @Test
     void callableExceptionPassesThroughAndUnbinds() {
-        assertThatThrownBy(() -> TenantPrivilege.elevated(() -> {
+        assertThatThrownBy(() -> tenantPrivilege.elevated(() -> {
             throw new IllegalStateException("boom");
         }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("boom");
 
-        assertThat(TenantPrivilege.isActive()).isFalse();
+        assertThat(tenantPrivilege.isActive()).isFalse();
     }
 
     @Test
     void nestedScopesRestoreLayerByLayer() throws Exception {
         List<Boolean> observed = new ArrayList<>();
 
-        TenantPrivilege.elevated((Runnable) () -> {
-            observed.add(TenantPrivilege.isActive());
+        tenantPrivilege.elevated((Runnable) () -> {
+            observed.add(tenantPrivilege.isActive());
 
             // 块体无 return，确保绑定 Runnable 重载（表达式 lambda 会优先解析到 throws Exception 的 Callable 重载）
-            TenantPrivilege.elevated(() -> {
-                observed.add(TenantPrivilege.isActive());
+            tenantPrivilege.elevated(() -> {
+                observed.add(tenantPrivilege.isActive());
             });
 
-            observed.add(TenantPrivilege.isActive());
+            observed.add(tenantPrivilege.isActive());
         });
 
-        observed.add(TenantPrivilege.isActive());
+        observed.add(tenantPrivilege.isActive());
 
         assertThat(observed).containsExactly(true, true, true, false);
     }
@@ -83,7 +91,7 @@ class TenantPrivilegeTest {
     void elevationDoesNotLeakIntoNewThread() throws InterruptedException {
         AtomicBoolean inThread = new AtomicBoolean(false);
 
-        Thread thread = new Thread(() -> inThread.set(TenantPrivilege.isActive()));
+        Thread thread = new Thread(() -> inThread.set(tenantPrivilege.isActive()));
         thread.start();
         thread.join(5_000);
 
@@ -97,14 +105,14 @@ class TenantPrivilegeTest {
      */
     @Test
     void readBypassExceptionPassesThroughAndUnbinds() {
-        assertThatThrownBy(() -> TenantPrivilege.withReadBypass((Callable<Void>) () -> {
+        assertThatThrownBy(() -> tenantPrivilege.withReadBypass((Callable<Void>) () -> {
             throw new IllegalStateException("boom");
         }))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("boom");
 
-        assertThat(TenantPrivilege.isReadBypassActive()).isFalse();
-        assertThat(TenantPrivilege.isAnyReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isAnyReadBypassActive()).isFalse();
     }
 
     /**
@@ -113,13 +121,13 @@ class TenantPrivilegeTest {
      */
     @Test
     void readBypassCheckedExceptionPassesThrough() throws Exception {
-        assertThatThrownBy(() -> TenantPrivilege.withReadBypass((Callable<Void>) () -> {
+        assertThatThrownBy(() -> tenantPrivilege.withReadBypass((Callable<Void>) () -> {
             throw new java.io.IOException("io-boom");
         }))
                 .isInstanceOf(java.io.IOException.class)
                 .hasMessage("io-boom");
 
-        assertThat(TenantPrivilege.isReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isReadBypassActive()).isFalse();
     }
 
     /**
@@ -127,13 +135,13 @@ class TenantPrivilegeTest {
      */
     @Test
     void readBypassScopeReturnsValue() throws Exception {
-        String result = TenantPrivilege.withReadBypass(() -> {
-            assertThat(TenantPrivilege.isReadBypassActive()).isTrue();
+        String result = tenantPrivilege.withReadBypass(() -> {
+            assertThat(tenantPrivilege.isReadBypassActive()).isTrue();
             return "ok";
         });
 
         assertThat(result).isEqualTo("ok");
-        assertThat(TenantPrivilege.isReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isReadBypassActive()).isFalse();
     }
 
     // ===== 读放行（@CrossTenant）状态：与提权分离，读写粒度独立 =====
@@ -145,21 +153,21 @@ class TenantPrivilegeTest {
     void readBypassScopeActivatesAndRestores() {
         AtomicBoolean inside = new AtomicBoolean(false);
 
-        TenantPrivilege.withReadBypass((Runnable) () -> {
-            assertThat(TenantPrivilege.isReadBypassActive()).isTrue();
-            assertThat(TenantPrivilege.isAnyReadBypassActive()).isTrue();
+        tenantPrivilege.withReadBypass((Runnable) () -> {
+            assertThat(tenantPrivilege.isReadBypassActive()).isTrue();
+            assertThat(tenantPrivilege.isAnyReadBypassActive()).isTrue();
             inside.set(true);
         });
 
         assertThat(inside).isTrue();
-        assertThat(TenantPrivilege.isReadBypassActive()).isFalse();
-        assertThat(TenantPrivilege.isAnyReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isReadBypassActive()).isFalse();
+        assertThat(tenantPrivilege.isAnyReadBypassActive()).isFalse();
     }
 
     @Test
     void readBypassScopeDoesNotActivateWriteElevation() {
-        TenantPrivilege.withReadBypass((Runnable) () ->
-                assertThat(TenantPrivilege.isActive())
+        tenantPrivilege.withReadBypass((Runnable) () ->
+                assertThat(tenantPrivilege.isActive())
                         .as("read bypass must NOT activate write elevation (read/write separation)")
                         .isFalse());
     }
@@ -173,8 +181,8 @@ class TenantPrivilegeTest {
     void readBypassDoesNotLeakIntoNewThread() throws InterruptedException {
         AtomicBoolean inThread = new AtomicBoolean(false);
 
-        TenantPrivilege.withReadBypass((Runnable) () -> {
-            Thread thread = new Thread(() -> inThread.set(TenantPrivilege.isReadBypassActive()));
+        tenantPrivilege.withReadBypass((Runnable) () -> {
+            Thread thread = new Thread(() -> inThread.set(tenantPrivilege.isReadBypassActive()));
             thread.start();
             try {
                 thread.join(5_000);
@@ -194,19 +202,19 @@ class TenantPrivilegeTest {
     void elevationAndReadBypassAreIndependentAndCompose() {
         List<Boolean> observed = new ArrayList<>();
 
-        TenantPrivilege.elevated((Runnable) () -> {
-            observed.add(TenantPrivilege.isActive());
-            observed.add(TenantPrivilege.isAnyReadBypassActive());
+        tenantPrivilege.elevated((Runnable) () -> {
+            observed.add(tenantPrivilege.isActive());
+            observed.add(tenantPrivilege.isAnyReadBypassActive());
 
-            TenantPrivilege.withReadBypass((Runnable) () -> {
-                observed.add(TenantPrivilege.isReadBypassActive());
-                observed.add(TenantPrivilege.isAnyReadBypassActive());
+            tenantPrivilege.withReadBypass((Runnable) () -> {
+                observed.add(tenantPrivilege.isReadBypassActive());
+                observed.add(tenantPrivilege.isAnyReadBypassActive());
             });
 
-            observed.add(TenantPrivilege.isAnyReadBypassActive());
+            observed.add(tenantPrivilege.isAnyReadBypassActive());
         });
 
-        observed.add(TenantPrivilege.isAnyReadBypassActive());
+        observed.add(tenantPrivilege.isAnyReadBypassActive());
 
         assertThat(observed).containsExactly(true, true, true, true, true, false);
     }
@@ -221,13 +229,13 @@ class TenantPrivilegeTest {
     void elevatedInTransactionShouldPassThroughResultAndBindElevationInsideCallback() throws Exception {
         TransactionTemplate transactionTemplate = mockingTransactionTemplate();
 
-        String result = TenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
-            assertThat(TenantPrivilege.isActive()).isTrue();
+        String result = tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
+            assertThat(tenantPrivilege.isActive()).isTrue();
             return "ok";
         });
 
         assertThat(result).isEqualTo("ok");
-        assertThat(TenantPrivilege.isActive()).isFalse();
+        assertThat(tenantPrivilege.isActive()).isFalse();
     }
 
     /**
@@ -239,7 +247,7 @@ class TenantPrivilegeTest {
     void elevatedInTransactionShouldPassThroughBusinessExceptionUnwrapped() {
         TransactionTemplate transactionTemplate = mockingTransactionTemplate();
 
-        assertThatThrownBy(() -> TenantPrivilege.elevatedInTransaction(transactionTemplate,
+        assertThatThrownBy(() -> tenantPrivilege.elevatedInTransaction(transactionTemplate,
                 () -> {
                     throw new BusinessException("business boom");
                 }))
@@ -255,7 +263,7 @@ class TenantPrivilegeTest {
     void elevatedInTransactionShouldWrapCheckedExceptionWithCause() {
         TransactionTemplate transactionTemplate = mockingTransactionTemplate();
 
-        assertThatThrownBy(() -> TenantPrivilege.elevatedInTransaction(transactionTemplate,
+        assertThatThrownBy(() -> tenantPrivilege.elevatedInTransaction(transactionTemplate,
                 () -> {
                     throw new Exception("boom");
                 }))
@@ -263,6 +271,57 @@ class TenantPrivilegeTest {
                 .hasMessage("elevated transaction failed")
                 .hasRootCauseInstanceOf(Exception.class)
                 .hasRootCauseMessage("boom");
+    }
+
+    /**
+     * 多 handler 契约：作用域退出时列表内所有 handler 均被通知——
+     * 容器按收集注入完整列表，逐个通知。
+     */
+    @Test
+    void scopeExitNotifiesEveryRegisteredHandler() {
+        TenantScopeExitHandler handlerA = mock(TenantScopeExitHandler.class);
+        TenantScopeExitHandler handlerB = mock(TenantScopeExitHandler.class);
+        TenantPrivilege privilege = new TenantPrivilege(List.of(handlerA, handlerB), null);
+
+        privilege.elevated((Runnable) () -> { });
+
+        verify(handlerA).onScopeExited();
+        verify(handlerB).onScopeExited();
+    }
+
+    /**
+     * 多 handler 失败隔离契约：单个 handler 清理失败（抛 RuntimeException）→ 记录日志不重抛、
+     * 不阻断其余 handler、业务异常原样透传。
+     */
+    @Test
+    void scopeExitHandlerFailureDoesNotBlockOthersNorBusinessException() {
+        TenantScopeExitHandler failingHandler = mock(TenantScopeExitHandler.class);
+        TenantScopeExitHandler healthyHandler = mock(TenantScopeExitHandler.class);
+        doThrow(new IllegalStateException("cleanup boom")).when(failingHandler).onScopeExited();
+        TenantPrivilege privilege = new TenantPrivilege(List.of(failingHandler, healthyHandler), null);
+
+        assertThatThrownBy(() -> privilege.elevated((Runnable) () -> {
+            throw new BusinessException("business boom");
+        }))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("business boom");
+
+        verify(healthyHandler).onScopeExited();
+        verify(failingHandler).onScopeExited();
+    }
+
+    /**
+     * 空 handler 列表 no-op 契约：纯单测环境（无容器、无 handler）下作用域退出通知为空操作。
+     */
+    @Test
+    void scopeExitWithEmptyHandlersIsNoOp() {
+        TenantPrivilege privilege = new TenantPrivilege(List.of(), null);
+
+        privilege.elevated((Runnable) () -> { });
+        privilege.withReadBypass((Runnable) () -> { });
+        // 无异常即契约成立；状态恢复照常
+        assertThat(privilege.isActive()).isFalse();
+        assertThat(privilege.isAnyReadBypassActive()).isFalse();
     }
 
     /**

@@ -51,6 +51,11 @@ public class JpaTenantReadIsolationAdapter implements TenantReadIsolationAdapter
     private final TenantContextAccessor tenantContextAccessor;
 
     /**
+     * 租户提权/读放行作用域状态（构造注入的 bean；作用域退出处理器按容器收集）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 应用当前读隔离状态：读放行 → 禁用租户 filter；正常 → 启用并设置当前租户参数。
      * <p>
      * re-enable 返回的 filter 参数为空（{@code LoadQueryInfluencers#enableFilter} 构造新
@@ -65,7 +70,7 @@ public class JpaTenantReadIsolationAdapter implements TenantReadIsolationAdapter
         final EntityManagerHolder holder =
                 (EntityManagerHolder) TransactionSynchronizationManager.getResource(entityManagerFactory);
         final Session session = holder.getEntityManager().unwrap(Session.class);
-        if (TenantPrivilege.isAnyReadBypassActive()) {
+        if (tenantPrivilege.isAnyReadBypassActive()) {
             session.disableFilter(TENANT_ID_FILTER_NAME);
             return;
         }
