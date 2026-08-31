@@ -7,7 +7,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 /**
- * 账号-店铺关联持久化对象（account_shop_rel 表，global）：M10 关联，一期每商家一行。
+ * 账号-店铺关联持久化对象（account_shop_rel 表，global）：账号-店铺多对多关联，一期每商家一行。
  *
  * @author nona9961
  */

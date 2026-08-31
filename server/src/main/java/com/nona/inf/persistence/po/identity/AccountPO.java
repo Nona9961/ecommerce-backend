@@ -14,9 +14,9 @@ import jakarta.persistence.UniqueConstraint;
  * 账号持久化对象（单表 {@code account}，global）：买家/商家统一承载，
  * type 列区分角色（BUYER/SELLER），(type, username) 联合唯一。
  * <p>
- * 领域模型 M5：Account 聚合只有一个，持久化即一张表——不存在需要分表的字段差异
+ * 领域模型：Account 聚合只有一个（仅承载凭证与状态），持久化即一张表——不存在需要分表的字段差异
  * （地址/收藏/店铺/入驻均为独立聚合）；平台运营（admin）账号不在本表承载
- * （RBAC 落点在 WU-10/Phase-II，portal=ADMIN 查询定向不到即拒绝，fail-closed）。
+ * （RBAC 落点在 Phase-II，portal=ADMIN 查询定向不到即拒绝，fail-closed）。
  *
  * @author nona9961
  */

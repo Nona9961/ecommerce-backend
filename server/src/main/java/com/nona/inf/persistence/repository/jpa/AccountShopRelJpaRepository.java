@@ -6,7 +6,7 @@ import org.springframework.data.repository.ListCrudRepository;
 import java.util.List;
 
 /**
- * 账号-店铺关联 JPA 仓储（account_shop_rel 表，M10）。
+ * 账号-店铺关联 JPA 仓储（account_shop_rel 表，账号-店铺关联实体）。
  *
  * @author nona9961
  */

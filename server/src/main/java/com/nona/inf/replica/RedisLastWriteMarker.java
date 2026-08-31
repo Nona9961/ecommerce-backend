@@ -28,7 +28,7 @@ public class RedisLastWriteMarker implements LastWriteMarker {
     public static final String KEY_PREFIX = "lastWrite:";
 
     /**
-     * 写后窗口 TTL（秒）：key 存活时长 = TD-08 权威值 5s
+     * 写后窗口 TTL（秒）：key 存活时长 = 写后自读窗口权威值 5s
      * （写 Redis {@code lastWrite:{uid}} TTL 5s；3s 窗口判定由搜索消费方按
      * 剩余 TTL/写入时刻实现，本组件只负责埋点与存活检查）
      */
