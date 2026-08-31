@@ -7,6 +7,7 @@ package com.nona.exceptions;
  * <ul>
  *     <li>{@code auth.*}：认证/授权域——未认证 {@code auth.unauthorized}、封禁与权限不足统一
  *         {@code auth.forbidden}（Security 链与登录用例同一语义）、凭证错误、注册用户名冲突</li>
+ *     <li>{@code identity.*}：身份域——买家地址簿地址不存在 {@code identity.address_not_found}</li>
  *     <li>{@code catalog.*} / {@code inventory.*} / {@code order.*} / {@code payment.*}：
  *         各业务域段基码占位，随各域 WU 扩展（只增不改）</li>
  * </ul>
@@ -37,6 +38,11 @@ public enum EcommerceBusinessCode {
      * 注册用户名冲突（同 type 联合唯一）。
      */
     AUTH_USERNAME_CONFLICT("auth.username_conflict", 400),
+
+    /**
+     * 身份域：买家地址簿目标地址不存在（编辑/删除/设置默认命中归属不明的地址）。
+     */
+    IDENTITY_ADDRESS_NOT_FOUND("identity.address_not_found", 404),
 
     /**
      * 商品域占位基码：资源不存在。
