@@ -8,6 +8,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -92,7 +93,7 @@ class AuthChainIntegrationTest {
     private AuthUserCache authUserCache;
 
     /**
-     * 测试配置：注册内存版 DB SPI。
+     * 测试配置：注册内存版 DB SPI（@Primary 覆盖主实现的注入优先级，不依赖 bean 覆盖机制）。
      */
     @TestConfiguration
     static class AuthChainTestConfig {
@@ -103,6 +104,7 @@ class AuthChainIntegrationTest {
          * @return DB SPI 的测试实现
          */
         @Bean
+        @Primary
         AccountStatusProvider accountStatusProvider() {
             return new InMemoryAccountStatusProvider();
         }
@@ -116,7 +118,7 @@ class AuthChainIntegrationTest {
         final InMemoryAccountStatusProvider provider = (InMemoryAccountStatusProvider) accountStatusProvider;
         provider.reset();
         provider.register(DB_BUYER_UID, active(List.of("BUYER")));
-        provider.register(BANNED_UID, new AuthUserContext(AccountStatus.BANNED, List.of("BUYER")));
+        provider.register(BANNED_UID, new AuthUserContext(AccountStatus.BANNED, List.of("BUYER"), List.of()));
         provider.register(SELLER_UID, active(List.of("SELLER")));
         provider.register(ADMIN_UID, active(List.of("ADMIN")));
     }
@@ -187,7 +189,7 @@ class AuthChainIntegrationTest {
      */
     @Test
     void bannedFromCache_returns403() throws Exception {
-        when(authUserCache.get(BANNED_UID)).thenReturn(Optional.of(new AuthUserContext(AccountStatus.BANNED, List.of("BUYER"))));
+        when(authUserCache.get(BANNED_UID)).thenReturn(Optional.of(new AuthUserContext(AccountStatus.BANNED, List.of("BUYER"), List.of())));
         final String token = tokenProvider.issueToken(BANNED_UID, Portal.MALL);
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
@@ -285,23 +287,26 @@ class AuthChainIntegrationTest {
     }
 
     /**
-     * 公开路径：登录/注册端点无 token 不被认证拦截（当前无实现，落 404 而非 401）。
+     * 公开路径：登录/注册端点无 token 不被认证拦截（端点已落地：空 body 触发参数解析失败，
+     * 而非 401/403 认证拦截）。
      */
     @Test
     void loginRegistration_withoutToken_notBlockedByAuth() throws Exception {
         mockMvc.perform(post("/auth/login"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false));
         mockMvc.perform(post("/auth/register"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false));
     }
 
     /**
-     * 构造活跃用户上下文。
+     * 构造活跃用户上下文（无店铺关联）。
      *
      * @param roles 角色名列表
      * @return 活跃上下文
      */
     private static AuthUserContext active(List<String> roles) {
-        return new AuthUserContext(AccountStatus.ACTIVE, roles);
+        return new AuthUserContext(AccountStatus.ACTIVE, roles, List.of());
     }
 }

@@ -7,7 +7,6 @@ import com.nona.inf.context.ThreadContext;
 import com.nona.util.JacksonUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,6 +27,8 @@ import java.nio.charset.StandardCharsets;
  * 路由语义：{@code /mall/**}→BUYER、{@code /seller/**}→SELLER、{@code /admin/**}→ADMIN；
  * 未认证统一 401（COMMON_UNAUTHORIZED），已认证但角色不匹配（含封禁拦截）统一 403
  * （COMMON_FORBIDDEN）；登录/注册/健康检查等公开路径放行。
+ * 账号状态 SPI（AccountStatusProvider）由身份域 JPA 实现直接注入过滤器
+ * （认证实现落地后删除 ObjectProvider 懒取语义）。
  *
  * @author nona9961
  */
@@ -53,9 +54,9 @@ public class SecurityConfig {
     private final AuthUserCache userCache;
 
     /**
-     * DB SPI 提供器（懒取）
+     * 账号状态 DB SPI（身份域 JPA 实现，直接注入过滤器）
      */
-    private final ObjectProvider<AccountStatusProvider> accountStatusProvider;
+    private final AccountStatusProvider accountStatusProvider;
 
     /**
      * 请求上下文（request 作用域代理）

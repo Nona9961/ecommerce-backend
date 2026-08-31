@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 import com.nona.annotation.ScaffoldGenerated;
@@ -16,6 +17,7 @@ import com.nona.annotation.ScaffoldGenerated;
  */
 @Data
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Inheritance(strategy = InheritanceType.TABLE_PER_CLASS)
 @ScaffoldGenerated
 public abstract class BasePO {

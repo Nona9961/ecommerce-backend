@@ -22,10 +22,18 @@ public interface AuthApi {
     HttpResponse<LoginResponse> login(LoginRequest request);
 
     /**
-     * 注册：创建账号（买家即时生效；商家仅创建账号，开店走入驻审核）。
+     * 注册：创建账号（买家即时生效；商家仅创建账号，开店走入驻审核；平台账号由平台创建，不接受注册）。
      *
      * @param request 注册请求（用户名/密码/门户）
      * @return 成功时携带新建账号的用户 ID
      */
     HttpResponse<RegisterResponse> register(RegisterRequest request);
+
+    /**
+     * 登出：无状态 JWT 语义下服务端无会话可销毁，登出即客户端丢弃 token；
+     * 本端点保留用于客户端登出动作的收口（幂等，恒成功）。
+     *
+     * @return 成功响应
+     */
+    HttpResponse<Void> logout();
 }

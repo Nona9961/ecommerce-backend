@@ -34,9 +34,10 @@ class RedisAuthUserCacheTest {
     private static final SecurityProperties PROPERTIES = new SecurityProperties("unit-test-secret-0123456789abcdef0123456789", 7200, 3600);
 
     /**
-     * 活跃买家上下文
+     * 活跃买家上下文（无店铺关联）
      */
-    private static final AuthUserContext ACTIVE_BUYER = new AuthUserContext(AccountStatus.ACTIVE, List.of("BUYER"));
+    private static final AuthUserContext ACTIVE_BUYER =
+            new AuthUserContext(AccountStatus.ACTIVE, List.of("BUYER"), List.of());
 
     /**
      * mock 的 Redis 模板
@@ -104,12 +105,13 @@ class RedisAuthUserCacheTest {
     }
 
     /**
-     * 回填：按 key 写入 JSON 并携带兜底 TTL。
+     * 回填：按 key 写入 JSON 并携带兜底 TTL（含店铺列表字段）。
      */
     @Test
     void put_writesJsonWithTtl() {
         cache.put(1001L, ACTIVE_BUYER);
-        verify(valueOperations).set("auth:user:1001", "{\"status\":\"ACTIVE\",\"roles\":[\"BUYER\"]}", Duration.ofSeconds(3600));
+        verify(valueOperations).set("auth:user:1001",
+                "{\"status\":\"ACTIVE\",\"roles\":[\"BUYER\"],\"shopIds\":[]}", Duration.ofSeconds(3600));
     }
 
     /**

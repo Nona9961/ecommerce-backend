@@ -10,7 +10,6 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.GrantedAuthority;
@@ -27,11 +26,12 @@ import java.util.Optional;
 /**
  * JWT 认证过滤器：解析 Bearer token → 取用户上下文（缓存命中直取，
  * miss 走 DB SPI 回填，缓存故障由缓存层降级）→ 封禁拦截 → 组装
- * SecurityContext 与 {@link ThreadContext}。
+ * SecurityContext 与 {@link ThreadContext}（含商家店铺上下文写入租户）。
  * <p>
  * 本过滤器只做「认定」与「组装」：token 非法/过期、用户不存在一律不设置认证
  * （沿用链式 401 语义）；封禁（BANNED）属于已认定但被拒的账号，按设计统一 403
- * （COMMON_FORBIDDEN），由本过滤器直接裁决。
+ * （COMMON_FORBIDDEN），由本过滤器直接裁决。账号状态 SPI 由身份域注册的 JPA
+ * 实现直接注入（删除懒取语义（认证实现随本域落地），实现缺失即启动失败——fail-fast）。
  *
  * @author nona9961
  */
@@ -59,9 +59,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AuthUserCache userCache;
 
     /**
-     * DB SPI 提供器（懒取：正式实现由身份域注册，未注册时缓存 miss 即视为未认证）
+     * DB SPI（身份域 JPA 实现，直接注入——删除懒取语义（认证实现随本域落地））
      */
-    private final ObjectProvider<AccountStatusProvider> accountStatusProvider;
+    private final AccountStatusProvider accountStatusProvider;
 
     /**
      * 请求上下文（request 作用域代理）
@@ -78,12 +78,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      *
      * @param tokenProvider         JWT 解析器
      * @param userCache             用户上下文缓存
-     * @param accountStatusProvider DB SPI 提供器
+     * @param accountStatusProvider 账号状态 DB SPI（身份域 JPA 实现）
      * @param threadContext         请求上下文
      */
     public JwtAuthenticationFilter(JwtTokenProvider tokenProvider,
                                    AuthUserCache userCache,
-                                   ObjectProvider<AccountStatusProvider> accountStatusProvider,
+                                   AccountStatusProvider accountStatusProvider,
                                    ThreadContext threadContext) {
         this.tokenProvider = tokenProvider;
         this.userCache = userCache;
@@ -136,23 +136,21 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 缓存 miss 路径：查 DB（SPI）并尽力回填缓存。
      *
      * @param uid 用户 ID
-     * @return 用户上下文；DB 无此账号或 SPI 未注册返回空
+     * @return 用户上下文；DB 无此账号返回空
      */
     private Optional<AuthUserContext> loadFromDbAndBackfill(Long uid) {
-        final AccountStatusProvider provider = accountStatusProvider.getIfAvailable();
-        if (provider == null) {
-            return Optional.empty();
-        }
-        final Optional<AuthUserContext> loaded = provider.loadUserContext(uid);
+        final Optional<AuthUserContext> loaded = accountStatusProvider.loadUserContext(uid);
         loaded.ifPresent(context -> userCache.put(uid, context));
         return loaded;
     }
 
     /**
-     * 组装 Spring Security 认证与请求上下文。
+     * 组装 Spring Security 认证与请求上下文：角色写入 SecurityContext 与
+     * ThreadContext；商家账号（shopIds 非空）取当前店铺（一期恒 1 个）写入
+     * ThreadContext.tenantID（归属已在登录路径校验，运行期不再校验）。
      *
      * @param uid     用户 ID
-     * @param context 用户上下文（角色列表）
+     * @param context 用户上下文（角色/店铺列表）
      */
     private void assembleContext(Long uid, AuthUserContext context) {
         final List<GrantedAuthority> authorities = context.roles().stream()
@@ -163,6 +161,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.setContext(securityContext);
         threadContext.setIdentity(uid.toString());
         threadContext.setRole(List.copyOf(context.roles()));
+        if (!context.shopIds().isEmpty()) {
+            threadContext.setTenantID(context.shopIds().get(0).toString());
+        }
     }
 
     /**
