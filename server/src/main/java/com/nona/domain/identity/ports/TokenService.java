@@ -5,7 +5,7 @@ import com.nona.api.auth.Portal;
 /**
  * 令牌签发端口（identity 域 ports）：签发无状态 JWT。
  * <p>
- * claim 只含定位信息 {@code {uid, portal, exp}}，不含用户信息快照（TD-01）；
+ * claim 只含定位信息 {@code {uid, portal, exp}}，不含用户信息快照（无状态 JWT 仅承载定位 claim）；
  * 落本域端口、由基础设施实现（inf.security.JwtTokenService，复用
  * JwtTokenProvider 现有密钥配置与 HS256 能力）。
  *

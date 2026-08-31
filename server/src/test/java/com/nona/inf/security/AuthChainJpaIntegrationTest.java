@@ -146,7 +146,7 @@ class AuthChainJpaIntegrationTest {
     }
 
     /**
-     * BANNED 真实数据：DB 回填返回封禁 → 403（统一 COMMON_FORBIDDEN）。
+     * BANNED 真实数据：DB 回填返回封禁 → 403（统一 auth.forbidden）。
      * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
@@ -156,7 +156,7 @@ class AuthChainJpaIntegrationTest {
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(1003));
+                .andExpect(jsonPath("$.code").value("auth.forbidden"));
     }
 
     /**
@@ -187,7 +187,7 @@ class AuthChainJpaIntegrationTest {
 
         mockMvc.perform(get("/admin/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
@@ -200,7 +200,7 @@ class AuthChainJpaIntegrationTest {
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**

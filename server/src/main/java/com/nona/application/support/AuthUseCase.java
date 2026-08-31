@@ -5,7 +5,6 @@ import com.nona.api.auth.LoginResponse;
 import com.nona.api.auth.Portal;
 import com.nona.api.auth.RegisterRequest;
 import com.nona.api.auth.RegisterResponse;
-import com.nona.api.common.ErrorCode;
 import com.nona.domain.identity.entity.Account;
 import com.nona.domain.identity.entity.AccountStatus;
 import com.nona.domain.identity.entity.AccountType;
@@ -15,6 +14,7 @@ import com.nona.domain.identity.ports.IssuedToken;
 import com.nona.domain.identity.ports.TokenService;
 import com.nona.domain.identity.repo.AccountRepository;
 import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.persistence.po.identity.AccountShopRelPO;
 import com.nona.inf.persistence.repository.jpa.AccountShopRelJpaRepository;
 import com.nona.inf.security.AuthUserCache;
@@ -28,10 +28,11 @@ import java.util.List;
  * 认证用例（跨端共用）：注册 / 登录 / 登出编排。
  * <p>
  * 登录编排：按门户定向查单表账号（type 匹配）→ 凭证校验（BCrypt，失败统一消息
- * 防账号存在性泄露）→ 账号状态校验（BANNED 拒绝登录，COMMON_FORBIDDEN → HTTP 403，
- * C11）→ 读取 M10 关联组装 shopIds（U5，一期空列表合法）→ 回填 Redis 用户上下文
+ * 防账号存在性泄露）→ 账号状态校验（BANNED 拒绝登录，{@code auth.forbidden} → HTTP 403，
+ * 封禁边界：买家封禁禁止一切操作且不造成经济损失；商家封禁仅停新交易，已支付订单继续履约）→
+ * 读取账号-店铺关联组装 shopIds（商家登录返回其店铺列表，一期空列表合法）→ 回填 Redis 用户上下文
  * （status/roles/shopIds）→ 签发 JWT {uid, portal, exp}。平台运营（admin）账号
- * 无落点（RBAC 属 WU-10/Phase-II），portal=ADMIN 拒绝（fail-closed）。
+ * 无落点（RBAC 属 Phase-II），portal=ADMIN 拒绝（fail-closed）。
  * 事务边界 = 本用例方法。
  *
  * @author nona9961
@@ -50,7 +51,7 @@ public class AuthUseCase {
     private final AccountRepository accountRepository;
 
     /**
-     * 账号-店铺关联 JPA 仓储（M10，登录组装 shopIds）
+     * 账号-店铺关联 JPA 仓储（登录组装 shopIds）
      */
     private final AccountShopRelJpaRepository accountShopRelRepository;
 
@@ -110,7 +111,7 @@ public class AuthUseCase {
     public RegisterResponse register(RegisterRequest request) {
         final AccountType type = resolveTypeForRegister(request.portal());
         if (accountRepository.findByTypeAndUsername(type, request.username()).isPresent()) {
-            throw new BusinessException("用户名已存在");
+            throw new BusinessException(EcommerceBusinessCode.AUTH_USERNAME_CONFLICT.code(), "用户名已存在", 400);
         }
         final Account account = accountFactory.createAccount(
                 type, request.username(), request.password(), credentialService);
@@ -120,8 +121,9 @@ public class AuthUseCase {
 
     /**
      * 登录：定向查单表（type 匹配，查无即统一失败消息）→ BCrypt 凭证校验
-     * （失败统一消息防存在性泄露）→ BANNED 拒绝（COMMON_FORBIDDEN → HTTP 403，
-     * C11）→ 读取 M10 关联组装 shopIds → 回填用户上下文缓存 → 签发 JWT。
+     * （失败统一消息防存在性泄露）→ BANNED 拒绝（{@code auth.forbidden} → HTTP 403，
+     * 封禁边界：买家封禁禁止一切操作且不造成经济损失；商家封禁仅停新交易，已支付订单继续履约）→
+     * 读取账号-店铺关联组装 shopIds → 回填用户上下文缓存 → 签发 JWT。
      *
      * @param request 登录请求
      * @return 登录响应（token/过期时间/店铺 ID 列表）
@@ -129,13 +131,14 @@ public class AuthUseCase {
     public LoginResponse login(LoginRequest request) {
         final AccountType type = resolveTypeForLogin(request.portal());
         final Account account = accountRepository.findByTypeAndUsername(type, request.username())
-                .orElseThrow(() -> new BusinessException(INVALID_CREDENTIALS));
+                .orElseThrow(() -> new BusinessException(
+                        EcommerceBusinessCode.AUTH_BAD_CREDENTIALS.code(), INVALID_CREDENTIALS, 400));
         if (!credentialService.matches(request.password(), account.getPasswordHash())) {
-            throw new BusinessException(INVALID_CREDENTIALS);
+            throw new BusinessException(
+                    EcommerceBusinessCode.AUTH_BAD_CREDENTIALS.code(), INVALID_CREDENTIALS, 400);
         }
         if (account.getStatus() == AccountStatus.BANNED) {
-            throw new BusinessException(ErrorCode.COMMON_FORBIDDEN.defaultMessage(),
-                    ErrorCode.COMMON_FORBIDDEN.code());
+            throw new BusinessException(EcommerceBusinessCode.AUTH_FORBIDDEN.code(), "账号已被封禁，禁止登录", 403);
         }
         final List<Long> shopIds = accountShopRelRepository.findByAccountId(account.getId()).stream()
                 .map(AccountShopRelPO::getShopId)
@@ -158,7 +161,8 @@ public class AuthUseCase {
     }
 
     /**
-     * 注册门户 → 账号类型映射；ADMIN 拒绝注册（平台员工由平台创建）。
+     * 注册门户 → 账号类型映射；ADMIN 拒绝注册（平台员工由平台创建，
+     * {@code auth.forbidden} → HTTP 403）。
      *
      * @param portal 注册门户
      * @return 账号类型
@@ -167,7 +171,8 @@ public class AuthUseCase {
         return switch (portal) {
             case MALL -> AccountType.BUYER;
             case SELLER -> AccountType.SELLER;
-            case ADMIN -> throw new BusinessException("平台账号不接受注册");
+            case ADMIN -> throw new BusinessException(
+                    EcommerceBusinessCode.AUTH_FORBIDDEN.code(), "平台账号不接受注册", 403);
         };
     }
 
@@ -181,7 +186,8 @@ public class AuthUseCase {
         return switch (portal) {
             case MALL -> AccountType.BUYER;
             case SELLER -> AccountType.SELLER;
-            case ADMIN -> throw new BusinessException(INVALID_CREDENTIALS);
+            case ADMIN -> throw new BusinessException(
+                    EcommerceBusinessCode.AUTH_BAD_CREDENTIALS.code(), INVALID_CREDENTIALS, 400);
         };
     }
 }

@@ -2,7 +2,7 @@ package com.nona.inf.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.HttpResponse;
-import com.nona.api.common.ErrorCode;
+import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.ThreadContext;
 import com.nona.util.JacksonUtil;
 import jakarta.servlet.FilterChain;
@@ -30,7 +30,7 @@ import java.util.Optional;
  * <p>
  * 本过滤器只做「认定」与「组装」：token 非法/过期、用户不存在一律不设置认证
  * （沿用链式 401 语义）；封禁（BANNED）属于已认定但被拒的账号，按设计统一 403
- * （COMMON_FORBIDDEN），由本过滤器直接裁决。账号状态 SPI 由身份域注册的 JPA
+ * （{@code auth.forbidden}），由本过滤器直接裁决。账号状态 SPI 由身份域注册的 JPA
  * 实现直接注入（删除懒取语义（认证实现随本域落地），实现缺失即启动失败——fail-fast）。
  *
  * @author nona9961
@@ -125,7 +125,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final AuthUserContext context = userContext.get();
         if (context.status() == AccountStatus.BANNED) {
             log.info("[auth] banned user rejected uid={} path={}", uid, request.getRequestURI());
-            writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.COMMON_FORBIDDEN);
+            writeError(response, HttpServletResponse.SC_FORBIDDEN, EcommerceBusinessCode.AUTH_FORBIDDEN, "forbidden");
             return;
         }
         assembleContext(uid, context);
@@ -169,16 +169,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * 输出统一错误响应体（HTTP 状态码 + HttpResponse 业务码）。
      *
-     * @param response  响应
-     * @param status    HTTP 状态码
-     * @param errorCode 业务错误码
+     * @param response     响应
+     * @param status       HTTP 状态码
+     * @param businessCode 业务码（ecommerce 域码，如 {@code auth.forbidden}）
+     * @param message      失败提示
      * @throws IOException IO 异常
      */
-    private void writeError(HttpServletResponse response, int status, ErrorCode errorCode) throws IOException {
+    private void writeError(HttpServletResponse response, int status,
+                            EcommerceBusinessCode businessCode, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
-                new HttpResponse<>(errorCode.code(), errorCode.defaultMessage(), false, null)));
+                new HttpResponse<>(businessCode.code(), message, false, null)));
     }
 }

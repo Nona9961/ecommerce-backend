@@ -6,9 +6,9 @@ import com.nona.persistence.BaseRepository;
 import java.util.List;
 
 /**
- * 账号-店铺关联仓储接口（M10）：关联的持久化契约，实现在基础设施层
- * （由 DifferRepository 包装 account_shop_rel 表落地，随 WU-20 入驻审核通过时写入；
- * 本 WU 登录链路经 JPA 直接读取）。
+ * 账号-店铺关联仓储接口（Account 聚合内关联实体）：关联的持久化契约，实现在基础设施层
+ * （由 DifferRepository 包装 account_shop_rel 表落地，随入驻审核通过时写入；
+ * 登录链路经 JPA 直接读取）。
  *
  * @author nona9961
  */

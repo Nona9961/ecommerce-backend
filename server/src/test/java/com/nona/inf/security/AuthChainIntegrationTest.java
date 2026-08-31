@@ -130,10 +130,10 @@ class AuthChainIntegrationTest {
     void noToken_onProtectedRoute_returns401() throws Exception {
         mockMvc.perform(get("/mall/probe"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
         mockMvc.perform(get("/seller/probe"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
@@ -181,11 +181,11 @@ class AuthChainIntegrationTest {
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
-     * 缓存返回封禁状态 → 403（统一 COMMON_FORBIDDEN），封禁即时生效。
+     * 缓存返回封禁状态 → 403（统一 auth.forbidden），封禁即时生效。
      */
     @Test
     void bannedFromCache_returns403() throws Exception {
@@ -194,7 +194,7 @@ class AuthChainIntegrationTest {
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(1003));
+                .andExpect(jsonPath("$.code").value("auth.forbidden"));
     }
 
     /**
@@ -207,7 +207,7 @@ class AuthChainIntegrationTest {
 
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(1003));
+                .andExpect(jsonPath("$.code").value("auth.forbidden"));
 
         verify(authUserCache).put(eq(BANNED_UID), any(AuthUserContext.class));
     }
@@ -222,7 +222,7 @@ class AuthChainIntegrationTest {
 
         mockMvc.perform(get("/seller/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(1003));
+                .andExpect(jsonPath("$.code").value("auth.forbidden"));
     }
 
     /**
@@ -262,7 +262,7 @@ class AuthChainIntegrationTest {
         final String token = JwtTestTokens.expired(securityProperties, CACHED_BUYER_UID);
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
@@ -274,7 +274,7 @@ class AuthChainIntegrationTest {
         final String tampered = JwtTestTokens.tamperPayload(valid);
         mockMvc.perform(get("/mall/probe").header("Authorization", "Bearer " + tampered))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
@@ -287,16 +287,18 @@ class AuthChainIntegrationTest {
     }
 
     /**
-     * 公开路径：登录/注册端点无 token 不被认证拦截（端点已落地：空 body 触发参数解析失败，
-     * 而非 401/403 认证拦截）。
+     * 公开路径：登录/注册端点无 token 不被认证拦截（端点已落地：空 body 触发请求体解析
+     * 失败 → 400 + generic.validation_failed，而非 401/403 认证拦截）。
      */
     @Test
     void loginRegistration_withoutToken_notBlockedByAuth() throws Exception {
         mockMvc.perform(post("/auth/login"))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("generic.validation_failed"))
                 .andExpect(jsonPath("$.success").value(false));
         mockMvc.perform(post("/auth/register"))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("generic.validation_failed"))
                 .andExpect(jsonPath("$.success").value(false));
     }
 

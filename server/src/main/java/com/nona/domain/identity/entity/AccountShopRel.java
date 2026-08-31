@@ -1,7 +1,7 @@
 package com.nona.domain.identity.entity;
 
 /**
- * 账号-店铺关联（M10）：账号与店铺的多对多关系实体（对应 account_shop_rel 表，global）。
+ * 账号-店铺关联（Account 聚合内关联实体）：账号与店铺的多对多关系实体（对应 account_shop_rel 表，global）。
  * <p>
  * 一期每商家一行（入驻审核通过时绑定，登录时读取写入 Redis 用户上下文 shopIds）；
  * II 期多店铺同轨复用同一关联。创建必须经由

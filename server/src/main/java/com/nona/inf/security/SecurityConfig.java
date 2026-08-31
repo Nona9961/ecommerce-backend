@@ -2,7 +2,7 @@ package com.nona.inf.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.HttpResponse;
-import com.nona.api.common.ErrorCode;
+import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.ThreadContext;
 import com.nona.util.JacksonUtil;
 import jakarta.servlet.http.HttpServletResponse;
@@ -25,10 +25,10 @@ import java.nio.charset.StandardCharsets;
  * Spring Security 过滤器链：无状态 JWT 认证 + 门户角色路由。
  * <p>
  * 路由语义：{@code /mall/**}→BUYER、{@code /seller/**}→SELLER、{@code /admin/**}→ADMIN；
- * 未认证统一 401（COMMON_UNAUTHORIZED），已认证但角色不匹配（含封禁拦截）统一 403
- * （COMMON_FORBIDDEN）；登录/注册/健康检查等公开路径放行。
+ * 未认证统一 401（{@code auth.unauthorized}），已认证但角色不匹配（含封禁拦截）统一 403
+ * （{@code auth.forbidden}）；登录/注册/健康检查等公开路径放行。
  * 账号状态 SPI（AccountStatusProvider）由身份域 JPA 实现直接注入过滤器
- * （认证实现落地后删除 ObjectProvider 懒取语义）。
+ * （ObjectProvider 懒取语义已随认证实现落地删除）。
  *
  * @author nona9961
  */
@@ -87,9 +87,11 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((request, response, ex) ->
-                                writeError(response, HttpServletResponse.SC_UNAUTHORIZED, ErrorCode.COMMON_UNAUTHORIZED))
+                                writeError(response, HttpServletResponse.SC_UNAUTHORIZED,
+                                        EcommerceBusinessCode.AUTH_UNAUTHORIZED, "unauthorized"))
                         .accessDeniedHandler((request, response, ex) ->
-                                writeError(response, HttpServletResponse.SC_FORBIDDEN, ErrorCode.COMMON_FORBIDDEN)))
+                                writeError(response, HttpServletResponse.SC_FORBIDDEN,
+                                        EcommerceBusinessCode.AUTH_FORBIDDEN, "forbidden")))
                 .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userCache,
                                 accountStatusProvider, threadContext),
                         UsernamePasswordAuthenticationFilter.class);
@@ -99,16 +101,18 @@ public class SecurityConfig {
     /**
      * 输出统一错误响应体（HTTP 状态码 + HttpResponse 业务码）。
      *
-     * @param response  响应
-     * @param status    HTTP 状态码
-     * @param errorCode 业务错误码
+     * @param response     响应
+     * @param status       HTTP 状态码
+     * @param businessCode 业务码（ecommerce 域码，如 {@code auth.unauthorized}）
+     * @param message      失败提示
      * @throws IOException IO 异常
      */
-    private static void writeError(HttpServletResponse response, int status, ErrorCode errorCode) throws IOException {
+    private static void writeError(HttpServletResponse response, int status,
+                                   EcommerceBusinessCode businessCode, String message) throws IOException {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.getWriter().write(OBJECT_MAPPER.writeValueAsString(
-                new HttpResponse<>(errorCode.code(), errorCode.defaultMessage(), false, null)));
+                new HttpResponse<>(businessCode.code(), message, false, null)));
     }
 }

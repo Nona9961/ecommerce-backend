@@ -3,7 +3,7 @@ package com.nona.domain.identity.entity;
 /**
  * 账号聚合根：买家与商家的统一账号主体（对应单表 {@code account}，type 列区分角色）。
  * <p>
- * 领域模型 M5 冻结定义：Account 聚合只有一个，内容 = credentials（username/password hash）
+ * 领域模型冻结定义：Account 聚合只有一个，仅承载凭证与状态——内容 = credentials（username/password hash）
  * + status + type（buyer/merchant）；Account stays lean——地址/收藏/店铺/入驻均为独立聚合
  * （AddressBook/Favorite/Shop/OnboardingApplication），不存在需要分表的字段差异。
  * <p>

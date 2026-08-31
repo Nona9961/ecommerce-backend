@@ -107,6 +107,8 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"alice\",\"password\":\"secret123\",\"portal\":\"MALL\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.username_conflict"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message", containsString("用户名")));
     }
@@ -164,6 +166,8 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"alice\",\"password\":\"wrong-pass\",\"portal\":\"MALL\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.bad_credentials"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message", containsString("用户名或密码")));
     }
@@ -178,7 +182,7 @@ class AuthApiIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"banned-buyer\",\"password\":\"secret123\",\"portal\":\"MALL\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value(1003));
+                .andExpect(jsonPath("$.code").value("auth.forbidden"));
     }
 
     /**
@@ -191,6 +195,8 @@ class AuthApiIntegrationTest {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"alice\",\"password\":\"secret123\",\"portal\":\"MALL\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("auth.bad_credentials"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message", containsString("用户名或密码")));
     }
@@ -217,18 +223,20 @@ class AuthApiIntegrationTest {
     void logout_withoutToken_returns401() throws Exception {
         mockMvc.perform(post("/auth/logout"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value(1002));
+                .andExpect(jsonPath("$.code").value("auth.unauthorized"));
     }
 
     /**
-     * error：登录请求缺 portal 字段 → 参数校验失败（非 401，公开路径语义）。
+     * error：登录请求缺 portal 字段 → 参数校验失败（HTTP 400 + generic.validation_failed，
+     * 非 401/403，公开路径语义）。
      */
     @Test
     void login_missingPortal_rejectsByValidation() throws Exception {
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"alice\",\"password\":\"secret123\"}"))
-                .andExpect(status().isOk())
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("generic.validation_failed"))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.message", not(containsString("unauthorized"))));
     }
