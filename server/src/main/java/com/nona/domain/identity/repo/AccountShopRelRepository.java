@@ -21,4 +21,15 @@ public interface AccountShopRelRepository extends BaseRepository<Long, AccountSh
      * @return 店铺关联列表；无关联返回空列表
      */
     List<AccountShopRel> findByAccountId(Long accountId);
+
+    /**
+     * 绑定账号-店铺关联（幂等）：不存在该关联时创建并落库，已存在则直接返回
+     * （不重复创建）；并发重复由 (account_id, shop_id) 联合唯一约束兜底，
+     * 冲突视为已存在。绑定后经 {@link #findByAccountId} 立即可见。
+     *
+     * @param accountId 账号 ID
+     * @param shopId    店铺 ID
+     * @return 本次是否新建了关联（true=新建，false=已存在）
+     */
+    boolean bind(Long accountId, Long shopId);
 }

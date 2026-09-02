@@ -2,15 +2,18 @@ package com.nona.inf.persistence.repository;
 
 import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.identity.entity.AccountShopRel;
+import com.nona.domain.identity.factory.AccountFactory;
 import com.nona.domain.identity.repo.AccountShopRelRepository;
 import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.RdbGeneralConvertor;
 import com.nona.inf.persistence.po.identity.AccountShopRelPO;
 import com.nona.inf.persistence.repository.jpa.AccountShopRelJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 账号-店铺关联仓储落地：{@link DifferRepository} 包装单表 account_shop_rel，
@@ -19,6 +22,9 @@ import java.util.List;
  * <p>
  * 变更追踪：读 → track 快照 → 保存 （新增 doInsert / 属性变更 doUpdate）
  * 由 changeTracking 框架计算变更集驱动，属性级 diff 落库。
+ * 绑定创建（{@link #bind}）参照收藏等聚合内关联实体的幂等语义直连 JPA 仓储：
+ * 查重 + saveAndFlush 立即落库，并发重复撞唯一约束时捕获冲突视为已存在
+ * （延迟 flush 会使冲突越过仓储捕获点，幂等兜底失效）。
  *
  * @author nona9961
  */
@@ -28,9 +34,14 @@ public class AccountShopRelRepositoryImpl
         implements AccountShopRelRepository {
 
     /**
-     * 账号-店铺关联 JPA 仓储（定向查询：按账号查关联）
+     * 账号-店铺关联 JPA 仓储（定向查询：按账号/账号+店铺查关联）
      */
     private final AccountShopRelJpaRepository jpaRepository;
+
+    /**
+     * 账号工厂（绑定创建必须经工厂生成关联 ID）
+     */
+    private final AccountFactory accountFactory;
 
     /**
      * 构造账号-店铺关联仓储。
@@ -39,13 +50,16 @@ public class AccountShopRelRepositoryImpl
      * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             DO ↔ PO 转换器
      * @param changeTrackerProvider 变更追踪器提供者
+     * @param accountFactory        账号工厂（创建关联实体）
      */
     public AccountShopRelRepositoryImpl(AccountShopRelJpaRepository repository,
                                         ThreadContext threadContext,
                                         RdbGeneralConvertor<AccountShopRel, AccountShopRelPO, Void> convertor,
-                                        ChangeTrackerProvider changeTrackerProvider) {
+                                        ChangeTrackerProvider changeTrackerProvider,
+                                        AccountFactory accountFactory) {
         super(repository, threadContext, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
+        this.accountFactory = accountFactory;
     }
 
     /**
@@ -112,5 +126,26 @@ public class AccountShopRelRepositoryImpl
         return jpaRepository.findByAccountId(accountId).stream()
                 .map(po -> convertor.convertToRoot(po, null))
                 .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 幂等绑定：先按账号+店铺查重，已存在直接返回 false；否则经工厂创建关联并
+     * saveAndFlush 立即落库（并发重复撞唯一约束时捕获冲突返回 false，视为已存在）。
+     */
+    @Override
+    public boolean bind(Long accountId, Long shopId) {
+        final Optional<AccountShopRelPO> existing = jpaRepository.findByAccountIdAndShopId(accountId, shopId);
+        if (existing.isPresent()) {
+            return false;
+        }
+        try {
+            jpaRepository.saveAndFlush(convertor.convertToPO(
+                    accountFactory.createAccountShopRel(accountId, shopId)));
+            return true;
+        } catch (DataIntegrityViolationException e) {
+            return false;
+        }
     }
 }
