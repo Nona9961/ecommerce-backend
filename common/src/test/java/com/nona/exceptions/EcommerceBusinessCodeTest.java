@@ -65,6 +65,36 @@ class EcommerceBusinessCodeTest {
     }
 
     @Test
+    @DisplayName("H: storage.content_type_not_allowed → 400（MIME 白名单拒绝）")
+    void storageContentTypeNotAllowedShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("storage.content_type_not_allowed")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: storage.file_too_large → 400（超大小上限）")
+    void storageFileTooLargeShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("storage.file_too_large")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: storage.file_empty → 400（空文件）")
+    void storageFileEmptyShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("storage.file_empty")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: storage.object_key_invalid → 400（objectKey 非法）")
+    void storageObjectKeyInvalidShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("storage.object_key_invalid")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: storage.file_not_found → 404（文件不存在）")
+    void storageFileNotFoundShouldMapTo404() {
+        assertThat(EcommerceBusinessCode.defaultStatus("storage.file_not_found")).isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("H: inventory.not_found → 404（库存域占位基码）")
     void inventoryNotFoundShouldMapTo404() {
         assertThat(EcommerceBusinessCode.defaultStatus("inventory.not_found")).isEqualTo(404);

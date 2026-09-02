@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -26,7 +27,8 @@ import java.nio.charset.StandardCharsets;
  * <p>
  * 路由语义：{@code /mall/**}→BUYER、{@code /seller/**}→SELLER、{@code /admin/**}→ADMIN；
  * 未认证统一 401（{@code auth.unauthorized}），已认证但角色不匹配（含封禁拦截）统一 403
- * （{@code auth.forbidden}）；登录/注册/健康检查等公开路径放行。
+ * （{@code auth.forbidden}）；登录/注册/健康检查等公开路径放行；{@code GET /files/**}
+ * 公开读取（商品图买家端展示，URL 统一形态；上传/删除仍要求登录）。
  * 账号状态 SPI（AccountStatusProvider）由身份域 JPA 实现直接注入过滤器
  * （ObjectProvider 懒取已随认证实现落地移除，改为直接注入）。
  *
@@ -81,6 +83,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/auth/login", "/auth/register",
                                 "/actuator/health", "/actuator/info", "/h2/**", "/error").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/files/**").permitAll()
                         .requestMatchers("/mall/**").hasRole(AuthRole.BUYER.name())
                         .requestMatchers("/seller/**").hasRole(AuthRole.SELLER.name())
                         .requestMatchers("/admin/**").hasRole(AuthRole.ADMIN.name())

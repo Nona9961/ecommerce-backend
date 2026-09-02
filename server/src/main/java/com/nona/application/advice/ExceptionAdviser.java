@@ -4,6 +4,7 @@ import com.nona.annotation.ScaffoldGenerated;
 import com.nona.api.HttpResponse;
 import com.nona.exceptions.BusinessCode;
 import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.HashMap;
@@ -32,6 +34,8 @@ import java.util.Objects;
  *     <li>{@link MethodArgumentNotValidException} / {@link BindException} → 400 + 字段错误 map
  *         （{@link BusinessCode#VALIDATION_FAILED}）</li>
  *     <li>{@link HttpMessageNotReadableException}（请求体缺失/不可读）→ 400（{@link BusinessCode#VALIDATION_FAILED}）</li>
+ *     <li>{@link MaxUploadSizeExceededException}（上传超系统 multipart 上限，业务上限前的最后防线）→ 400
+ *         （{@code storage.file_too_large}）</li>
  *     <li>{@link NoResourceFoundException}（未匹配路径）→ 404（{@link BusinessCode#NOT_FOUND}）</li>
  *     <li>{@link RuntimeException} 兜底 → 500（{@link BusinessCode#INTERNAL_ERROR}），
  *         通用消息不泄露内部细节，堆栈仅记录在服务端日志</li>
@@ -97,6 +101,20 @@ public class ExceptionAdviser {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public HttpResponse<?> handleMessageNotReadable(HttpMessageNotReadableException e) {
         return HttpResponse.fail(BusinessCode.VALIDATION_FAILED.code(), "Request body missing or malformed");
+    }
+
+    /**
+     * 处理上传超限异常（系统 multipart 上限拦截，发生在 controller 之前）：
+     * 返回 400 + 存储域业务码（业务层上限 {@code nona.storage.max-size-bytes} 已在存储实现内判定，
+     * 本类为系统兜底防线）。
+     *
+     * @param e 上传超限异常
+     * @return 失败响应（业务码 {@code storage.file_too_large}）
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public HttpResponse<?> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        return HttpResponse.fail(EcommerceBusinessCode.STORAGE_FILE_TOO_LARGE.code(), "file too large");
     }
 
     /**

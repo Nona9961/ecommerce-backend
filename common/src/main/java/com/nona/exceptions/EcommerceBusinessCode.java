@@ -142,7 +142,32 @@ public enum EcommerceBusinessCode {
     /**
      * 支付域占位基码：资源不存在。
      */
-    PAYMENT_NOT_FOUND("payment.not_found", 404);
+    PAYMENT_NOT_FOUND("payment.not_found", 404),
+
+    /**
+     * 存储域：上传 contentType 不在白名单（nona.storage.allowed-content-types 可配）。
+     */
+    STORAGE_CONTENT_TYPE_NOT_ALLOWED("storage.content_type_not_allowed", 400),
+
+    /**
+     * 存储域：上传内容超出大小上限（nona.storage.max-size-bytes 可配；含系统 multipart 兜底拦截）。
+     */
+    STORAGE_FILE_TOO_LARGE("storage.file_too_large", 400),
+
+    /**
+     * 存储域：上传内容为空（0 字节无业务价值，与“不存在”语义区分）。
+     */
+    STORAGE_FILE_EMPTY("storage.file_empty", 400),
+
+    /**
+     * 存储域：objectKey 非法（白名单字符校验/路径穿越拒绝：{@code ../}、绝对路径、非法字符等）。
+     */
+    STORAGE_OBJECT_KEY_INVALID("storage.object_key_invalid", 400),
+
+    /**
+     * 存储域：目标文件不存在。
+     */
+    STORAGE_FILE_NOT_FOUND("storage.file_not_found", 404);
 
     private final String code;
 

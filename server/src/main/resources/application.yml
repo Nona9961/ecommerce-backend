@@ -8,6 +8,10 @@ spring:
   jpa:
     # OSV 必须关闭：session 打开时一次性定型租户模式，打开时机必须可控
     open-in-view: false
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
 
 logging:
   config: classpath:log_config.xml
@@ -24,3 +28,7 @@ nona:
     jwt-secret: ${JWT_SECRET:dev-only-jwt-secret-0123456789abcdef}
     jwt-ttl-seconds: 7200
     user-context-cache-ttl-seconds: 3600
+  storage:
+    root-dir: ${FILES_ROOT_DIR:./data/files}
+    max-size-bytes: 10485760
+    allowed-content-types: image/jpeg,image/png,image/webp,image/gif
