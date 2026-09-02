@@ -3,6 +3,7 @@ package com.nona.web.mall;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.auth.Portal;
 import com.nona.inf.persistence.repository.jpa.AccountJpaRepository;
+import com.nona.inf.persistence.repository.jpa.AddressBookJpaRepository;
 import com.nona.inf.persistence.repository.jpa.AddressJpaRepository;
 import com.nona.inf.security.AuthUserCache;
 import com.nona.inf.security.JwtTokenProvider;
@@ -59,6 +60,12 @@ class AddressBookApiIntegrationTest {
     private AddressJpaRepository addressRepository;
 
     /**
+     * 地址簿主表 JPA 仓储（测试数据清理）
+     */
+    @Autowired
+    private AddressBookJpaRepository addressBookRepository;
+
+    /**
      * JWT 签发器（构造买家访问令牌）
      */
     @Autowired
@@ -81,6 +88,7 @@ class AddressBookApiIntegrationTest {
     @BeforeEach
     void setUp() {
         addressRepository.deleteAll();
+        addressBookRepository.deleteAll();
         accountRepository.deleteAll();
         when(authUserCache.get(anyLong())).thenReturn(java.util.Optional.empty());
     }

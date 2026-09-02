@@ -2,7 +2,9 @@ package com.nona.web.mall;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.auth.Portal;
+import com.nona.inf.persistence.po.identity.AddressBookPO;
 import com.nona.inf.persistence.po.identity.AddressPO;
+import com.nona.inf.persistence.repository.jpa.AddressBookJpaRepository;
 import com.nona.inf.persistence.repository.jpa.AddressJpaRepository;
 import com.nona.inf.security.AuthUserCache;
 import com.nona.inf.security.JwtTokenProvider;
@@ -59,6 +61,12 @@ class AddressDefaultConcurrencyTest {
     private AddressJpaRepository addressRepository;
 
     /**
+     * 地址簿主表 JPA 仓储（测试数据清理）
+     */
+    @Autowired
+    private AddressBookJpaRepository addressBookRepository;
+
+    /**
      * JWT 签发器
      */
     @Autowired
@@ -81,6 +89,7 @@ class AddressDefaultConcurrencyTest {
     @BeforeEach
     void setUp() {
         addressRepository.deleteAll();
+        addressBookRepository.deleteAll();
         when(authUserCache.get(anyLong())).thenReturn(java.util.Optional.empty());
     }
 
@@ -207,9 +216,18 @@ class AddressDefaultConcurrencyTest {
      */
     private long insertAddress(String token, long id) {
         final long accountId = tokenProvider.parse(token).orElseThrow().uid();
+        // 确保地址簿根行存在（address_book 主表），地址行以 book_id（rootId）关联
+        final AddressBookPO book = addressBookRepository.findByAccountId(accountId)
+                .orElseGet(() -> {
+                    final AddressBookPO po = new AddressBookPO();
+                    po.setId(com.nona.util.IDUtils.generateID());
+                    po.setAccountId(accountId);
+                    addressBookRepository.save(po);
+                    return po;
+                });
         final AddressPO po = new AddressPO();
         po.setId(id);
-        po.setAccountId(accountId);
+        po.setBookId(book.getId());
         po.setRecipient("张三");
         po.setPhone("13800138000");
         po.setProvince("浙江省");

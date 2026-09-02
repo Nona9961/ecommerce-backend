@@ -16,12 +16,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AddressBookTest {
 
     /**
+     * 测试簿主键（固定值，聚合逻辑不依赖具体主键）
+     */
+    private static final long BOOK_ID = 1L;
+
+    /**
+     * 测试簿归属账号（固定值）
+     */
+    private static final long ACCOUNT_ID = 10001L;
+
+    /**
+     * 构造测试地址簿（bookId 独立主键 + accountId 业务关联）。
+     *
+     * @return 地址簿
+     */
+    private static AddressBook book() {
+        return new AddressBook(BOOK_ID, ACCOUNT_ID);
+    }
+
+    /**
      * happy：连续新增多个地址，簿内条数递增。
      */
     @Test
     @DisplayName("新增地址成功")
     void add_appendsAddress() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
         book.add(address(2L, "李四", false));
 
@@ -37,7 +56,7 @@ class AddressBookTest {
     @Test
     @DisplayName("新增带默认的新地址让位旧默认")
     void add_withDefault_clearsPreviousDefault() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", true));
         book.add(address(2L, "李四", true));
 
@@ -52,7 +71,7 @@ class AddressBookTest {
     @Test
     @DisplayName("重复 ID 新增拒绝")
     void add_duplicateId_rejects() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
 
         assertThatThrownBy(() -> book.add(address(1L, "李四", false)))
@@ -65,7 +84,7 @@ class AddressBookTest {
     @Test
     @DisplayName("空地址新增拒绝")
     void add_null_rejects() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
 
         assertThatThrownBy(() -> book.add(null))
                 .isInstanceOf(BusinessException.class);
@@ -77,7 +96,7 @@ class AddressBookTest {
     @Test
     @DisplayName("设置默认让位旧默认")
     void setDefault_migratesMarker() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", true));
         book.add(address(2L, "李四", false));
 
@@ -93,7 +112,7 @@ class AddressBookTest {
     @Test
     @DisplayName("无默认簿内设置默认")
     void setDefault_withoutPreviousDefault() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
         book.add(address(2L, "李四", false));
 
@@ -109,7 +128,7 @@ class AddressBookTest {
     @Test
     @DisplayName("重复设置默认幂等")
     void setDefault_idempotentWhenAlreadyDefault() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", true));
 
         book.setDefault(1L);
@@ -124,7 +143,7 @@ class AddressBookTest {
     @Test
     @DisplayName("设置不存在的地址为默认拒绝")
     void setDefault_missingId_rejects() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
 
         assertThatThrownBy(() -> book.setDefault(999L))
@@ -138,7 +157,7 @@ class AddressBookTest {
     @Test
     @DisplayName("编辑更新字段且默认标记保持")
     void update_replacesFields_keepsDefault() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", true));
 
         final Address updated = book.getById(1L).orElseThrow();
@@ -158,7 +177,7 @@ class AddressBookTest {
     @Test
     @DisplayName("编辑不存在的地址拒绝")
     void update_missingId_rejects() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
 
         final Address stranger = address(999L, "路人", false);
@@ -174,7 +193,7 @@ class AddressBookTest {
     @Test
     @DisplayName("删除地址成功")
     void remove_removesAddress() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
         book.add(address(2L, "李四", false));
 
@@ -190,7 +209,7 @@ class AddressBookTest {
     @Test
     @DisplayName("删除默认地址自动提升第一条")
     void removeDefault_promotesFirst() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
         book.add(address(2L, "李四", true));
         book.add(address(3L, "王五", false));
@@ -207,7 +226,7 @@ class AddressBookTest {
     @Test
     @DisplayName("删除最后一条地址后无默认")
     void removeDefault_lastOne_leavesNoDefault() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", true));
 
         book.remove(1L);
@@ -222,7 +241,7 @@ class AddressBookTest {
     @Test
     @DisplayName("删除不存在的地址拒绝")
     void remove_missingId_rejects() {
-        final AddressBook book = new AddressBook(10001L);
+        final AddressBook book = book();
         book.add(address(1L, "张三", false));
 
         assertThatThrownBy(() -> book.remove(999L))
@@ -231,7 +250,7 @@ class AddressBookTest {
     }
 
     /**
-     * 构造簿内地址实体（直接构造，ID 显式可控）。
+     * 构造簿内地址实体（直接构造，ID 显式可控，bookId 与簿一致）。
      *
      * @param id        地址 ID
      * @param recipient 收件人
@@ -239,7 +258,7 @@ class AddressBookTest {
      * @return 地址
      */
     private static Address address(Long id, String recipient, boolean isDefault) {
-        return new Address(id, 10001L, recipient, "13800138000",
+        return new Address(id, BOOK_ID, recipient, "13800138000",
                 "浙江省", "杭州市", "西湖区", "文一西路 100 号", isDefault);
     }
 }

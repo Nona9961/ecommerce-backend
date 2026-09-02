@@ -55,7 +55,7 @@ class AddressBookFactoryTest {
                 "张三", "13800138000", "浙江省", "杭州市", "西湖区", "文一西路 100 号", true);
 
         assertThat(address.getId()).isNotNull();
-        assertThat(address.getAccountId()).isEqualTo(10001L);
+        assertThat(address.getBookId()).isEqualTo(book.getId());
         assertThat(address.getRecipient()).isEqualTo("张三");
         assertThat(address.getPhone()).isEqualTo("13800138000");
         assertThat(address.getProvince()).isEqualTo("浙江省");
