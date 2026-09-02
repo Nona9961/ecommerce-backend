@@ -65,6 +65,36 @@ public enum EcommerceBusinessCode {
     CATALOG_NOT_FOUND("catalog.not_found", 404),
 
     /**
+     * 商品域：店铺不存在（商家当前店铺缺失或已被删除）。
+     */
+    CATALOG_SHOP_NOT_FOUND("catalog.shop_not_found", 404),
+
+    /**
+     * 商品域：店铺分类不存在（目标分类不属于当前店铺，按不存在呈现）。
+     */
+    CATALOG_SHOP_CATEGORY_NOT_FOUND("catalog.shop_category_not_found", 404),
+
+    /**
+     * 商品域：店铺对象缺失（工厂参数防御，属请求构造错误）。
+     */
+    CATALOG_SHOP_REQUIRED("catalog.shop_required", 400),
+
+    /**
+     * 商品域：店铺名称不能为空。
+     */
+    CATALOG_SHOP_NAME_BLANK("catalog.shop_name_blank", 400),
+
+    /**
+     * 商品域：店铺分类名称不能为空（含创建时归属店铺缺失）。
+     */
+    CATALOG_SHOP_CATEGORY_NAME_BLANK("catalog.shop_category_name_blank", 400),
+
+    /**
+     * 商品域：店铺分类在聚合内重复（同一店铺分类 ID 唯一）。
+     */
+    CATALOG_SHOP_CATEGORY_DUPLICATE("catalog.shop_category_duplicate", 400),
+
+    /**
      * 库存域占位基码：资源不存在。
      */
     INVENTORY_NOT_FOUND("inventory.not_found", 404),

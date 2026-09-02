@@ -35,3 +35,4 @@ spring:
 change-tracking:
   identifier-methods:
     com.nona.domain.identity.entity.Address: getId
+    com.nona.domain.catalog.entity.ShopCategory: getId

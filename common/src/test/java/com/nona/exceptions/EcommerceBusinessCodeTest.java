@@ -59,6 +59,12 @@ class EcommerceBusinessCodeTest {
     }
 
     @Test
+    @DisplayName("H: catalog.shop_required → 400（店铺对象缺失）")
+    void catalogShopRequiredShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.shop_required")).isEqualTo(400);
+    }
+
+    @Test
     @DisplayName("H: inventory.not_found → 404（库存域占位基码）")
     void inventoryNotFoundShouldMapTo404() {
         assertThat(EcommerceBusinessCode.defaultStatus("inventory.not_found")).isEqualTo(404);
