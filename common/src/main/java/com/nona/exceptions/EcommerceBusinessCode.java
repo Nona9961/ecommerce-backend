@@ -155,6 +155,76 @@ public enum EcommerceBusinessCode {
     CATALOG_FREIGHT_INPUT_INVALID("catalog.freight_input_invalid", 400),
 
     /**
+     * 商品域：草稿商品不存在（按 ID 操作命中不存在的商品或不属于当前店铺的商品）。
+     */
+    CATALOG_PRODUCT_NOT_FOUND("catalog.product_not_found", 404),
+
+    /**
+     * 商品域：商品对象缺失（工厂参数防御，属请求构造错误）。
+     */
+    CATALOG_PRODUCT_REQUIRED("catalog.product_required", 400),
+
+    /**
+     * 商品域：商品名称不能为空（草稿必填项，无名商品连草稿都不允许保存）。
+     */
+    CATALOG_PRODUCT_NAME_BLANK("catalog.product_name_blank", 400),
+
+    /**
+     * 商品域：商品图片 URL 不能为空（图片引用必填）。
+     */
+    CATALOG_PRODUCT_IMAGE_URL_BLANK("catalog.product_image_url_blank", 400),
+
+    /**
+     * 商品域：商品图片引用重复（同一商品内图片 ID 唯一）。
+     */
+    CATALOG_PRODUCT_IMAGE_DUPLICATE("catalog.product_image_duplicate", 400),
+
+    /**
+     * 商品域：商品图片不存在（目标图片不属于当前商品，按不存在呈现）。
+     */
+    CATALOG_PRODUCT_IMAGE_NOT_FOUND("catalog.product_image_not_found", 404),
+
+    /**
+     * 商品域：商品属性键不能为空（自定义属性键值对的键必填）。
+     */
+    CATALOG_PRODUCT_ATTRIBUTE_KEY_BLANK("catalog.product_attribute_key_blank", 400),
+
+    /**
+     * 商品域：商品属性键重复（同一商品内属性键唯一，重复键无业务意义）。
+     */
+    CATALOG_PRODUCT_ATTRIBUTE_KEY_DUPLICATE("catalog.product_attribute_key_duplicate", 400),
+
+    /**
+     * 商品域：商品属性重复（同一商品内属性 ID 唯一）。
+     */
+    CATALOG_PRODUCT_ATTRIBUTE_DUPLICATE("catalog.product_attribute_duplicate", 400),
+
+    /**
+     * 商品域：商品属性不存在（目标属性不属于当前商品，按不存在呈现）。
+     */
+    CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND("catalog.product_attribute_not_found", 404),
+
+    /**
+     * 商品域：平台分类已禁用（新商品不可挂载禁用分类；已挂商品的保留历史归属合法）。
+     */
+    CATALOG_CATEGORY_DISABLED("catalog.category_disabled", 400),
+
+    /**
+     * 商品域：平台分类已被商品引用（禁用/删除前必须解除全部引用——冲突语义 409）。
+     */
+    CATALOG_CATEGORY_IN_USE("catalog.category_in_use", 409),
+
+    /**
+     * 商品域：品牌已禁用（新商品不可挂载禁用品牌；已挂商品的保留历史归属合法）。
+     */
+    CATALOG_BRAND_DISABLED("catalog.brand_disabled", 400),
+
+    /**
+     * 商品域：品牌已被商品引用（禁用/删除前必须解除全部引用——冲突语义 409）。
+     */
+    CATALOG_BRAND_IN_USE("catalog.brand_in_use", 409),
+
+    /**
      * 库存域占位基码：资源不存在。
      */
     INVENTORY_NOT_FOUND("inventory.not_found", 404),

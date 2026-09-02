@@ -12,7 +12,7 @@ import com.nona.exceptions.EcommerceBusinessCode;
  * 关键不变量：名称非空；名称全局唯一。不变量收敛在本聚合方法内
  * （rename 守卫）与创建路径（工厂守卫），包外无直接字段变更路径。
  * 「删除」= 禁用（disable-not-delete 软删）：禁用后既有商品保持可见、
- * 新商品不可挂载（挂载守卫属商品域后续工作），行不删除。
+ * 新商品不可挂载（挂载校验在商品创建/更新路径），行不删除。
  *
  * @author nona9961
  */

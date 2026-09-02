@@ -1,0 +1,173 @@
+package com.nona.inf.persistence.po.catalog;
+
+import com.nona.domain.catalog.entity.ProductStatus;
+import com.nona.inf.persistence.po.TenantScopedBasePO;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
+
+/**
+ * 商品持久化对象（product 表，tenant=shopId）：Product 聚合根主表。
+ * <p>
+ * 商家维度数据归店铺租户（tenant_id=shopId），天然 fail-closed 隔离——
+ * 跨店铺访问商品行在 Hibernate 租户过滤层即被拦截。shop_id 为业务关联列
+ * （rootId 关联 shop 主表，冗余承载归属便于店铺维度分页查询）；平台类目/
+ * 品牌为可空引用列（category_id / brand_id，草稿允许不挂载）；status 为
+ * 生命周期状态（一期恒 DRAFT——草稿可保存不生效，状态机属后续阶段）。
+ *
+ * @author nona9961
+ */
+@Entity
+@Table(name = "product", indexes = {
+        @Index(name = "idx_product_shop", columnList = "shop_id")
+})
+public class ProductPO extends TenantScopedBasePO {
+
+    /**
+     * 所属店铺 ID（rootId 关联）
+     */
+    @Column(nullable = false, name = "shop_id")
+    private Long shopId;
+
+    /**
+     * 商品名称
+     */
+    @Column(nullable = false, length = 128)
+    private String name;
+
+    /**
+     * 商品描述（可空）
+     */
+    @Column(length = 4000)
+    private String description;
+
+    /**
+     * 平台类目 ID（可空引用）
+     */
+    @Column(name = "category_id")
+    private Long categoryId;
+
+    /**
+     * 品牌 ID（可空引用）
+     */
+    @Column(name = "brand_id")
+    private Long brandId;
+
+    /**
+     * 商品状态（一期恒 DRAFT）
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 16)
+    private ProductStatus status;
+
+    /**
+     * 所属店铺 ID。
+     *
+     * @return 店铺 ID
+     */
+    public Long getShopId() {
+        return shopId;
+    }
+
+    /**
+     * 设置所属店铺 ID。
+     *
+     * @param shopId 店铺 ID
+     */
+    public void setShopId(Long shopId) {
+        this.shopId = shopId;
+    }
+
+    /**
+     * 商品名称。
+     *
+     * @return 名称
+     */
+    public String getName() {
+        return name;
+    }
+
+    /**
+     * 设置商品名称。
+     *
+     * @param name 名称
+     */
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    /**
+     * 商品描述。
+     *
+     * @return 描述；未填写为 null
+     */
+    public String getDescription() {
+        return description;
+    }
+
+    /**
+     * 设置商品描述。
+     *
+     * @param description 描述
+     */
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    /**
+     * 平台类目 ID。
+     *
+     * @return 类目 ID；未挂载为 null
+     */
+    public Long getCategoryId() {
+        return categoryId;
+    }
+
+    /**
+     * 设置平台类目 ID。
+     *
+     * @param categoryId 类目 ID
+     */
+    public void setCategoryId(Long categoryId) {
+        this.categoryId = categoryId;
+    }
+
+    /**
+     * 品牌 ID。
+     *
+     * @return 品牌 ID；未挂载为 null
+     */
+    public Long getBrandId() {
+        return brandId;
+    }
+
+    /**
+     * 设置品牌 ID。
+     *
+     * @param brandId 品牌 ID
+     */
+    public void setBrandId(Long brandId) {
+        this.brandId = brandId;
+    }
+
+    /**
+     * 商品状态。
+     *
+     * @return 状态
+     */
+    public ProductStatus getStatus() {
+        return status;
+    }
+
+    /**
+     * 设置商品状态。
+     *
+     * @param status 状态
+     */
+    public void setStatus(ProductStatus status) {
+        this.status = status;
+    }
+}

@@ -130,6 +130,36 @@ class EcommerceBusinessCodeTest {
         assertThat(EcommerceBusinessCode.defaultStatus("identity.onboarding_state")).isEqualTo(400);
     }
 
+    @Test
+    @DisplayName("H: catalog.product_not_found → 404（草稿商品不存在）")
+    void catalogProductNotFoundShouldMapTo404() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_not_found")).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_attribute_key_duplicate → 400（属性键重复）")
+    void catalogProductAttributeKeyDuplicateShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_attribute_key_duplicate")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.category_disabled → 400（禁用分类不可挂载）")
+    void catalogCategoryDisabledShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.category_disabled")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.category_in_use → 409（分类被商品引用拒绝禁用）")
+    void catalogCategoryInUseShouldMapTo409() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.category_in_use")).isEqualTo(409);
+    }
+
+    @Test
+    @DisplayName("H: catalog.brand_in_use → 409（品牌被商品引用拒绝禁用）")
+    void catalogBrandInUseShouldMapTo409() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.brand_in_use")).isEqualTo(409);
+    }
+
     // ---- Critical path ----
 
     @Test

@@ -1,0 +1,390 @@
+package com.nona.application.seller;
+
+import com.nona.api.common.PageQuery;
+import com.nona.api.common.PageResult;
+import com.nona.api.seller.ProductAttributeItem;
+import com.nona.api.seller.ProductAttributeRequest;
+import com.nona.api.seller.ProductDetail;
+import com.nona.api.seller.ProductDraftItem;
+import com.nona.api.seller.ProductDraftRequest;
+import com.nona.api.seller.ProductImageItem;
+import com.nona.api.seller.ProductImageRequest;
+import com.nona.domain.catalog.entity.Brand;
+import com.nona.domain.catalog.entity.BrandStatus;
+import com.nona.domain.catalog.entity.CategoryStatus;
+import com.nona.domain.catalog.entity.PlatformCategory;
+import com.nona.domain.catalog.entity.Product;
+import com.nona.domain.catalog.entity.ProductAttribute;
+import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.factory.ProductFactory;
+import com.nona.domain.catalog.repo.BrandRepository;
+import com.nona.domain.catalog.repo.PlatformCategoryRepository;
+import com.nona.domain.catalog.repo.ProductRepository;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Objects;
+
+/**
+ * 商家端商品草稿用例：草稿 CRUD、图片引用管理（增删/设主图）与
+ * 自定义属性键值管理（增删改）编排。
+ * <p>
+ * 当前店铺由认证上下文定位（controller 从 ThreadContext 取租户 ID=当前店铺
+ * 传入创建路径；商品归属随写门禁注入租户列）。事务边界：所有写路径在用例
+ * 事务内完成「加载聚合 → 领域操作 → 变更集落库」；读路径直接查询。
+ * 跨店铺商品访问按不存在呈现（404——租户过滤 fail-closed，不泄露归属）。
+ * 类目/品牌引用校验（引用查询能力由平台分类/品牌仓储提供）：引用非空时目标必须存在且
+ * 启用（禁用态不可挂载）；更新场景引用保持不变时保留历史归属合法
+ * （域内既有商品在类目/品牌禁用后维持可见，此路径允许保留引用）。
+ * 草稿状态恒 DRAFT（可保存不生效——发布/审核链路属后续阶段）。
+ *
+ * @author nona9961
+ */
+@Service
+public class ProductUseCase {
+
+    /**
+     * 商品仓储
+     */
+    private final ProductRepository productRepository;
+
+    /**
+     * 商品聚合工厂
+     */
+    private final ProductFactory productFactory;
+
+    /**
+     * 平台分类仓储（引用存在性/启用校验）
+     */
+    private final PlatformCategoryRepository categoryRepository;
+
+    /**
+     * 品牌仓储（引用存在性/启用校验）
+     */
+    private final BrandRepository brandRepository;
+
+    /**
+     * 构造商品草稿用例。
+     *
+     * @param productRepository  商品仓储
+     * @param productFactory     商品工厂
+     * @param categoryRepository 平台分类仓储
+     * @param brandRepository    品牌仓储
+     */
+    public ProductUseCase(ProductRepository productRepository,
+                          ProductFactory productFactory,
+                          PlatformCategoryRepository categoryRepository,
+                          BrandRepository brandRepository) {
+        this.productRepository = productRepository;
+        this.productFactory = productFactory;
+        this.categoryRepository = categoryRepository;
+        this.brandRepository = brandRepository;
+    }
+
+    /**
+     * 创建商品草稿：类目/品牌引用校验 → 工厂创建（ID 生成/归属定型/
+     * 状态 DRAFT）→ 落库。
+     *
+     * @param shopId  当前店铺 ID（认证上下文）
+     * @param request 草稿主体（名称必填；描述/类目/品牌可空）
+     * @return 新建草稿详情
+     */
+    @Transactional
+    public ProductDetail createDraft(Long shopId, ProductDraftRequest request) {
+        requireReference(request.categoryId(), request.brandId());
+        final Product product = productFactory.createDraft(
+                shopId, request.name(), request.description(), request.categoryId(), request.brandId());
+        productRepository.save(product);
+        return toDetail(product);
+    }
+
+    /**
+     * 草稿列表（翻页；新商品在前）。
+     *
+     * @param shopId 当前店铺 ID（认证上下文）
+     * @param query  分页参数（pageNum/pageSize 已归一化）
+     * @return 分页草稿列表（概要行）
+     */
+    public PageResult<ProductDraftItem> listDrafts(Long shopId, PageQuery query) {
+        final List<Product> products = productRepository.listByShopPaged(
+                shopId, Math.toIntExact(query.offset()), query.pageSize());
+        final long total = productRepository.countByShop(shopId);
+        return PageResult.of(products.stream().map(ProductUseCase::toItem).toList(), total, query);
+    }
+
+    /**
+     * 草稿详情（含图片与属性完整列表）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 草稿详情
+     */
+    public ProductDetail detail(Long productId) {
+        return toDetail(requireProduct(productId));
+    }
+
+    /**
+     * 更新草稿主体：名称/描述/类目/品牌整体替换；引用变更时校验新目标
+     * 存在且启用（保留不变的历史归属合法）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   新主体
+     * @return 更新后的草稿详情
+     */
+    @Transactional
+    public ProductDetail update(Long productId, ProductDraftRequest request) {
+        final Product product = requireProduct(productId);
+        requireReferenceOnChange(product, request.categoryId(), request.brandId());
+        product.updateInfo(request.name(), request.description(), request.categoryId(), request.brandId());
+        productRepository.save(product);
+        return toDetail(product);
+    }
+
+    /**
+     * 删除草稿（物理删除：级联删图片/属性引用行）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     */
+    @Transactional
+    public void delete(Long productId) {
+        requireProduct(productId);
+        productRepository.deleteByID(productId);
+    }
+
+    /**
+     * 添加图片引用：工厂创建 → 聚合新增（主图唯一性聚合内保证）→ 落库。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   图片 URL 与主图标记
+     * @return 新建图片条目
+     */
+    @Transactional
+    public ProductImageItem addImage(Long productId, ProductImageRequest request) {
+        final Product product = requireProduct(productId);
+        final ProductImage image = productFactory.createImage(
+                product, request.url(), Boolean.TRUE.equals(request.primary()));
+        product.addImage(image);
+        productRepository.save(product);
+        return toImageItem(image);
+    }
+
+    /**
+     * 删除图片引用（主图被删后主图位清空）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param imageId   图片引用 ID（必须属于当前商品，否则 404）
+     */
+    @Transactional
+    public void removeImage(Long productId, Long imageId) {
+        final Product product = requireProduct(productId);
+        product.removeImage(imageId);
+        productRepository.save(product);
+    }
+
+    /**
+     * 设置主图（清除原主图标记，目标图片设为新主图）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param imageId   图片引用 ID（必须属于当前商品，否则 404）
+     * @return 更新后的主图条目
+     */
+    @Transactional
+    public ProductImageItem setPrimaryImage(Long productId, Long imageId) {
+        final Product product = requireProduct(productId);
+        product.setPrimaryImage(imageId);
+        productRepository.save(product);
+        return toImageItem(product.getImageById(imageId)
+                .orElseThrow(() -> new BusinessException(
+                        EcommerceBusinessCode.CATALOG_PRODUCT_IMAGE_NOT_FOUND.code(), "图片不存在")));
+    }
+
+    /**
+     * 添加自定义属性：工厂创建 → 聚合新增（键唯一性聚合内保证）→ 落库。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   属性键值
+     * @return 新建属性条目
+     */
+    @Transactional
+    public ProductAttributeItem addAttribute(Long productId, ProductAttributeRequest request) {
+        final Product product = requireProduct(productId);
+        final ProductAttribute attribute = productFactory.createAttribute(
+                product, request.key(), request.value());
+        product.addAttribute(attribute);
+        productRepository.save(product);
+        return toAttributeItem(attribute);
+    }
+
+    /**
+     * 更新自定义属性（改键保持唯一；值可空）。
+     *
+     * @param productId   商品 ID（必须属于当前店铺，否则 404）
+     * @param attributeId 属性 ID（必须属于当前商品，否则 404）
+     * @param request     新键值
+     * @return 更新后的属性条目
+     */
+    @Transactional
+    public ProductAttributeItem updateAttribute(Long productId, Long attributeId,
+                                                ProductAttributeRequest request) {
+        final Product product = requireProduct(productId);
+        product.updateAttribute(attributeId, request.key(), request.value());
+        productRepository.save(product);
+        return toAttributeItem(product.getAttributeById(attributeId)
+                .orElseThrow(() -> new BusinessException(
+                        EcommerceBusinessCode.CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND.code(), "属性不存在")));
+    }
+
+    /**
+     * 删除自定义属性。
+     *
+     * @param productId   商品 ID（必须属于当前店铺，否则 404）
+     * @param attributeId 属性 ID（必须属于当前商品，否则 404）
+     */
+    @Transactional
+    public void removeAttribute(Long productId, Long attributeId) {
+        final Product product = requireProduct(productId);
+        product.removeAttribute(attributeId);
+        productRepository.save(product);
+    }
+
+    /**
+     * 创建/更新引用校验：引用非空时目标必须存在且启用
+     * （禁用态不可挂载——「新商品不能挂」语义）。
+     *
+     * @param categoryId 平台类目 ID（可空）
+     * @param brandId    品牌 ID（可空）
+     */
+    private void requireReference(Long categoryId, Long brandId) {
+        requireCategoryReference(categoryId);
+        requireBrandReference(brandId);
+    }
+
+    /**
+     * 更新场景引用校验：仅当引用值发生变更时校验新目标（保留不变的历史
+     * 归属合法——既有商品在类目/品牌禁用后保持引用不变）。
+     *
+     * @param product      当前商品
+     * @param newCategoryId 新类目 ID（可空=清空）
+     * @param newBrandId    新品牌 ID（可空=清空）
+     */
+    private void requireReferenceOnChange(Product product, Long newCategoryId, Long newBrandId) {
+        if (!Objects.equals(product.getCategoryId(), newCategoryId)) {
+            requireCategoryReference(newCategoryId);
+        }
+        if (!Objects.equals(product.getBrandId(), newBrandId)) {
+            requireBrandReference(newBrandId);
+        }
+    }
+
+    /**
+     * 平台类目引用校验：存在且启用（不存在 404；禁用 400）。
+     *
+     * @param categoryId 类目 ID（可空）
+     */
+    private void requireCategoryReference(Long categoryId) {
+        if (categoryId == null) {
+            return;
+        }
+        final PlatformCategory category = categoryRepository.getByID(categoryId);
+        if (category == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_CATEGORY_NOT_FOUND.code(), "平台分类不存在");
+        }
+        if (category.getStatus() != CategoryStatus.ENABLED) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_CATEGORY_DISABLED.code(), "平台分类已禁用，不可挂载");
+        }
+    }
+
+    /**
+     * 品牌引用校验：存在且启用（不存在 404；禁用 400）。
+     *
+     * @param brandId 品牌 ID（可空）
+     */
+    private void requireBrandReference(Long brandId) {
+        if (brandId == null) {
+            return;
+        }
+        final Brand brand = brandRepository.getByID(brandId);
+        if (brand == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_BRAND_NOT_FOUND.code(), "品牌不存在");
+        }
+        if (brand.getStatus() != BrandStatus.ENABLED) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_BRAND_DISABLED.code(), "品牌已禁用，不可挂载");
+        }
+    }
+
+    /**
+     * 加载商品并断言存在（租户过滤 fail-closed：跨店铺商品按不存在呈现）。
+     *
+     * @param productId 商品 ID
+     * @return 商品聚合
+     */
+    private Product requireProduct(Long productId) {
+        final Product product = productRepository.getByID(productId);
+        if (product == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_NOT_FOUND.code(), "商品不存在");
+        }
+        return product;
+    }
+
+    /**
+     * 领域商品 → 契约详情。
+     *
+     * @param product 商品聚合
+     * @return 契约详情
+     */
+    private static ProductDetail toDetail(Product product) {
+        return new ProductDetail(
+                product.getId(),
+                product.getName(),
+                product.getDescription(),
+                product.getCategoryId(),
+                product.getBrandId(),
+                product.getStatus().name(),
+                product.imagesOrdered().stream().map(ProductUseCase::toImageItem).toList(),
+                product.attributesOrdered().stream().map(ProductUseCase::toAttributeItem).toList());
+    }
+
+    /**
+     * 领域商品 → 契约列表项。
+     *
+     * @param product 商品聚合
+     * @return 契约列表项
+     */
+    private static ProductDraftItem toItem(Product product) {
+        return new ProductDraftItem(
+                product.getId(),
+                product.getName(),
+                product.getStatus().name(),
+                product.getCategoryId(),
+                product.getBrandId(),
+                product.imagesOrdered().size(),
+                product.attributesOrdered().size());
+    }
+
+    /**
+     * 领域图片引用 → 契约条目。
+     *
+     * @param image 图片引用
+     * @return 契约条目
+     */
+    private static ProductImageItem toImageItem(ProductImage image) {
+        return new ProductImageItem(image.getId(), image.getUrl(), image.isPrimary());
+    }
+
+    /**
+     * 领域属性 → 契约条目。
+     *
+     * @param attribute 属性
+     * @return 契约条目
+     */
+    private static ProductAttributeItem toAttributeItem(ProductAttribute attribute) {
+        return new ProductAttributeItem(attribute.getId(), attribute.getKey(), attribute.getValue());
+    }
+}

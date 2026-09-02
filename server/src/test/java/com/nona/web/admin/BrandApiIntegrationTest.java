@@ -2,7 +2,15 @@ package com.nona.web.admin;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.auth.Portal;
+import com.nona.domain.catalog.entity.Product;
+import com.nona.domain.catalog.factory.ProductFactory;
+import com.nona.domain.catalog.repo.ProductRepository;
+import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.repository.jpa.BrandJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import com.nona.inf.security.AccountStatus;
 import com.nona.inf.security.AuthUserCache;
 import com.nona.inf.security.AuthUserContext;
@@ -86,15 +94,73 @@ class BrandApiIntegrationTest {
     private AuthUserCache authUserCache;
 
     /**
-     * 每用例前：清空品牌表，模拟平台运营身份。
+     * 每用例前：清空品牌表与商品相关表，模拟平台运营身份。
      */
     @BeforeEach
     void setUp() {
         brandRepository.deleteAll();
+        tenantPrivilege.elevated(() -> {
+            productAttributeJpaRepository.deleteAll();
+            productImageJpaRepository.deleteAll();
+            productJpaRepository.deleteAll();
+        });
         when(authUserCache.get(anyLong())).thenReturn(Optional.empty());
         when(authUserCache.get(ADMIN_UID)).thenReturn(Optional.of(
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("ADMIN"), List.of())));
     }
+
+    /**
+     * 商品主表 JPA（商品引用守卫测试的数据清理）
+     */
+    @Autowired
+    private ProductJpaRepository productJpaRepository;
+
+    /**
+     * 商品图片子表 JPA（商品引用守卫测试的数据清理）
+     */
+    @Autowired
+    private ProductImageJpaRepository productImageJpaRepository;
+
+    /**
+     * 商品属性子表 JPA（商品引用守卫测试的数据清理）
+     */
+    @Autowired
+    private ProductAttributeJpaRepository productAttributeJpaRepository;
+
+    /**
+     * 商品聚合工厂（商品引用守卫测试的数据准备）
+     */
+    @Autowired
+    private ProductFactory productFactory;
+
+    /**
+     * 商品仓储（商品引用守卫测试的数据准备/解除）
+     */
+    @Autowired
+    private ProductRepository productRepository;
+
+    /**
+     * 请求级上下文（商品创建需模拟商家租户）
+     */
+    @Autowired
+    private ThreadContext threadContext;
+
+    /**
+     * 提权工具（tenant-scoped 商品表清理）
+     */
+    @Autowired
+    private TenantPrivilege tenantPrivilege;
+
+    /**
+     * 编程式事务模板（商品引用守卫测试的数据写路径）
+     */
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate tx;
+
+    /**
+     * 商品引用守卫测试用的商家店铺租户
+     */
+    private static final String GUARD_TENANT = "91601";
 
     /**
      * happy：创建——名称与 logo 透传，状态 ENABLED。
@@ -518,5 +584,48 @@ class BrandApiIntegrationTest {
      */
     private String adminToken() {
         return tokenProvider.issueToken(ADMIN_UID, Portal.ADMIN);
+    }
+
+    /**
+     * guard（引用守卫）：存在商品引用该品牌时禁用/删除拒绝（409），
+     * 引用解除（商品删除）后才可禁用——商品侧删引用/删商品是唯一解除路径。
+     * 创建引用商品需模拟商家租户上下文（请求级租户，用例事务语义）。
+     */
+    @Test
+    @DisplayName("有商品引用时禁用拒绝且解除引用后可禁用")
+    void disable_rejectedWhileProductReferencesRemain() throws Exception {
+        final long brandId = createAs("示例", null);
+        threadContext.setTenantID(GUARD_TENANT);
+        Product product;
+        try {
+            product = tx.execute(status -> {
+                final Product created = productFactory.createDraft(91601L, "挂品牌商品", null, null, brandId);
+                productRepository.save(created);
+                return created;
+            });
+        } finally {
+            threadContext.setTenantID(null);
+        }
+        assertThat(product).isNotNull();
+
+        mockMvc.perform(post("/admin/brands/" + brandId + "/disable")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isConflict());
+        mockMvc.perform(delete("/admin/brands/" + brandId)
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isConflict());
+
+        threadContext.setTenantID(GUARD_TENANT);
+        try {
+            tx.execute(status -> {
+                productRepository.deleteByID(product.getId());
+                return null;
+            });
+        } finally {
+            threadContext.setTenantID(null);
+        }
+        mockMvc.perform(post("/admin/brands/" + brandId + "/disable")
+                        .header("Authorization", "Bearer " + adminToken()))
+                .andExpect(status().isOk());
     }
 }

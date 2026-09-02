@@ -7,8 +7,10 @@ import com.nona.domain.catalog.entity.CategoryStatus;
 import com.nona.domain.catalog.entity.PlatformCategory;
 import com.nona.domain.catalog.factory.PlatformCategoryFactory;
 import com.nona.domain.catalog.repo.PlatformCategoryRepository;
+import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,15 +43,23 @@ public class PlatformCategoryUseCase {
     private final PlatformCategoryFactory categoryFactory;
 
     /**
+     * 商品仓储（禁用守卫：有商品引用的分类拒绝禁用）
+     */
+    private final ProductRepository productRepository;
+
+    /**
      * 构造平台分类用例。
      *
      * @param categoryRepository 平台分类仓储
      * @param categoryFactory    平台分类工厂
+     * @param productRepository  商品仓储（禁用前引用检查）
      */
     public PlatformCategoryUseCase(PlatformCategoryRepository categoryRepository,
-                                   PlatformCategoryFactory categoryFactory) {
+                                   PlatformCategoryFactory categoryFactory,
+                                   ProductRepository productRepository) {
         this.categoryRepository = categoryRepository;
         this.categoryFactory = categoryFactory;
+        this.productRepository = productRepository;
     }
 
     /**
@@ -109,19 +119,25 @@ public class PlatformCategoryUseCase {
      *
      * @param categoryId 分类 ID
      */
+    @CrossTenant
     @Transactional
     public void delete(Long categoryId) {
         disable(categoryId);
     }
 
     /**
-     * 禁用分类（与删除同语义，显式状态动作）。
+     * 禁用分类（与删除同语义，显式状态动作）：禁用前检查商品引用——有
+     * 商品引用的分类拒绝禁用（409，引用守卫；商品引用检查
+     * 为跨租户读，故读放行 @CrossTenant——写门禁不受影响，仍由
+     * elevatedInTransaction 语义管辖）。
      *
      * @param categoryId 分类 ID
      */
+    @CrossTenant
     @Transactional
     public void disable(Long categoryId) {
         final PlatformCategory category = requireCategory(categoryId);
+        requireNoProductReference(categoryId);
         category.disable();
         categoryRepository.save(category);
     }
@@ -136,6 +152,19 @@ public class PlatformCategoryUseCase {
         final PlatformCategory category = requireCategory(categoryId);
         category.enable();
         categoryRepository.save(category);
+    }
+
+    /**
+     * 商品引用守卫：存在引用本分类的商品即拒绝禁用（409 冲突语义；
+     * 引用解除路径 = 商品侧删引用/删商品，属商品域用例）。
+     *
+     * @param categoryId 分类 ID
+     */
+    private void requireNoProductReference(Long categoryId) {
+        if (productRepository.existsByCategoryId(categoryId)) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_CATEGORY_IN_USE.code(), "存在商品引用该分类，不能禁用");
+        }
     }
 
     /**

@@ -9,7 +9,7 @@ import com.nona.exceptions.BusinessException;
  * 与 catalog 域 {@code CategoryStatus} / {@code BrandStatus} 语义一一对应
  * （enabled 启用 / disabled 禁用），映射点收敛在各端用例（switch 显式转换）。
  * 禁用 = 软删（disable-not-delete）：禁用后既有商品保持历史挂载可见，
- * 新商品不可挂载（商品侧挂载守卫属商品域后续工作）。
+ * 新商品不可挂载（挂载校验在商品创建/更新路径）。
  *
  * @author nona9961
  */

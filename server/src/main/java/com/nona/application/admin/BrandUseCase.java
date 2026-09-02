@@ -7,8 +7,10 @@ import com.nona.domain.catalog.entity.Brand;
 import com.nona.domain.catalog.entity.BrandStatus;
 import com.nona.domain.catalog.factory.BrandFactory;
 import com.nona.domain.catalog.repo.BrandRepository;
+import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,7 +25,7 @@ import java.util.Optional;
  * 「删除」= 禁用（disable-not-delete 软删），与显式禁用同语义（行保留）。
  * 名称唯一性守卫（含禁用态不可复用）：创建/更新前按名称查重，撞名 400；
  * 并发竞态由数据库唯一约束兜底（仓储层翻译为业务冲突）。
- * 禁用品牌既有商品保持可见、新商品不可挂（挂载守卫属商品域后续工作）。
+ * 禁用品牌既有商品保持可见、新商品不可挂（挂载校验在商品创建/更新路径）。
  *
  * @author nona9961
  */
@@ -41,14 +43,23 @@ public class BrandUseCase {
     private final BrandFactory brandFactory;
 
     /**
+     * 商品仓储（禁用守卫：有商品引用的品牌拒绝禁用）
+     */
+    private final ProductRepository productRepository;
+
+    /**
      * 构造品牌用例。
      *
-     * @param brandRepository 品牌仓储
-     * @param brandFactory    品牌工厂
+     * @param brandRepository   品牌仓储
+     * @param brandFactory      品牌工厂
+     * @param productRepository 商品仓储（禁用前引用检查）
      */
-    public BrandUseCase(BrandRepository brandRepository, BrandFactory brandFactory) {
+    public BrandUseCase(BrandRepository brandRepository,
+                        BrandFactory brandFactory,
+                        ProductRepository productRepository) {
         this.brandRepository = brandRepository;
         this.brandFactory = brandFactory;
+        this.productRepository = productRepository;
     }
 
     /**
@@ -103,19 +114,25 @@ public class BrandUseCase {
      *
      * @param brandId 品牌 ID
      */
+    @CrossTenant
     @Transactional
     public void delete(Long brandId) {
         disable(brandId);
     }
 
     /**
-     * 禁用品牌（与删除同语义，显式状态动作）。
+     * 禁用品牌（与删除同语义，显式状态动作）：禁用前检查商品引用——有
+     * 商品引用的品牌拒绝禁用（409，引用守卫；商品引用检查
+     * 为跨租户读，故读放行 @CrossTenant——写门禁不受影响，仍由
+     * elevatedInTransaction 语义管辖）。
      *
      * @param brandId 品牌 ID
      */
+    @CrossTenant
     @Transactional
     public void disable(Long brandId) {
         final Brand brand = requireBrand(brandId);
+        requireNoProductReference(brandId);
         brand.disable();
         brandRepository.save(brand);
     }
@@ -130,6 +147,19 @@ public class BrandUseCase {
         final Brand brand = requireBrand(brandId);
         brand.enable();
         brandRepository.save(brand);
+    }
+
+    /**
+     * 商品引用守卫：存在引用本品牌的商品即拒绝禁用（409 冲突语义；
+     * 引用解除路径 = 商品侧删引用/删商品，属商品域用例）。
+     *
+     * @param brandId 品牌 ID
+     */
+    private void requireNoProductReference(Long brandId) {
+        if (productRepository.existsByBrandId(brandId)) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_BRAND_IN_USE.code(), "存在商品引用该品牌，不能禁用");
+        }
     }
 
     /**
