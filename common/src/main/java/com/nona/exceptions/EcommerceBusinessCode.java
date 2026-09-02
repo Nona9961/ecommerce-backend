@@ -45,6 +45,21 @@ public enum EcommerceBusinessCode {
     IDENTITY_ADDRESS_NOT_FOUND("identity.address_not_found", 404),
 
     /**
+     * 身份域：入驻申请已存在（每个提交实体至多一个申请，提交/重提路径的账号冲突）。
+     */
+    IDENTITY_ONBOARDING_CONFLICT("identity.onboarding_conflict", 400),
+
+    /**
+     * 身份域：入驻申请不存在（按 ID 操作命中归属不明或不存在的申请）。
+     */
+    IDENTITY_ONBOARDING_NOT_FOUND("identity.onboarding_not_found", 404),
+
+    /**
+     * 身份域：入驻申请非法状态迁移（非 pending 审核 / 非 rejected 重提 / 终态修改 / 缺驳回原因）。
+     */
+    IDENTITY_ONBOARDING_STATE("identity.onboarding_state", 400),
+
+    /**
      * 商品域占位基码：资源不存在。
      */
     CATALOG_NOT_FOUND("catalog.not_found", 404),

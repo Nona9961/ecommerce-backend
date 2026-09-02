@@ -76,6 +76,24 @@ class EcommerceBusinessCodeTest {
         assertThat(EcommerceBusinessCode.defaultStatus("payment.not_found")).isEqualTo(404);
     }
 
+    @Test
+    @DisplayName("H: identity.onboarding_conflict → 400（入驻申请已存在）")
+    void identityOnboardingConflictShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("identity.onboarding_conflict")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: identity.onboarding_not_found → 404（入驻申请不存在）")
+    void identityOnboardingNotFoundShouldMapTo404() {
+        assertThat(EcommerceBusinessCode.defaultStatus("identity.onboarding_not_found")).isEqualTo(404);
+    }
+
+    @Test
+    @DisplayName("H: identity.onboarding_state → 400（入驻申请非法状态迁移）")
+    void identityOnboardingStateShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("identity.onboarding_state")).isEqualTo(400);
+    }
+
     // ---- Critical path ----
 
     @Test
