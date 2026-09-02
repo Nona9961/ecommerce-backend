@@ -125,9 +125,34 @@ public enum EcommerceBusinessCode {
     CATALOG_BRAND_NAME_BLANK("catalog.brand_name_blank", 400),
 
     /**
-     * 商品域：品牌名称冲突（C16，名称全局唯一，禁用态品牌名也不可复用）。
+     * 商品域：品牌名称冲突（名称全局唯一，禁用态品牌名也不可复用）。
      */
     CATALOG_BRAND_NAME_CONFLICT("catalog.brand_name_conflict", 400),
+
+    /**
+     * 商品域：运费模板不存在（目标模板不属于当前店铺，按不存在呈现）。
+     */
+    CATALOG_FREIGHT_TEMPLATE_NOT_FOUND("catalog.freight_template_not_found", 404),
+
+    /**
+     * 商品域：运费模板名称不能为空。
+     */
+    CATALOG_FREIGHT_TEMPLATE_NAME_BLANK("catalog.freight_template_name_blank", 400),
+
+    /**
+     * 商品域：运费模板规则配置非法（规则类型缺失/未知、计费参数缺失或非正）。
+     */
+    CATALOG_FREIGHT_TEMPLATE_INVALID_RULES("catalog.freight_template_invalid_rules", 400),
+
+    /**
+     * 商品域：运费模板已停用（新订单不可用——计算器领域守卫）。
+     */
+    CATALOG_FREIGHT_TEMPLATE_DISABLED("catalog.freight_template_disabled", 400),
+
+    /**
+     * 商品域：运费计算输入非法（空模板、负商品金额、负件数——防御性拒绝）。
+     */
+    CATALOG_FREIGHT_INPUT_INVALID("catalog.freight_input_invalid", 400),
 
     /**
      * 库存域占位基码：资源不存在。
