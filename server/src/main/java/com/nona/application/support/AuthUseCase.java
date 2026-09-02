@@ -9,14 +9,14 @@ import com.nona.domain.identity.entity.Account;
 import com.nona.domain.identity.entity.AccountStatus;
 import com.nona.domain.identity.entity.AccountType;
 import com.nona.domain.identity.factory.AccountFactory;
+import com.nona.domain.identity.entity.AccountShopRel;
 import com.nona.domain.identity.ports.CredentialService;
 import com.nona.domain.identity.ports.IssuedToken;
 import com.nona.domain.identity.ports.TokenService;
 import com.nona.domain.identity.repo.AccountRepository;
+import com.nona.domain.identity.repo.AccountShopRelRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.persistence.po.identity.AccountShopRelPO;
-import com.nona.inf.persistence.repository.jpa.AccountShopRelJpaRepository;
 import com.nona.inf.security.AuthUserCache;
 import com.nona.inf.security.AuthUserContext;
 import org.springframework.stereotype.Service;
@@ -51,9 +51,9 @@ public class AuthUseCase {
     private final AccountRepository accountRepository;
 
     /**
-     * 账号-店铺关联 JPA 仓储（登录组装 shopIds）
+     * 账号-店铺关联仓储（登录组装 shopIds）
      */
-    private final AccountShopRelJpaRepository accountShopRelRepository;
+    private final AccountShopRelRepository accountShopRelRepository;
 
     /**
      * 账号聚合工厂
@@ -86,7 +86,7 @@ public class AuthUseCase {
      * @param authUserCache            用户上下文缓存
      */
     public AuthUseCase(AccountRepository accountRepository,
-                       AccountShopRelJpaRepository accountShopRelRepository,
+                       AccountShopRelRepository accountShopRelRepository,
                        AccountFactory accountFactory,
                        CredentialService credentialService,
                        TokenService tokenService,
@@ -141,7 +141,7 @@ public class AuthUseCase {
             throw new BusinessException(EcommerceBusinessCode.AUTH_FORBIDDEN.code(), "账号已被封禁，禁止登录", 403);
         }
         final List<Long> shopIds = accountShopRelRepository.findByAccountId(account.getId()).stream()
-                .map(AccountShopRelPO::getShopId)
+                .map(AccountShopRel::getShopId)
                 .toList();
         authUserCache.put(account.getId(), new AuthUserContext(
                 com.nona.inf.security.AccountStatus.ACTIVE,
