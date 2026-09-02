@@ -95,6 +95,41 @@ public enum EcommerceBusinessCode {
     CATALOG_SHOP_CATEGORY_DUPLICATE("catalog.shop_category_duplicate", 400),
 
     /**
+     * 商品域：平台分类不存在（按 ID 操作命中不存在的平台分类）。
+     */
+    CATALOG_CATEGORY_NOT_FOUND("catalog.category_not_found", 404),
+
+    /**
+     * 商品域：平台分类名称不能为空。
+     */
+    CATALOG_CATEGORY_NAME_BLANK("catalog.category_name_blank", 400),
+
+    /**
+     * 商品域：平台分类名称冲突（名称全局唯一，禁用态分类名也不可复用）。
+     */
+    CATALOG_CATEGORY_NAME_CONFLICT("catalog.category_name_conflict", 400),
+
+    /**
+     * 商品域：平台分类排序值非法（排序必须为正数）。
+     */
+    CATALOG_CATEGORY_ORDER_INVALID("catalog.category_order_invalid", 400),
+
+    /**
+     * 商品域：品牌不存在（按 ID 操作命中不存在的品牌）。
+     */
+    CATALOG_BRAND_NOT_FOUND("catalog.brand_not_found", 404),
+
+    /**
+     * 商品域：品牌名称不能为空。
+     */
+    CATALOG_BRAND_NAME_BLANK("catalog.brand_name_blank", 400),
+
+    /**
+     * 商品域：品牌名称冲突（C16，名称全局唯一，禁用态品牌名也不可复用）。
+     */
+    CATALOG_BRAND_NAME_CONFLICT("catalog.brand_name_conflict", 400),
+
+    /**
      * 库存域占位基码：资源不存在。
      */
     INVENTORY_NOT_FOUND("inventory.not_found", 404),
