@@ -142,7 +142,7 @@ class AuthApiIntegrationTest {
     }
 
     /**
-     * happy：登录成功返回 token 与店铺 ID 列表（U5；买家空列表合法）。
+     * happy：登录成功返回 token 与店铺 ID 列表（买家端空列表合法）。
      */
     @Test
     void login_buyer_returnsTokenAndEmptyShopIds() throws Exception {
@@ -173,7 +173,7 @@ class AuthApiIntegrationTest {
     }
 
     /**
-     * error：BANNED 账号登录 → 403（封禁拒绝登录，C11）。
+     * error：BANNED 账号登录 → 403（封禁账号拒绝登录）。
      */
     @Test
     void login_bannedAccount_returns403() throws Exception {

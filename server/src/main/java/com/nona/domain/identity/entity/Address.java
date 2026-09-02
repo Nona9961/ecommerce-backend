@@ -158,7 +158,7 @@ public class Address {
     /**
      * 是否默认地址。
      *
-     * @return 默认返回 true
+     * @return 是默认地址时返回 true
      */
     public boolean isDefault() {
         return isDefault;

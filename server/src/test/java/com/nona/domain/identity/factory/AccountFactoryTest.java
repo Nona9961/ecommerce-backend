@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 账号工厂单元测试：聚合创建与不变量初始化（单表 account 语义，type 区分买家/商家）。
  * <p>
  * 成功路径依赖凭证端口（Phase 1 骨架态，预期红）；纯拼装路径（类型校验、关联创建）
- * 随工厂真实实现转绿。平台运营（admin）账号无落点（RBAC 属 WU-10/Phase-II），
+ * 随工厂真实实现转绿。平台运营（admin）账号无落点（RBAC 属 Phase-II），
  * 工厂不接受 ADMIN——AccountType 枚举本身不存在该值，编译期即排除。
  */
 class AccountFactoryTest {
@@ -90,7 +90,7 @@ class AccountFactoryTest {
     }
 
     /**
-     * 创建账号-店铺关联（M10）：ID 生成与两端 ID 正确。
+     * 创建账号-店铺关联：账号行与店铺行各自生成 ID，两端 ID 正确。
      */
     @Test
     void createAccountShopRel_initializesRel() {

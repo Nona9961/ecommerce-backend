@@ -69,7 +69,16 @@ public class AuthController implements AuthApi {
     @Override
     @PostMapping("/auth/logout")
     public HttpResponse<Void> logout() {
-        authUseCase.logout(Long.valueOf(threadContext.getIdentity()));
+        authUseCase.logout(currentAccountId());
         return HttpResponse.ok();
+    }
+
+    /**
+     * 当前登录用户 ID（认证过滤器写入 ThreadContext 的身份）。
+     *
+     * @return 用户账号 ID
+     */
+    private Long currentAccountId() {
+        return Long.valueOf(threadContext.getIdentity());
     }
 }

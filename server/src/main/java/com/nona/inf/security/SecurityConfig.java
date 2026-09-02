@@ -28,7 +28,7 @@ import java.nio.charset.StandardCharsets;
  * 未认证统一 401（{@code auth.unauthorized}），已认证但角色不匹配（含封禁拦截）统一 403
  * （{@code auth.forbidden}）；登录/注册/健康检查等公开路径放行。
  * 账号状态 SPI（AccountStatusProvider）由身份域 JPA 实现直接注入过滤器
- * （ObjectProvider 懒取语义已随认证实现落地删除）。
+ * （ObjectProvider 懒取已随认证实现落地移除，改为直接注入）。
  *
  * @author nona9961
  */

@@ -108,7 +108,7 @@ class JpaAccountStatusProviderTest {
     }
 
     /**
-     * 商家账号：SELLER 角色 + 关联店铺列表（M10 rel 填充 shopIds）。
+     * 商家账号：SELLER 角色 + 关联店铺列表（rel 填充 shopIds）。
      */
     @Test
     void loadUserContext_sellerAccount_returnsSellerContextWithShopIds() {
@@ -126,7 +126,7 @@ class JpaAccountStatusProviderTest {
     }
 
     /**
-     * 平台运营（portal=ADMIN）：单表无 admin 落点（RBAC 属 WU-10/Phase-II），
+     * 平台运营（portal=ADMIN）：单表无 admin 落点（RBAC 属 Phase-II），
      * 查询返回空 → 过滤器按未认证处理（fail-closed，登录拒绝）。
      */
     @Test

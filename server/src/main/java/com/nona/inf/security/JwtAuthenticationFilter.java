@@ -31,7 +31,7 @@ import java.util.Optional;
  * 本过滤器只做「认定」与「组装」：token 非法/过期、用户不存在一律不设置认证
  * （沿用链式 401 语义）；封禁（BANNED）属于已认定但被拒的账号，按设计统一 403
  * （{@code auth.forbidden}），由本过滤器直接裁决。账号状态 SPI 由身份域注册的 JPA
- * 实现直接注入（删除懒取语义（认证实现随本域落地），实现缺失即启动失败——fail-fast）。
+ * 实现直接注入（认证实现随本域落地），实现缺失即启动失败（fail-fast）。
  *
  * @author nona9961
  */
@@ -59,7 +59,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AuthUserCache userCache;
 
     /**
-     * DB SPI（身份域 JPA 实现，直接注入——删除懒取语义（认证实现随本域落地））
+     * DB SPI（身份域 JPA 实现，直接注入）
      */
     private final AccountStatusProvider accountStatusProvider;
 

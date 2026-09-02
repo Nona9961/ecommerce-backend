@@ -15,7 +15,7 @@ import java.util.Optional;
 
 /**
  * 入驻申请 JPA 仓储（onboarding_application 表，global）：按提交实体定向查询、
- * 按状态/全量分页（提交时间倒序由调用方排序）、审核行写锁与账号行写锁。
+ * 按状态/全量分页（提交时间正序由调用方排序）、审核行写锁与账号行写锁。
  * <p>
  * 锁语义：{@link #lockApplication} 对申请行加悲观写锁（审核并发串行化）；
  * {@link #lockAccount} 借道账号表行加锁（商家必然存在，登录链路保证）——
@@ -35,7 +35,7 @@ public interface MerchantApplicationJpaRepository extends JpaRepository<Merchant
     Optional<MerchantApplicationPO> findByAccountId(Long accountId);
 
     /**
-     * 按状态分页查询申请（排序由调用方指定，平台列表固定提交时间倒序）。
+     * 按状态分页查询申请（排序由调用方指定，平台列表固定提交时间正序）。
      *
      * @param status   申请状态
      * @param pageable 分页与排序

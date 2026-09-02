@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 无真实 Redis（缓存以 mock 替代）；账号数据直接写入 H2 内存库（account / account_shop_rel），
  * AccountStatusProvider 走真实 JPA 实现（Phase 1 骨架态：回填路径预期红，缓存命中路径随过滤器
  * 改造转绿）。
- * 覆盖：DB 回填组装上下文、商家店铺上下文写入租户（U5 shopIds）、BANNED 真实数据 403、
+ * 覆盖：DB 回填组装上下文、商家店铺上下文写入租户（shopIds 落租户）、BANNED 真实数据 403、
  * 缓存命中直取、uid 不存在 401、平台运营（portal=ADMIN）无落点 401（fail-closed）。
  */
 @SpringBootTest(properties = "management.health.redis.enabled=false")
@@ -130,7 +130,7 @@ class AuthChainJpaIntegrationTest {
 
     /**
      * DB 回填（商家真实数据 + rel）：account 表命中 type=SELLER → SELLER 角色 + 店铺上下文
-     * 写入 ThreadContext.tenantID（U5 shopIds 落租户）。Phase 1 红（JPA 回填骨架态）。
+     * 写入 ThreadContext.tenantID（shopIds 落租户）。Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_sellerFromDb_fillsTenantFromShopIds() throws Exception {
@@ -161,7 +161,7 @@ class AuthChainJpaIntegrationTest {
 
     /**
      * 缓存命中（带 shopIds）：不查 DB，过滤器直接取上下文当前店铺写入租户。
-     * 随过滤器改造转绿（验证 U5 店铺上下文填充机制）。
+     * 随过滤器改造转绿（验证店铺上下文填充机制）。
      */
     @Test
     void cacheHit_withShopIds_fillsTenantFromContext() throws Exception {
@@ -177,7 +177,7 @@ class AuthChainJpaIntegrationTest {
     }
 
     /**
-     * 平台运营（portal=ADMIN）：单表无 admin 账号落点（RBAC 属 WU-10/Phase-II），
+     * 平台运营（portal=ADMIN）：单表无 admin 账号落点（RBAC 属 Phase-II），
      * DB 回填查无账号 → 401（fail-closed：admin 端在 RBAC 落地前不可达）。
      * Phase 1 红（JPA 回填骨架态）。
      */

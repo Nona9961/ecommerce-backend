@@ -52,7 +52,7 @@ class RedisLastWriteMarkerTest {
     }
 
     /**
-     * 标记写入：按 uid 定位 key 并携带窗口 TTL（TD-08：TTL 5s）。
+     * 标记写入：按 uid 定位 key 并携带窗口 TTL（5 秒）。
      */
     @Test
     void markWrite_setsKeyWithWindowTtl() {
