@@ -8,22 +8,22 @@ import jakarta.persistence.Table;
 
 /**
  * 买家收货地址持久化对象（address 表，global）：地址簿的一行，
- * 归属买家维度（account_id），默认标记（is_default）同买家至多一个
- * （唯一性由应用层买家维度锁 + 迁移式更新保证，见 AddressBookRepository）。
+ * 归属地址簿主键（book_id，rootId 关联 address_book），默认标记（is_default）
+ * 同买家至多一个（唯一性由应用层买家维度锁 + 迁移式更新保证，见 AddressBookRepository）。
  *
  * @author nona9961
  */
 @Entity
 @Table(name = "address", indexes = {
-        @Index(name = "idx_address_account", columnList = "account_id")
+        @Index(name = "idx_address_book", columnList = "book_id")
 })
 public class AddressPO extends BasePO {
 
     /**
-     * 归属买家账号 ID
+     * 所属地址簿主键（rootId 关联）
      */
-    @Column(nullable = false, name = "account_id")
-    private Long accountId;
+    @Column(nullable = false, name = "book_id")
+    private Long bookId;
 
     /**
      * 收件人
@@ -68,21 +68,21 @@ public class AddressPO extends BasePO {
     private Boolean isDefault;
 
     /**
-     * 归属买家账号 ID。
+     * 所属地址簿主键。
      *
-     * @return 买家账号 ID
+     * @return 地址簿主键
      */
-    public Long getAccountId() {
-        return accountId;
+    public Long getBookId() {
+        return bookId;
     }
 
     /**
-     * 设置归属买家账号 ID。
+     * 设置所属地址簿主键。
      *
-     * @param accountId 买家账号 ID
+     * @param bookId 地址簿主键
      */
-    public void setAccountId(Long accountId) {
-        this.accountId = accountId;
+    public void setBookId(Long bookId) {
+        this.bookId = bookId;
     }
 
     /**

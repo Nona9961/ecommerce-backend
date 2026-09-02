@@ -3,7 +3,7 @@ package com.nona.domain.identity.entity;
 /**
  * 收货地址（AddressBook 聚合内实体）：地址簿的组成单元，一行对应 address 表一条记录。
  * <p>
- * 携带归属键 accountId（与所属地址簿一致，创建时定型不可变）——持久化行级映射所需，
+ * 携带归属键 bookId（所属地址簿主键，创建时定型不可变）——持久化行级映射所需，
  * 归属一致性由工厂与聚合保证（地址只经 AddressBook 聚合装载与操作，不单独游离存在）。
  * 默认标记（isDefault）不参与编辑（编辑只更新地址字段），默认标记的变更路径只有
  * 「新增时标记」与「设置默认」两种，保证默认唯一不变量集中在聚合内闭环。
@@ -18,9 +18,9 @@ public class Address {
     private final Long id;
 
     /**
-     * 归属买家账号 ID（与所属地址簿一致）
+     * 所属地址簿主键（rootId 关联，与所属地址簿一致）
      */
-    private final Long accountId;
+    private final Long bookId;
 
     /**
      * 收件人
@@ -61,7 +61,7 @@ public class Address {
      * 构造地址（仅 Factory 与聚合加载重建调用）。
      *
      * @param id        地址 ID
-     * @param accountId 归属买家账号 ID
+     * @param bookId    所属地址簿主键
      * @param recipient 收件人
      * @param phone     联系电话
      * @param province  省份
@@ -70,10 +70,10 @@ public class Address {
      * @param detail    详细地址
      * @param isDefault 是否默认地址
      */
-    public Address(Long id, Long accountId, String recipient, String phone,
+    public Address(Long id, Long bookId, String recipient, String phone,
                    String province, String city, String district, String detail, boolean isDefault) {
         this.id = id;
-        this.accountId = accountId;
+        this.bookId = bookId;
         this.recipient = recipient;
         this.phone = phone;
         this.province = province;
@@ -93,12 +93,12 @@ public class Address {
     }
 
     /**
-     * 归属买家账号 ID。
+     * 所属地址簿主键。
      *
-     * @return 买家账号 ID
+     * @return 地址簿主键
      */
-    public Long getAccountId() {
-        return accountId;
+    public Long getBookId() {
+        return bookId;
     }
 
     /**

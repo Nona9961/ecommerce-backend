@@ -4,11 +4,11 @@ import com.nona.domain.identity.entity.AddressBook;
 import com.nona.persistence.BaseRepository;
 
 /**
- * 地址簿仓储接口：买家地址簿的持久化契约（address 表，每行一个地址，买家维度）。
+ * 地址簿仓储接口：买家地址簿的持久化契约（address_book 主表 + address 从表，买家维度）。
  * <p>
- * 实现在基础设施层（AddressBookRepositoryImpl 以 JPA 行级同步 address 表落地）；
- * 领域层只依赖本契约，不感知 JPA。地址簿是单表集合形态（无「聚合根一行」的主表），
- * 故不套用 DifferRepository 的主表快照模板：读取按买家全量加载，保存按行级 diff 同步。
+ * 实现在基础设施层（AddressBookRepositoryImpl 继承 DifferRepository：主表快照追踪 + 变更集驱动落库）；
+ * 领域层只依赖本契约，不感知 JPA。聚合根主表以独立主键（bookId）承载簿身份，account_id 为
+ * 业务关联列（一个买家一本簿）；地址行以 book_id（rootId）关联聚合根。
  *
  * @author nona9961
  */
@@ -23,7 +23,7 @@ public interface AddressBookRepository extends BaseRepository<Long, AddressBook>
     AddressBook getByAccountId(Long accountId);
 
     /**
-     * 保存地址簿：与库内现状做行级 diff，新增/更新/删除最小化落库。
+     * 保存地址簿：变更集驱动落库，新增/更新/删除最小化写库。
      *
      * @param book 地址簿
      * @return 是否有行级变更被持久化

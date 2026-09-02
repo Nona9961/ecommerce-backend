@@ -9,8 +9,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 买家收货地址簿聚合根：买家维度的地址集合 + 默认标记（address 表每行一个地址）。
+ * 买家收货地址簿聚合根：买家维度的地址集合 + 默认标记（address_book 主表 + address 从表）。
  * <p>
+ * 聚合根拥有独立主键 bookId（Snowflake，address_book 表主键）；accountId 为业务关联列
+ * （一个买家一本簿，account_id 唯一）。从表地址行以 book_id（rootId）关联本聚合。
  * 关键不变量：同买家至多一个默认地址；设置新默认自动让位旧默认（覆盖语义）。
  * 不变量收敛在本聚合（add/setDefault/remove 都经过统一迁移逻辑），外部只能通过
  * 聚合方法变更地址簿；默认标记的写入入口（Address.markDefault）仅对本聚合可见。
@@ -20,7 +22,12 @@ import java.util.Optional;
 public class AddressBook {
 
     /**
-     * 归属买家账号 ID（聚合标识）
+     * 地址簿主键（Snowflake，聚合根标识）
+     */
+    private final Long bookId;
+
+    /**
+     * 归属买家账号 ID（业务关联列，address_book.account_id 唯一）
      */
     private final Long accountId;
 
@@ -32,10 +39,21 @@ public class AddressBook {
     /**
      * 构造地址簿（仅 Factory 与仓储加载重建调用）。
      *
+     * @param bookId    地址簿主键
      * @param accountId 归属买家账号 ID
      */
-    public AddressBook(Long accountId) {
+    public AddressBook(Long bookId, Long accountId) {
+        this.bookId = bookId;
         this.accountId = accountId;
+    }
+
+    /**
+     * 地址簿主键。
+     *
+     * @return 主键
+     */
+    public Long getId() {
+        return bookId;
     }
 
     /**

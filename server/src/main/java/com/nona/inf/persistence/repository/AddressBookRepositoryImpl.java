@@ -1,147 +1,245 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.changeTracking.domain.model.changeset.Change;
+import com.nona.changeTracking.domain.model.changeset.ChangeSet;
+import com.nona.changeTracking.domain.model.changeset.ItemAddedChange;
+import com.nona.changeTracking.domain.model.changeset.ItemRemovedChange;
+import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
 import com.nona.domain.identity.entity.Address;
 import com.nona.domain.identity.entity.AddressBook;
 import com.nona.domain.identity.repo.AddressBookRepository;
+import com.nona.inf.context.ThreadContext;
+import com.nona.inf.persistence.converters.AddressBookConvertor;
 import com.nona.inf.persistence.converters.AddressConvertor;
+import com.nona.inf.persistence.po.identity.AddressBookPO;
 import com.nona.inf.persistence.po.identity.AddressPO;
+import com.nona.inf.persistence.repository.jpa.AddressBookJpaRepository;
 import com.nona.inf.persistence.repository.jpa.AddressJpaRepository;
+import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 
 /**
- * 地址簿仓储落地：JPA 行级同步 address 表，实现域仓储契约 {@link AddressBookRepository}。
+ * 地址簿仓储落地：继承 {@link DifferRepository}（主表快照 + 变更追踪），
+ * 主表 address_book（id=簿独立主键 + account_id 业务关联）+ 从表 address（book_id 关联）。
  * <p>
- * 读取按买家全量加载（findByAccountIdOrderByIdAsc）；保存与库内现状做行级 diff：
- * 簿内存在而库内没有的行插入，字段不一致的行更新，库内剩余的行删除（最小化落库）。
- * 地址簿是单表集合形态（无主表行），不套用 DifferRepository 的主表快照模板——与
- * 账号-店铺关联（AccountShopRel）同类处理：直接包装 Spring Data 仓储。
+ * 读：按业务关联账号查主表行 → 走主键加载（track 快照）+ getOther 加载从表行；
+ * 保存：变更集驱动落库——集合项新增插行、删除删行、字段变更整行更新。
+ * 删除：deleteByID 级联删从表 + 主表，返回真实删除条数（根行）。
  *
  * @author nona9961
  */
 @Component
-public class AddressBookRepositoryImpl implements AddressBookRepository {
+public class AddressBookRepositoryImpl extends DifferRepository<AddressBook, AddressBookPO, List<AddressPO>>
+        implements AddressBookRepository {
 
     /**
-     * 地址 JPA 仓储
+     * 从表集合在聚合中的字段名（变更集路径解析用）
      */
-    private final AddressJpaRepository jpaRepository;
+    private static final String ADDRESSES_FIELD = "addresses";
 
     /**
-     * 地址实体 ↔ PO 转换器
+     * 地址子表 JPA 仓储（从表加载与落库）
      */
-    private final AddressConvertor convertor;
+    private final AddressJpaRepository addressJpaRepository;
 
     /**
-     * 构造仓储实现。
+     * 地址簿主表 JPA 仓储（业务关联查询）
+     */
+    private final AddressBookJpaRepository addressBookJpaRepository;
+
+    /**
+     * 地址行转换器
+     */
+    private final AddressConvertor addressConvertor;
+
+    /**
+     * 构造地址簿仓储。
      *
-     * @param jpaRepository 地址 JPA 仓储
-     * @param convertor     地址转换器
+     * @param repository             地址簿主表 JPA 仓储
+     * @param threadContext          请求级上下文（变更追踪器与快照）
+     * @param convertor              地址簿聚合转换器（主表 + 从表行集合）
+     * @param changeTrackerProvider  变更追踪器提供者
+     * @param addressJpaRepository   地址子表 JPA 仓储
+     * @param addressBookJpaRepository 地址簿主表 JPA 仓储（业务关联查询）
+     * @param addressConvertor       地址行转换器
      */
-    public AddressBookRepositoryImpl(AddressJpaRepository jpaRepository, AddressConvertor convertor) {
-        this.jpaRepository = jpaRepository;
-        this.convertor = convertor;
+    public AddressBookRepositoryImpl(AddressBookJpaRepository repository,
+                                     ThreadContext threadContext,
+                                     AddressBookConvertor convertor,
+                                     ChangeTrackerProvider changeTrackerProvider,
+                                     AddressJpaRepository addressJpaRepository,
+                                     AddressBookJpaRepository addressBookJpaRepository,
+                                     AddressConvertor addressConvertor) {
+        super(repository, threadContext, convertor, changeTrackerProvider);
+        this.addressJpaRepository = addressJpaRepository;
+        this.addressBookJpaRepository = addressBookJpaRepository;
+        this.addressConvertor = addressConvertor;
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 聚合标识 = 买家账号 ID，与 {@link #getByAccountId} 同语义。
+     * 从表行按加载序读出（ID 升序），作为聚合装配的 other 输入。
      */
     @Override
-    public AddressBook getByID(Long accountId) {
-        return getByAccountId(accountId);
+    protected List<AddressPO> getOther(AddressBookPO po) {
+        return addressJpaRepository.findByBookIdOrderByIdAsc(po.getId());
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 无任何地址时返回空簿（聚合始终存在；买家账号存在性由登录链路保证）。
+     * 聚合根主键 = 簿独立主键（bookId）。
      */
     @Override
-    public AddressBook getByAccountId(Long accountId) {
-        final List<Address> addresses = jpaRepository.findByAccountIdOrderByIdAsc(accountId).stream()
-                .map(convertor::toDomain)
-                .toList();
-        final AddressBook book = new AddressBook(accountId);
-        addresses.forEach(book::add);
-        return book;
+    protected Long retrieveIDFromRoot(AddressBook root) {
+        return root.getId();
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 行级 diff 落库：比较库内行与簿内地址（按 ID 对齐），
-     * 新增/字段变更行 save，库内剩余行删除；无任何差异时不执行 SQL。
+     * 插入根行 + 全部从表行（新簿首次落库）。
      */
     @Override
-    public boolean save(AddressBook book) {
-        Objects.requireNonNull(book, "地址簿不能为空");
-        final Map<Long, AddressPO> existingById = new HashMap<>();
-        jpaRepository.findByAccountIdOrderByIdAsc(book.getAccountId())
-                .forEach(po -> existingById.put(po.getId(), po));
+    protected void doInsert(AddressBook root) {
+        repository.save(convertor.convertToPO(root));
+        root.snapshot().forEach(address -> addressJpaRepository.save(addressConvertor.toPO(address)));
+    }
 
-        boolean changed = false;
-        for (final Address address : book.snapshot()) {
-            final AddressPO existing = existingById.remove(address.getId());
-            if (existing == null || !sameFields(existing, address)) {
-                jpaRepository.save(convertor.toPO(address));
-                changed = true;
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 变更集驱动落库：ensure 根行存在（空簿首次 add 的场景）→
+     * 集合新增插行 → 集合删除删行 → 字段变更整行更新。
+     */
+    @Override
+    protected void doUpdate(AddressBook root, ChangeSet changeSet) {
+        if (!repository.existsById(root.getId())) {
+            repository.save(convertor.convertToPO(root));
+        }
+        for (final Change change : changeSet.getLeafChanges()) {
+            if (!ADDRESSES_FIELD.equals(change.collectionFieldName())) {
+                continue;
+            }
+            if (change instanceof ItemAddedChange added) {
+                final Long addressId = extractIdentifier(added.addedItem());
+                root.getById(addressId)
+                        .ifPresent(address -> addressJpaRepository.save(addressConvertor.toPO(address)));
+            } else if (change instanceof ItemRemovedChange removed) {
+                final Long addressId = extractIdentifier(removed.removedItem());
+                addressJpaRepository.deleteById(addressId);
+            } else {
+                // ValueChange / ObjectFieldChange：整行更新（字段覆盖，避免逐字段映射漂移）
+                saveChangedRow(root, change);
             }
         }
-        if (!existingById.isEmpty()) {
-            jpaRepository.deleteAll(existingById.values());
-            changed = true;
-        }
-        return changed;
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 地址簿不整体删除（删除地址走簿内 remove 后 save）；返回 0 保持契约形。
+     * 删除整簿：委托 {@link #deleteByID}（按簿主键级联删除）。
      */
     @Override
     public int delete(AddressBook book) {
-        return 0;
+        return book == null ? 0 : deleteByID(book.getId());
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 地址簿不整体删除（删除地址走簿内 remove 后 save）；返回 0 保持契约形。
+     * 级联删除：先删从表行（按簿主键），再删根行；返回根行删除条数
+     * （0/1 真实语义，非契约形）。事务边界由用例层持有（REQUIRED 语义）。
      */
     @Override
-    public int deleteByID(Long id) {
-        return 0;
+    public int deleteByID(Long bookId) {
+        if (bookId == null) {
+            return 0;
+        }
+        addressJpaRepository.deleteByBookId(bookId);
+        if (!repository.existsById(bookId)) {
+            return 0;
+        }
+        repository.deleteById(bookId);
+        return 1;
     }
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 按业务关联账号加载：无簿时返回空簿（聚合始终存在语义）；
+     * 有簿时经主键路径加载（track 快照 + 装配）。
      */
     @Override
-    public void lockBuyer(Long accountId) {
-        jpaRepository.lockBuyerAccount(accountId);
+    public AddressBook getByAccountId(Long accountId) {
+        final Optional<AddressBookPO> po = addressBookJpaRepository.findByAccountId(accountId);
+        if (po.isPresent()) {
+            return getByID(po.get().getId());
+        }
+        final AddressBook empty = new AddressBook(com.nona.util.IDUtils.generateID(), accountId);
+        getOrCreateChangeTracker().track(empty);
+        threadContext.saveSnapshot(empty.getId(), empty);
+        return empty;
     }
 
     /**
-     * 比较库内行与领域实体的业务字段（默认标记在内；审计时间戳不参与比较）。
+     * 从变更节点提取集合项标识（Identifier 提取器按实体 id 注册）。
      *
-     * @param po      库内行
-     * @param address 领域实体
-     * @return 字段全一致返回 true
+     * @param node 变更节点（ObjectNode）
+     * @return 集合项 ID
      */
-    private static boolean sameFields(AddressPO po, Address address) {
-        return Objects.equals(po.getRecipient(), address.getRecipient())
-                && Objects.equals(po.getPhone(), address.getPhone())
-                && Objects.equals(po.getProvince(), address.getProvince())
-                && Objects.equals(po.getCity(), address.getCity())
-                && Objects.equals(po.getDistrict(), address.getDistrict())
-                && Objects.equals(po.getDetail(), address.getDetail())
-                && Boolean.TRUE.equals(po.getIsDefault()) == address.isDefault();
+    private static Long extractIdentifier(com.nona.changeTracking.domain.model.snapshot.ValueNode node) {
+        if (node instanceof ObjectNode objectNode) {
+            return (Long) objectNode.identifier();
+        }
+        return null;
+    }
+
+    /**
+     * 从 root 中按变更路径里的集合项 ID 找到实体，整行更新。
+     *
+     * @param root   聚合根
+     * @param change 字段变更（path 形如 addresses[&lt;id&gt;].field）
+     */
+    private void saveChangedRow(AddressBook root, Change change) {
+        final Long addressId = extractIdFromPath(change.path());
+        if (addressId != null) {
+            root.getById(addressId)
+                    .ifPresent(address -> addressJpaRepository.save(addressConvertor.toPO(address)));
+        }
+    }
+
+    /**
+     * 从变更路径提取集合项 ID（path 形如 addresses[&lt;id&gt;].field）。
+     *
+     * @param path 变更路径
+     * @return 集合项 ID；无法解析返回 null
+     */
+    private static Long extractIdFromPath(String path) {
+        final int start = path.indexOf('[');
+        final int end = path.indexOf(']');
+        if (start < 0 || end <= start) {
+            return null;
+        }
+        try {
+            return Long.parseLong(path.substring(start + 1, end));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 买家维度悲观锁：对账号行加写锁，串行化同一买家的地址写操作。
+     * 由调用方事务持有至提交（调用方需处于活动事务中）。
+     */
+    @Override
+    public void lockBuyer(Long accountId) {
+        addressJpaRepository.lockBuyerAccount(accountId);
     }
 }

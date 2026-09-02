@@ -10,8 +10,9 @@ import org.springframework.stereotype.Component;
 /**
  * 地址簿聚合根工厂：地址簿与地址的创建入口（ID 生成 + 字段形态校验）。
  * <p>
- * 聚合创建统一经工厂 + {@link IDUtils#generateID()}；地址必带归属账号
- * （accountId 与簿一致），重复校验与默认让位由 {@link AddressBook} 聚合方法保证。
+ * 聚合创建统一经工厂 + {@link IDUtils#generateID()}；地址簿拥有独立主键 bookId，
+ * accountId 仅作业务关联列；地址以 bookId（rootId）关联所属簿，重复校验与默认
+ * 让位由 {@link AddressBook} 聚合方法保证。
  *
  * @author nona9961
  */
@@ -20,19 +21,20 @@ public class AddressBookFactory {
 
     /**
      * 创建空地址簿（买家维度；买家信息保密性：账号存在性由登录链路保证）。
+     * 主键 bookId 独立生成（Snowflake），accountId 为业务关联列（一个买家一本簿）。
      *
      * @param accountId 归属买家账号 ID
      * @return 空地址簿
      */
     public AddressBook createBook(Long accountId) {
         BusinessAssert.assertNonNull(accountId, "买家账号 ID 不能为空");
-        return new AddressBook(accountId);
+        return new AddressBook(IDUtils.generateID(), accountId);
     }
 
     /**
-     * 创建地址（ID 由雪花算法生成；归属账号取自簿）。
+     * 创建地址（ID 由雪花算法生成；bookId 取自簿主键）。
      *
-     * @param book      归属地址簿（accountId 取自簿）
+     * @param book      归属地址簿（bookId 取自簿）
      * @param recipient 收件人
      * @param phone     联系电话
      * @param province  省份
@@ -47,7 +49,7 @@ public class AddressBookFactory {
                                  boolean isDefault) {
         BusinessAssert.assertNonNull(book, "地址簿不能为空");
         assertFields(recipient, phone, province, city, district, detail);
-        return new Address(IDUtils.generateID(), book.getAccountId(),
+        return new Address(IDUtils.generateID(), book.getId(),
                 recipient, phone, province, city, district, detail, isDefault);
     }
 

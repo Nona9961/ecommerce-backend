@@ -12,19 +12,27 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 收货地址 JPA 仓储（address 表，买家维度行集合）。
+ * 收货地址 JPA 仓储（address 表，地址簿从表行集合）。
  *
  * @author nona9961
  */
 public interface AddressJpaRepository extends ListCrudRepository<AddressPO, Long> {
 
     /**
-     * 按归属买家查询全部地址（按 ID 升序，删默认后的自动提升以最早一条为准）。
+     * 按所属地址簿查询全部地址（按 ID 升序，删默认后的自动提升以最早一条为准）。
      *
-     * @param accountId 买家账号 ID
+     * @param bookId 地址簿主键
      * @return 地址列表；无地址返回空列表
      */
-    List<AddressPO> findByAccountIdOrderByIdAsc(Long accountId);
+    List<AddressPO> findByBookIdOrderByIdAsc(Long bookId);
+
+    /**
+     * 按所属地址簿删除全部地址（deleteByID 级联删除用；假删除返回 0，真删除返回行数）。
+     *
+     * @param bookId 地址簿主键
+     * @return 删除的行数
+     */
+    long deleteByBookId(Long bookId);
 
     /**
      * 买家维度写锁：对账号行加悲观写锁（for update），串行化同一买家的地址写事务。

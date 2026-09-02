@@ -40,7 +40,7 @@ public class AddressConvertor implements PoConverter<Address, AddressPO> {
     public AddressPO toPO(Address domain) {
         final AddressPO po = new AddressPO();
         po.setId(domain.getId());
-        po.setAccountId(domain.getAccountId());
+        po.setBookId(domain.getBookId());
         po.setRecipient(domain.getRecipient());
         po.setPhone(domain.getPhone());
         po.setProvince(domain.getProvince());
@@ -56,7 +56,7 @@ public class AddressConvertor implements PoConverter<Address, AddressPO> {
      */
     @Override
     public Address toDomain(AddressPO po) {
-        return new Address(po.getId(), po.getAccountId(), po.getRecipient(), po.getPhone(),
+        return new Address(po.getId(), po.getBookId(), po.getRecipient(), po.getPhone(),
                 po.getProvince(), po.getCity(), po.getDistrict(), po.getDetail(),
                 Boolean.TRUE.equals(po.getIsDefault()));
     }
