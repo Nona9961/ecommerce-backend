@@ -31,3 +31,7 @@ spring:
       # 本机 Redis 8（密码来自环境变量，未设置则直连无密）
       password: ${REDIS_PASSWORD:}
       timeout: 2s
+
+change-tracking:
+  identifier-methods:
+    com.nona.domain.identity.entity.Address: getId
