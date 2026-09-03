@@ -9,6 +9,11 @@ import com.nona.api.seller.ProductDraftItem;
 import com.nona.api.seller.ProductDraftRequest;
 import com.nona.api.seller.ProductImageItem;
 import com.nona.api.seller.ProductImageRequest;
+import com.nona.api.seller.SkuEnabledRequest;
+import com.nona.api.seller.SkuItem;
+import com.nona.api.seller.SkuPriceRequest;
+import com.nona.api.seller.SpecDimensionRequest;
+import com.nona.api.seller.SpecTemplateRequest;
 import com.nona.domain.catalog.entity.Brand;
 import com.nona.domain.catalog.entity.BrandStatus;
 import com.nona.domain.catalog.entity.CategoryStatus;
@@ -16,6 +21,9 @@ import com.nona.domain.catalog.entity.PlatformCategory;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.Sku;
+import com.nona.domain.catalog.entity.SpecItem;
+import com.nona.domain.catalog.entity.SpecTemplate;
 import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.BrandRepository;
 import com.nona.domain.catalog.repo.PlatformCategoryRepository;
@@ -29,8 +37,9 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 商家端商品草稿用例：草稿 CRUD、图片引用管理（增删/设主图）与
- * 自定义属性键值管理（增删改）编排。
+ * 商家端商品草稿用例：草稿 CRUD、图片引用管理（增删/设主图）、
+ * 自定义属性键值管理（增删改）与规格模板/SKU 维护（整体替换模板重建
+ * SKU 集、改价、启停）编排。
  * <p>
  * 当前店铺由认证上下文定位（controller 从 ThreadContext 取租户 ID=当前店铺
  * 传入创建路径；商品归属随写门禁注入租户列）。事务边界：所有写路径在用例
@@ -247,6 +256,104 @@ public class ProductUseCase {
         final Product product = requireProduct(productId);
         product.removeAttribute(attributeId);
         productRepository.save(product);
+    }
+
+    /**
+     * 整体替换规格模板并重建 SKU 集：请求维度表 → 值对象构造（结构校验）
+     * → 聚合重建（组合匹配保留/新增/移除，上限守卫）→ 变更集落库。
+     * 空 dimensions = 空模板（清空 SKU 集）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   新规格模板（整体替换；空 dimensions=清空 SKU 集）
+     * @return 重建后的 SKU 集（按模板展开序）
+     */
+    @Transactional
+    public List<SkuItem> configureSpecTemplate(Long productId, SpecTemplateRequest request) {
+        final Product product = requireProduct(productId);
+        product.configureSpecTemplate(toTemplate(request));
+        productRepository.save(product);
+        return product.skusOrdered().stream().map(ProductUseCase::toSkuItem).toList();
+    }
+
+    /**
+     * 更新 SKU 价格（null=清除价格复位未定价；非正数拒绝）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param skuId     SKU ID（必须属于当前商品，否则 404）
+     * @param request   新价格（价格 null=清除定价）
+     * @return 更新后的 SKU 条目
+     */
+    @Transactional
+    public SkuItem updateSkuPrice(Long productId, Long skuId, SkuPriceRequest request) {
+        final Product product = requireProduct(productId);
+        product.updateSkuPrice(skuId, request.price());
+        productRepository.save(product);
+        return toSkuItem(requireSku(product, skuId));
+    }
+
+    /**
+     * 切换 SKU 启用状态。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param skuId     SKU ID（必须属于当前商品，否则 404）
+     * @param request   启用状态
+     * @return 更新后的 SKU 条目
+     */
+    @Transactional
+    public SkuItem setSkuEnabled(Long productId, Long skuId, SkuEnabledRequest request) {
+        final Product product = requireProduct(productId);
+        product.setSkuEnabled(skuId, request.enabled());
+        productRepository.save(product);
+        return toSkuItem(requireSku(product, skuId));
+    }
+
+    /**
+     * 请求维度表 → 规格模板值对象（空 dimensions 构造空模板；结构校验
+     * 由值对象构造路径承载——维度名非空/唯一、值非空/值内唯一）。
+     *
+     * @param request 请求体
+     * @return 规格模板
+     */
+    private static SpecTemplate toTemplate(SpecTemplateRequest request) {
+        final List<SpecItem> dimensions = request.dimensions().stream()
+                .map(ProductUseCase::toSpecItem)
+                .toList();
+        return new SpecTemplate(dimensions);
+    }
+
+    /**
+     * 请求维度 → 规格维度值对象（与 {@link #toTemplate} 配合）。
+     *
+     * @param dimension 请求维度
+     * @return 规格维度
+     */
+    private static SpecItem toSpecItem(SpecDimensionRequest dimension) {
+        return new SpecItem(dimension.name(), dimension.values());
+    }
+
+    /**
+     * 按 ID 定位 SKU 并断言存在（改价/启停的目标必须属于当前商品；
+     * 不属于按不存在呈现，不泄露归属）。
+     *
+     * @param product 商品聚合
+     * @param skuId   SKU ID
+     * @return SKU
+     */
+    private static Sku requireSku(Product product, Long skuId) {
+        return product.getSkuById(skuId)
+                .orElseThrow(() -> new BusinessException(
+                        EcommerceBusinessCode.CATALOG_PRODUCT_SKU_NOT_FOUND.code(), "SKU不存在"));
+    }
+
+    /**
+     * 领域 SKU → 契约条目。
+     *
+     * @param sku SKU 实体
+     * @return 契约条目
+     */
+    private static SkuItem toSkuItem(Sku sku) {
+        return new SkuItem(sku.getId(), sku.getSpecHash(), sku.getSpecSummary(),
+                sku.getPrice(), sku.isEnabled());
     }
 
     /**

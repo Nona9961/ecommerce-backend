@@ -160,6 +160,54 @@ class EcommerceBusinessCodeTest {
         assertThat(EcommerceBusinessCode.defaultStatus("catalog.brand_in_use")).isEqualTo(409);
     }
 
+    @Test
+    @DisplayName("H: catalog.product_spec_invalid → 400（规格模板非法）")
+    void catalogProductSpecInvalidShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_spec_invalid")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_spec_dimension_name_blank → 400（规格维度名空）")
+    void catalogProductSpecDimensionNameBlankShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_spec_dimension_name_blank")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_spec_dimension_duplicate → 400（规格维度名重复）")
+    void catalogProductSpecDimensionDuplicateShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_spec_dimension_duplicate")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_spec_value_blank → 400（规格值为空）")
+    void catalogProductSpecValueBlankShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_spec_value_blank")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_spec_value_duplicate → 400（规格值重复）")
+    void catalogProductSpecValueDuplicateShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_spec_value_duplicate")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_sku_count_exceeded → 400（SKU 组合数超上限）")
+    void catalogProductSkuCountExceededShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_sku_count_exceeded")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_sku_price_invalid → 400（SKU 价格非法）")
+    void catalogProductSkuPriceInvalidShouldMapTo400() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_sku_price_invalid")).isEqualTo(400);
+    }
+
+    @Test
+    @DisplayName("H: catalog.product_sku_not_found → 404（SKU 不存在）")
+    void catalogProductSkuNotFoundShouldMapTo404() {
+        assertThat(EcommerceBusinessCode.defaultStatus("catalog.product_sku_not_found")).isEqualTo(404);
+    }
+
     // ---- Critical path ----
 
     @Test

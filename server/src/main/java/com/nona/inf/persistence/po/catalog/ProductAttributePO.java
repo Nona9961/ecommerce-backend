@@ -5,6 +5,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 /**
  * 商品自定义属性持久化对象（product_attribute 表，tenant=shopId）：Product
@@ -12,12 +13,16 @@ import jakarta.persistence.Table;
  * <p>
  * 商家维度数据归店铺租户（tenant_id=shopId），天然 fail-closed 隔离。
  * product_id 为业务关联列（rootId 关联 product 主表）；attr_key / attr_value
- * 为键值列（键同商品内唯一由聚合保证，键必填；值可空）。
+ * 为键值列（键同商品内唯一由聚合保证 + uk_product_attribute_key 唯一约束
+ * 并发兜底；键必填；值可空）。
  *
  * @author nona9961
  */
 @Entity
-@Table(name = "product_attribute", indexes = {
+@Table(name = "product_attribute", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_product_attribute_key",
+                columnNames = {"product_id", "attr_key"})
+}, indexes = {
         @Index(name = "idx_product_attribute_product", columnList = "product_id")
 })
 public class ProductAttributePO extends TenantScopedBasePO {

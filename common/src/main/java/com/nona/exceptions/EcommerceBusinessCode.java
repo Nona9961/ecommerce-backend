@@ -205,6 +205,46 @@ public enum EcommerceBusinessCode {
     CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND("catalog.product_attribute_not_found", 404),
 
     /**
+     * 商品域：规格模板非法（配置模板为空引用——模板整体替换路径的必填守卫）。
+     */
+    CATALOG_PRODUCT_SPEC_INVALID("catalog.product_spec_invalid", 400),
+
+    /**
+     * 商品域：规格维度名不能为空（维度必填非空，无名维度无业务意义）。
+     */
+    CATALOG_PRODUCT_SPEC_DIMENSION_NAME_BLANK("catalog.product_spec_dimension_name_blank", 400),
+
+    /**
+     * 商品域：规格维度名重复（同一模板内维度名唯一，同名维度无法区分组合归属）。
+     */
+    CATALOG_PRODUCT_SPEC_DIMENSION_DUPLICATE("catalog.product_spec_dimension_duplicate", 400),
+
+    /**
+     * 商品域：规格值不能为空（维度值列表必填非空且元素非空）。
+     */
+    CATALOG_PRODUCT_SPEC_VALUE_BLANK("catalog.product_spec_value_blank", 400),
+
+    /**
+     * 商品域：规格值重复（同一维度内值唯一，重复值使同一规格组合重复生成）。
+     */
+    CATALOG_PRODUCT_SPEC_VALUE_DUPLICATE("catalog.product_spec_value_duplicate", 400),
+
+    /**
+     * 商品域：SKU 组合数超上限（单商品 SKU 组合数超过防御性上限，拒绝配置）。
+     */
+    CATALOG_PRODUCT_SKU_COUNT_EXCEEDED("catalog.product_sku_count_exceeded", 400),
+
+    /**
+     * 商品域：SKU 价格非法（非空价格必须为正整数分，0 与负数无业务意义）。
+     */
+    CATALOG_PRODUCT_SKU_PRICE_INVALID("catalog.product_sku_price_invalid", 400),
+
+    /**
+     * 商品域：SKU 不存在（目标 SKU 不属于当前商品，按不存在呈现）。
+     */
+    CATALOG_PRODUCT_SKU_NOT_FOUND("catalog.product_sku_not_found", 404),
+
+    /**
      * 商品域：平台分类已禁用（新商品不可挂载禁用分类；已挂商品的保留历史归属合法）。
      */
     CATALOG_CATEGORY_DISABLED("catalog.category_disabled", 400),

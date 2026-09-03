@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
+import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 /**
@@ -62,6 +63,16 @@ public class ProductPO extends TenantScopedBasePO {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private ProductStatus status;
+
+    /**
+     * 规格模板 JSON（可空=尚未配置模板；空数组=空模板）：规格模板为聚合
+     * 内值对象（整体替换语义），以 JSON 载体随主表行走——结构序列化/
+     * 反序列化由转换器经中间形态完成（specTemplate_json 列与 TD 系列的
+     * JSON 扩展列同形态）。
+     */
+    @Lob
+    @Column(name = "spec_template_json")
+    private String specTemplateJson;
 
     /**
      * 所属店铺 ID。
@@ -169,5 +180,23 @@ public class ProductPO extends TenantScopedBasePO {
      */
     public void setStatus(ProductStatus status) {
         this.status = status;
+    }
+
+    /**
+     * 规格模板 JSON 内容。
+     *
+     * @return JSON 字符串；未配置模板返回 null
+     */
+    public String getSpecTemplateJson() {
+        return specTemplateJson;
+    }
+
+    /**
+     * 设置规格模板 JSON 内容。
+     *
+     * @param specTemplateJson JSON 字符串；null=未配置模板
+     */
+    public void setSpecTemplateJson(String specTemplateJson) {
+        this.specTemplateJson = specTemplateJson;
     }
 }

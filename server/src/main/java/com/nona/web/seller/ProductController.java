@@ -11,6 +11,10 @@ import com.nona.api.seller.ProductDraftItem;
 import com.nona.api.seller.ProductDraftRequest;
 import com.nona.api.seller.ProductImageItem;
 import com.nona.api.seller.ProductImageRequest;
+import com.nona.api.seller.SkuEnabledRequest;
+import com.nona.api.seller.SkuItem;
+import com.nona.api.seller.SkuPriceRequest;
+import com.nona.api.seller.SpecTemplateRequest;
 import com.nona.application.seller.ProductUseCase;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
@@ -23,6 +27,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 商家端商品草稿 REST 控制器（/seller/products…，SELLER 角色）。
@@ -166,6 +172,38 @@ public class ProductController implements ProductApi {
                                               @PathVariable("attributeId") Long attributeId) {
         productUseCase.removeAttribute(productId, attributeId);
         return HttpResponse.ok();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @PutMapping("/seller/products/{productId}/spec-template")
+    public HttpResponse<List<SkuItem>> configureSpecTemplate(@PathVariable("productId") Long productId,
+                                                             @Valid @RequestBody SpecTemplateRequest request) {
+        return HttpResponse.ok(productUseCase.configureSpecTemplate(productId, request));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @PutMapping("/seller/products/{productId}/skus/{skuId}/price")
+    public HttpResponse<SkuItem> updateSkuPrice(@PathVariable("productId") Long productId,
+                                                @PathVariable("skuId") Long skuId,
+                                                @Valid @RequestBody SkuPriceRequest request) {
+        return HttpResponse.ok(productUseCase.updateSkuPrice(productId, skuId, request));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @PutMapping("/seller/products/{productId}/skus/{skuId}/enabled")
+    public HttpResponse<SkuItem> setSkuEnabled(@PathVariable("productId") Long productId,
+                                               @PathVariable("skuId") Long skuId,
+                                               @Valid @RequestBody SkuEnabledRequest request) {
+        return HttpResponse.ok(productUseCase.setSkuEnabled(productId, skuId, request));
     }
 
     /**

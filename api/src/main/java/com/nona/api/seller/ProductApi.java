@@ -4,6 +4,8 @@ import com.nona.api.HttpResponse;
 import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 
+import java.util.List;
+
 /**
  * 商家端商品草稿契约（/seller/products…，SELLER 角色）：草稿 CRUD、
  * 图片引用管理（增删/设主图）与自定义属性键值管理（增删改）。
@@ -116,4 +118,42 @@ public interface ProductApi {
      * @return 成功响应
      */
     HttpResponse<Void> removeAttribute(Long productId, Long attributeId);
+
+    /**
+     * 整体替换规格模板并重建 SKU 集（规格模板是 SKU 集的唯一生成依据）：
+     * 同组合（specHash 相同）保留既有 SKU 的价格/启用/身份（skuId 不变，
+     * 跨域引用稳定），新增组合生成新 SKU（默认未定价、停用），消失组合
+     * 的 SKU 移除；空 dimensions（null 或空列表）= 空模板，清空 SKU 集；
+     * 同一模板重复配置幂等。组合数超上限拒绝且模板保持原值。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   新规格模板（整体替换；空 dimensions=清空 SKU 集）
+     * @return 重建后的 SKU 集（按模板展开序）
+     */
+    HttpResponse<List<SkuItem>> configureSpecTemplate(Long productId,
+                                                      SpecTemplateRequest request);
+
+    /**
+     * 更新 SKU 价格（价格语义：null=清除价格复位未定价——草稿期合法；
+     * 非空必须为正整数分，0 与负数拒绝）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param skuId     SKU ID（必须属于当前商品，否则 404）
+     * @param request   新价格（价格 null=清除定价）
+     * @return 更新后的 SKU 条目
+     */
+    HttpResponse<SkuItem> updateSkuPrice(Long productId, Long skuId,
+                                         SkuPriceRequest request);
+
+    /**
+     * 切换 SKU 启用状态（停用 SKU 不出售；新生成的 SKU 默认停用——
+     * 显式启用避免未配价误售）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param skuId     SKU ID（必须属于当前商品，否则 404）
+     * @param request   启用状态
+     * @return 更新后的 SKU 条目
+     */
+    HttpResponse<SkuItem> setSkuEnabled(Long productId, Long skuId,
+                                        SkuEnabledRequest request);
 }

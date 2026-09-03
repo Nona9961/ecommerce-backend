@@ -8,18 +8,21 @@ import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.ProductAttributeConvertor;
 import com.nona.inf.persistence.converters.ProductChildPos;
 import com.nona.inf.persistence.converters.ProductConvertor;
 import com.nona.inf.persistence.converters.ProductImageConvertor;
+import com.nona.inf.persistence.converters.SkuConvertor;
 import com.nona.inf.persistence.po.catalog.ProductAttributePO;
 import com.nona.inf.persistence.po.catalog.ProductImagePO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
+import com.nona.inf.persistence.repository.jpa.SkuJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -31,15 +34,17 @@ import java.util.List;
 /**
  * 商品仓储落地：继承 {@link DifferRepository}（主表快照 + 变更追踪），
  * 主表 product（id=商品 ID，tenant=shopId）+ 从表 product_image /
- * product_attribute（均为 tenant=shopId）。
+ * product_attribute / product_sku（均为 tenant=shopId）。
  * <p>
- * 读：按主表主键加载（track 快照）+ getOther 经租户过滤加载本商品两个
- * 从表集合（图片/属性，均按加入序）；分页列表按店铺查询（与租户过滤
- * 共同定位行集），每行装配完整聚合（概要计数派生自集合）。保存：变更集
- * 驱动落库——集合新增插行、删除删行、字段变更整行更新、根字段变更整行
- * 更新主表。删除：deleteByID 级联删两个从表 + 主表，返回真实删除条数。
- * 引用存在性查询（类目/品牌）供平台侧禁用守卫使用——跨租户全局语义，
- * 事务内需读放行（@CrossTenant，放行职责在用例层）。
+ * 读：按主表主键加载（track 快照）+ getOther 经租户过滤加载本商品三个
+ * 从表集合（图片/属性按加入序、SKU 按 ID 升序——ID 升序近似创建序，维度
+ * 调序重建后存活旧 SKU 与新 SKU 混合时读回序与模板展开序不一致，展示方
+ * 需按组合序重排）；分页列表按店铺查询（与
+ * 租户过滤共同定位行集），每行装配完整聚合（概要计数派生自集合）。保存：
+ * 变更集驱动落库——集合新增插行、删除删行、字段变更整行更新、根字段变更
+ * 整行更新主表（含规格模板 JSON 列）。删除：deleteByID 级联删三个从表 +
+ * 主表，返回真实删除条数。引用存在性查询（类目/品牌）供平台侧禁用守卫
+ * 使用——跨租户全局语义，事务内需读放行（@CrossTenant，放行职责在用例层）。
  * <p>
  * 从表写路径的租户列由写门禁按请求上下文注入（商家请求 tenant=当前店铺），
  * 读路径由 Hibernate 租户过滤保证 fail-closed（跨店铺加载不到商品行）。
@@ -61,6 +66,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private static final String ATTRIBUTES_FIELD = "attributes";
 
     /**
+     * SKU 集合在聚合中的字段名（变更集路径解析用）
+     */
+    private static final String SKUS_FIELD = "skus";
+
+    /**
      * 商品主表 JPA 仓储（分页/统计/引用存在性查询）
      */
     private final ProductJpaRepository productJpaRepository;
@@ -76,6 +86,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private final ProductAttributeJpaRepository attributeJpaRepository;
 
     /**
+     * 商品 SKU 子表 JPA 仓储（从表加载与落库）
+     */
+    private final SkuJpaRepository skuJpaRepository;
+
+    /**
      * 图片行转换器
      */
     private final ProductImageConvertor imageConvertor;
@@ -84,6 +99,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * 属性行转换器
      */
     private final ProductAttributeConvertor attributeConvertor;
+
+    /**
+     * SKU 行转换器
+     */
+    private final SkuConvertor skuConvertor;
 
     /**
      * 构造商品仓储。
@@ -96,6 +116,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * @param attributeJpaRepository 属性子表 JPA 仓储
      * @param imageConvertor         图片行转换器
      * @param attributeConvertor     属性行转换器
+     * @param skuJpaRepository       SKU 子表 JPA 仓储
+     * @param skuConvertor           SKU 行转换器
      */
     public ProductRepositoryImpl(ProductJpaRepository repository,
                                  ThreadContext threadContext,
@@ -104,26 +126,32 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                                  ProductImageJpaRepository imageJpaRepository,
                                  ProductAttributeJpaRepository attributeJpaRepository,
                                  ProductImageConvertor imageConvertor,
-                                 ProductAttributeConvertor attributeConvertor) {
+                                 ProductAttributeConvertor attributeConvertor,
+                                 SkuJpaRepository skuJpaRepository,
+                                 SkuConvertor skuConvertor) {
         super(repository, threadContext, convertor, changeTrackerProvider);
         this.productJpaRepository = repository;
         this.imageJpaRepository = imageJpaRepository;
         this.attributeJpaRepository = attributeJpaRepository;
         this.imageConvertor = imageConvertor;
         this.attributeConvertor = attributeConvertor;
+        this.skuJpaRepository = skuJpaRepository;
+        this.skuConvertor = skuConvertor;
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 从表行按加入序读出（图片/属性分别按 ID 升序，稳定），作为聚合装配的
+     * 从表行按加入序读出（图片/属性分别按 ID 升序，稳定；SKU 同按 ID 升序），
+     * 作为聚合装配的
      * other 输入。
      */
     @Override
     protected ProductChildPos getOther(ProductPO po) {
         return new ProductChildPos(
                 imageJpaRepository.findByProductIdOrderByIdAsc(po.getId()),
-                attributeJpaRepository.findByProductIdOrderByIdAsc(po.getId()));
+                attributeJpaRepository.findByProductIdOrderByIdAsc(po.getId()),
+                skuJpaRepository.findByProductIdOrderByIdAsc(po.getId()));
     }
 
     /**
@@ -148,12 +176,14 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                 imageJpaRepository.save(imageConvertor.toPO(image)));
         root.attributesOrdered().forEach(attribute ->
                 attributeJpaRepository.save(attributeConvertor.toPO(attribute)));
+        root.skusOrdered().forEach(sku ->
+                skuJpaRepository.save(skuConvertor.toPO(sku)));
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 变更集驱动落库：ensure 根行存在（首次新增即保存主表）→ 图片/属性
+     * 变更集驱动落库：ensure 根行存在（首次新增即保存主表）→ 图片/属性/SKU
      * 集合新增插行、删除删行、字段变更整行更新 → 根行字段变更整行更新主表
      * （字段覆盖，避免逐字段映射漂移）。
      */
@@ -168,6 +198,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                 dispatchImageChange(root, change);
             } else if (ATTRIBUTES_FIELD.equals(change.collectionFieldName())) {
                 dispatchAttributeChange(root, change);
+            } else if (SKUS_FIELD.equals(change.collectionFieldName())) {
+                dispatchSkuChange(root, change);
             } else {
                 rootRowDirty = true;
             }
@@ -190,7 +222,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     /**
      * {@inheritDoc}
      * <p>
-     * 级联删除：先删两个从表行（按商品 ID），再删根行；返回根行删除条数
+     * 级联删除：先删三个从表行（按商品 ID），再删根行；返回根行删除条数
      * （0/1 真实语义，非契约形）。事务边界由用例层持有（REQUIRED 语义）。
      */
     @Override
@@ -200,6 +232,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         }
         imageJpaRepository.deleteByProductId(productId);
         attributeJpaRepository.deleteByProductId(productId);
+        skuJpaRepository.deleteByProductId(productId);
         if (!repository.existsById(productId)) {
             return 0;
         }
@@ -304,6 +337,39 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         if (attributeId != null) {
             root.getAttributeById(attributeId)
                     .ifPresent(attribute -> attributeJpaRepository.save(attributeConvertor.toPO(attribute)));
+        }
+    }
+
+    /**
+     * 按变更节点分发 SKU 集合变更：新增插行、删除删行、字段变更整行更新。
+     *
+     * @param root   聚合根
+     * @param change 集合变更节点
+     */
+    private void dispatchSkuChange(Product root, Change change) {
+        if (change instanceof ItemAddedChange added) {
+            final Long skuId = extractIdentifier(added.addedItem());
+            root.getSkuById(skuId).ifPresent(sku ->
+                    skuJpaRepository.save(skuConvertor.toPO(sku)));
+        } else if (change instanceof ItemRemovedChange removed) {
+            final Long skuId = extractIdentifier(removed.removedItem());
+            skuJpaRepository.deleteById(skuId);
+        } else {
+            saveChangedSkuRow(root, change);
+        }
+    }
+
+    /**
+     * 从 root 中按变更路径里的 SKU ID 找到实体，整行更新。
+     *
+     * @param root   聚合根
+     * @param change 字段变更（path 形如 skus[&lt;id&gt;].field）
+     */
+    private void saveChangedSkuRow(Product root, Change change) {
+        final Long skuId = extractIdFromPath(change.path());
+        if (skuId != null) {
+            root.getSkuById(skuId)
+                    .ifPresent(sku -> skuJpaRepository.save(skuConvertor.toPO(sku)));
         }
     }
 
