@@ -1,0 +1,67 @@
+package com.nona.domain.inventory.ports;
+
+import java.util.List;
+
+/**
+ * 库存门面（inventory 跨上下文契约，签名随本阶段冻结、消费方为订单/
+ * 商品上游编排）：
+ * <ul>
+ *     <li>{@link #queryAvailable}——多 SKU 可售量查询（本阶段实现的最小
+ *         查询面：可售 = available 列值，缺行按 0 呈现、跨店铺 fail-closed
+ *         不可见）；</li>
+ *     <li>{@link #preoccupy} / {@link #confirmDeduct} / {@link #rollback}——
+ *         订单驱动三动作（下单预占 / 支付确认扣减 / 取消与超时回滚），
+ *         签名随本阶段冻结声明，行为实现属后续阶段（预占防超卖唯一机制
+ *         为数据库条件更新）；</li>
+ *     <li>{@link #adjust}——商家手工调整可售（仅可售变动，调整后 ≥ 0），
+ *         签名冻结声明、行为实现属后续阶段。</li>
+ * </ul>
+ * 并发一致性：跨域编排（下单/支付/取消用例）在应用层事务内调用本门面与
+ * 订单聚合推进，任一失败整体回滚。租户语义：普通域内读写
+ * （tenant=shopId，fail-closed）；跨店铺下单预占的提权编排属后续阶段。
+ *
+ * @author nona9961
+ */
+public interface InventoryFacade {
+
+    /**
+     * 多 SKU 可售量查询（下单前置读/详情展示共用）。
+     *
+     * @param skuIds 请求的 SKU ID 集合（去重由实现保证）
+     * @return 各 SKU 可售量列表——请求 SKU 全量返回（zip 语义）；未初始
+     * 化或跨店铺 SKU 按可售 0 呈现（不泄露归属，买家视角不可售）
+     */
+    List<InventoryAvailable> queryAvailable(List<Long> skuIds);
+
+    /**
+     * 下单预占（订单驱动，签名冻结、实现属后续阶段）。
+     *
+     * @param orderId 订单 ID
+     * @param items   预占明细（SKU + 数量）
+     */
+    void preoccupy(Long orderId, List<StockChangeItem> items);
+
+    /**
+     * 支付成功确认扣减（订单驱动，签名冻结、实现属后续阶段）。
+     *
+     * @param orderId 订单 ID
+     * @param items   扣减明细（SKU + 数量）
+     */
+    void confirmDeduct(Long orderId, List<StockChangeItem> items);
+
+    /**
+     * 预占回滚（取消/超时释放，订单驱动，签名冻结、实现属后续阶段）。
+     *
+     * @param orderId 订单 ID
+     * @param items   回滚明细（SKU + 数量）
+     */
+    void rollback(Long orderId, List<StockChangeItem> items);
+
+    /**
+     * 商家手工调整可售（签名冻结、实现属后续阶段）。
+     *
+     * @param skuId 目标 SKU ID
+     * @param delta 可售调整量（带符号；调整后可售 ≥ 0）
+     */
+    void adjust(Long skuId, int delta);
+}

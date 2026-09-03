@@ -327,9 +327,40 @@ public enum EcommerceBusinessCode {
     CATALOG_BRAND_IN_USE("catalog.brand_in_use", 409),
 
     /**
-     * 库存域占位基码：资源不存在。
+     * 库存域：SKU 库存不存在（按 ID/SKU 操作命中不存在或跨店铺的库存行，
+     * 按不存在呈现——fail-closed 不泄露归属）。
      */
     INVENTORY_NOT_FOUND("inventory.not_found", 404),
+
+    /**
+     * 库存域：SKU 库存重复初始化（inventory_item.sku_id 唯一约束命中，
+     * 同一 SKU 只允许一次初始化）。
+     */
+    INVENTORY_ALREADY_EXISTS("inventory.already_exists", 400),
+
+    /**
+     * 库存域：库存量不足（预占可售不足/扣减回滚预占不足——变更拒绝，
+     * 防超卖前置守卫；并发防线为数据库条件更新）。
+     */
+    INVENTORY_INSUFFICIENT("inventory.insufficient", 400),
+
+    /**
+     * 库存域：变动数量非法（预占/扣减/回滚数量必须为正，非正无业务意义）。
+     */
+    INVENTORY_QUANTITY_INVALID("inventory.quantity_invalid", 400),
+
+    /**
+     * 库存域：流水行形态非法（零变更不产流水/前后快照与类型数量算术
+     * 不一致/订单上下文与类型不符/手动调整缺操作人——审计行自相矛盾无
+     * 意义，构造路径拒绝）。
+     */
+    INVENTORY_LOG_INVALID("inventory.log_invalid", 400),
+
+    /**
+     * 库存域：库存行装配形态非法（构造/读回路径：归属缺失、三态负值、
+     * 乐观锁版本负值——非法形态的库存行无业务意义）。
+     */
+    INVENTORY_ITEM_INVALID("inventory.item_invalid", 400),
 
     /**
      * 订单域占位基码：资源不存在。
