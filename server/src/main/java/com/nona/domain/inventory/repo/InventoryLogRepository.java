@@ -1,6 +1,7 @@
 package com.nona.domain.inventory.repo;
 
 import com.nona.domain.inventory.entity.InventoryLog;
+import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.persistence.BaseRepository;
 
 import java.util.List;
@@ -51,4 +52,18 @@ public interface InventoryLogRepository extends BaseRepository<Long, InventoryLo
      * @return 流水数
      */
     long countBySku(Long skuId);
+
+    /**
+     * 幂等键存在性判定：(order_id, sku_id, type) 三元组是否已有一行流水
+     * （租户过滤内校验——跨店铺请求按不存在呈现，fail-closed）。
+     * <p>
+     * 重复请求先经本判定快速拒绝（并发窗口内的重复追加由表级唯一
+     * 约束兜底，兜底路径的异常在实现层转换为业务异常——两层防线）。
+     *
+     * @param orderId 订单 ID（订单驱动型必填；手动调整型请勿调用本方法）
+     * @param skuId   归属 SKU ID
+     * @param type    流水类型
+     * @return 幂等键已存在返回 true
+     */
+    boolean existsByIdempotencyKey(Long orderId, Long skuId, InventoryLogType type);
 }

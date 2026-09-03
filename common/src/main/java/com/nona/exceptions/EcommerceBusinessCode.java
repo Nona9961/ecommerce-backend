@@ -363,6 +363,13 @@ public enum EcommerceBusinessCode {
     INVENTORY_ITEM_INVALID("inventory.item_invalid", 400),
 
     /**
+     * 库存域：重复变更请求（同订单同 SKU 同类型（幂等键 order_id,
+     * sku_id, type）的变更已发生过——预查询拒绝或 DB 唯一约束兜底
+     * 转换，重复请求不重复扣减/回滚，冲突语义 409）。
+     */
+    INVENTORY_LOG_DUPLICATE("inventory.log_duplicate", 409),
+
+    /**
      * 订单域占位基码：资源不存在。
      */
     ORDER_NOT_FOUND("order.not_found", 404),

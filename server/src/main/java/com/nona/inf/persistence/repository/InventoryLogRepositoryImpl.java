@@ -1,14 +1,19 @@
 package com.nona.inf.persistence.repository;
 
 import com.nona.domain.inventory.entity.InventoryLog;
+import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.domain.inventory.repo.InventoryLogRepository;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.persistence.converters.InventoryLogConvertor;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
 import java.util.List;
 
 /**
@@ -27,6 +32,12 @@ import java.util.List;
  */
 @Component
 public class InventoryLogRepositoryImpl implements InventoryLogRepository {
+
+    /**
+     * 幂等键唯一约束名（inventory_log 表 uk_inventory_log_order_sku_type，
+     * 兜底异常转换的精确匹配基准）
+     */
+    private static final String IDEMPOTENCY_KEY_CONSTRAINT = "UK_INVENTORY_LOG_ORDER_SKU_TYPE";
 
     /**
      * 流水表 JPA 仓储
@@ -55,11 +66,45 @@ public class InventoryLogRepositoryImpl implements InventoryLogRepository {
      * <p>
      * 追加插入（append-only：save 即插一行，无更新路径）；租户归属由写
      * 门禁按请求上下文注入。同一 (order_id, sku_id, type) 重复追加被
-     * DB 唯一约束拒绝。
+     * DB 唯一约束拒绝——约束冲突按幂等键约束名精确判定后转换为业务
+     * 异常（重复变更请求 409），其余约束异常保持原样上抛（不遮其他
+     * 异常）。
      */
     @Override
     public InventoryLog append(InventoryLog log) {
-        return convertor.toDomain(jpaRepository.save(convertor.toPO(log)));
+        final InventoryLogPO po = convertor.toPO(log);
+        try {
+            return convertor.toDomain(jpaRepository.save(po));
+        } catch (final DataIntegrityViolationException ex) {
+            final BusinessException duplicate = asIdempotencyKeyDuplicate(ex);
+            if (duplicate != null) {
+                throw duplicate;
+            }
+            throw ex;
+        }
+    }
+
+    /**
+     * 幂等键约束冲突识别：沿异常链定位数据库约束违反，按幂等键约束名
+     * 精确判定——命中转换为重复变更请求业务异常；否则返回 null
+     * （原异常上抛，不遮其他约束异常）。
+     *
+     * @param ex 数据完整性违反异常
+     * @return 转换后的业务异常；非幂等键冲突返回 null
+     */
+    private BusinessException asIdempotencyKeyDuplicate(DataIntegrityViolationException ex) {
+        for (Throwable cause = ex; cause != null; cause = cause.getCause()) {
+            if (cause instanceof org.hibernate.exception.ConstraintViolationException violation) {
+                final String constraintName = violation.getConstraintName();
+                if (constraintName != null
+                        && constraintName.toUpperCase(Locale.ROOT).contains(IDEMPOTENCY_KEY_CONSTRAINT)) {
+                    return new BusinessException(
+                            EcommerceBusinessCode.INVENTORY_LOG_DUPLICATE.code(),
+                            "重复变更请求：同订单同 SKU 同类型的库存变动已存在");
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -103,6 +148,18 @@ public class InventoryLogRepositoryImpl implements InventoryLogRepository {
     public boolean save(InventoryLog log) {
         jpaRepository.save(convertor.toPO(log));
         return true;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 幂等键存在性判定：委托 JPA 派生查询（租户过滤内判定，跨店铺
+     * 请求按不存在呈现，fail-closed）；重复请求先经本判定快速拒绝，
+     * 并发窗口由流水表唯一约束兜底（append 路径异常转换）。
+     */
+    @Override
+    public boolean existsByIdempotencyKey(Long orderId, Long skuId, InventoryLogType type) {
+        return jpaRepository.existsByOrderIdAndSkuIdAndType(orderId, skuId, type);
     }
 
     /**

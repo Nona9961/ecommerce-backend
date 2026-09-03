@@ -26,4 +26,56 @@ public interface InventoryItemRepository extends BaseRepository<Long, InventoryI
      * @return 库存聚合；不存在或跨店铺（租户过滤）返回 null
      */
     InventoryItem getBySkuId(Long skuId);
+
+    /**
+     * 条件更新预占（防超卖的持久化防线）：单语句原子执行
+     * <code>available −= demand、held += demand、version += 1</code>，
+     * WHERE 以 {@code available >= demand} 为业务量条件（基于 DB 当前值
+     * 判定，行锁串行化下正好 M 份库存只放行 M 笔预占——超量请求命中 0 行）。
+     * <p>
+     * 形态约定：
+     * <ul>
+     *     <li>返回受影响行数（1=条件命中并推进、0=容量不足拒绝），
+     *         delete/deleteByID 同款持久化语义；拒绝的业务语义（不足项）
+     *         由编排层翻译为业务异常，本方法不抛异常（受影响行数判定）；</li>
+     *     <li>租户条件（tenant_id=shopId）由实现从请求上下文注入——
+     *         不接收租户参数（防跨店条件更新：调用方无法伪造他人店铺的
+     *         租户条件），上下文缺失按 fail-closed 拒绝；</li>
+     *     <li>version 列随更新逐笔 +1（SQL 侧算术推进），不参与条件判定
+     *         （冲突检测辅助列，不承担防超卖职责）；</li>
+     *     <li>本方法为条件更新接缝：不登记变更追踪、不经差异归集落库
+     *         （更新语义由 WHERE 条件完整表达）。</li>
+     * </ul>
+     *
+     * @param itemId 库存聚合根 ID
+     * @param demand 预占数量（必须为正，由聚合前置守卫先行校验）
+     * @return 受影响行数（1=成功；0=可售不足或行不存在或跨店铺）
+     */
+    int casPreoccupy(Long itemId, int demand);
+
+    /**
+     * 条件更新确认扣减（防扣减超预占）：单语句原子执行
+     * <code>held −= quantity、sold += quantity、version += 1</code>，
+     * WHERE 以 {@code held >= quantity} 为业务量条件。形态约定同
+     * {@link #casPreoccupy(Long, int)}（返回受影响行数、租户条件注入、
+     * version 不参与判定）。
+     *
+     * @param itemId   库存聚合根 ID
+     * @param quantity 扣减数量（必须为正）
+     * @return 受影响行数（1=成功；0=预占不足或行不存在或跨店铺）
+     */
+    int casConfirmDeduct(Long itemId, int quantity);
+
+    /**
+     * 条件更新预占回滚（防回滚超预占）：单语句原子执行
+     * <code>held −= quantity、available += quantity、version += 1</code>，
+     * WHERE 以 {@code held >= quantity} 为业务量条件。形态约定同
+     * {@link #casPreoccupy(Long, int)}（返回受影响行数、租户条件注入、
+     * version 不参与判定）。
+     *
+     * @param itemId   库存聚合根 ID
+     * @param quantity 回滚数量（必须为正）
+     * @return 受影响行数（1=成功；0=预占不足或行不存在或跨店铺）
+     */
+    int casRollback(Long itemId, int quantity);
 }

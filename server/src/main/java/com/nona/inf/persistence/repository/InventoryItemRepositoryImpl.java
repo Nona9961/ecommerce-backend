@@ -3,6 +3,9 @@ package com.nona.inf.persistence.repository;
 import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.domain.inventory.repo.InventoryItemRepository;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.TenantContextAccessor;
 import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.InventoryItemConvertor;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
@@ -33,9 +36,15 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
         implements InventoryItemRepository {
 
     /**
-     * 库存主表 JPA 仓储（SKU 键查询用——父类 repository 字段为泛型契约类型）
+     * 库存主表 JPA 仓储（SKU 键查询/条件更新用——父类 repository 字段为
+     * 泛型契约类型）
      */
     private final InventoryItemJpaRepository jpaRepository;
+
+    /**
+     * 租户上下文读取器（条件更新的租户条件注入源）
+     */
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造库存仓储。
@@ -44,13 +53,16 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
      * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             库存聚合转换器
      * @param changeTrackerProvider 变更追踪器提供者
+     * @param tenantContextAccessor 租户上下文读取器（CAS 租户条件注入）
      */
     public InventoryItemRepositoryImpl(InventoryItemJpaRepository repository,
                                        ThreadContext threadContext,
                                        InventoryItemConvertor convertor,
-                                       ChangeTrackerProvider changeTrackerProvider) {
+                                       ChangeTrackerProvider changeTrackerProvider,
+                                       TenantContextAccessor tenantContextAccessor) {
         super(repository, threadContext, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -109,6 +121,58 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
         }
         repository.deleteById(itemId);
         return 1;
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 条件更新预占（条件更新接缝：单语句条件 UPDATE——业务量条件
+     * available >= demand 基于 DB 当前值判定，版本逐笔算术 +1 不参与
+     * 条件；租户条件从请求上下文读取并显式注入 WHERE，上下文缺失按
+     * fail-closed 拒绝；受影响行数 1=命中推进、0=容量不足/行不存在/
+     * 跨店铺）。
+     */
+    @Override
+    public int casPreoccupy(Long itemId, int demand) {
+        return jpaRepository.casPreoccupy(itemId, demand, requiredTenantId());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 条件更新确认扣减（同 {@link #casPreoccupy(Long, int)}，业务量
+     * 条件为 held >= quantity）。
+     */
+    @Override
+    public int casConfirmDeduct(Long itemId, int quantity) {
+        return jpaRepository.casConfirmDeduct(itemId, quantity, requiredTenantId());
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 条件更新预占回滚（同 {@link #casPreoccupy(Long, int)}，业务量
+     * 条件为 held >= quantity）。
+     */
+    @Override
+    public int casRollback(Long itemId, int quantity) {
+        return jpaRepository.casRollback(itemId, quantity, requiredTenantId());
+    }
+
+    /**
+     * 读取当前请求租户作为条件更新注入值；上下文缺失按 fail-closed
+     * 拒绝（不执行更新——跨店铺条件更新与视角缺失同语义拒绝）。
+     *
+     * @return 当前请求租户 ID
+     */
+    private String requiredTenantId() {
+        final String tenantId = tenantContextAccessor.getTenantID();
+        if (tenantId == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.INVENTORY_NOT_FOUND.code(),
+                    "租户上下文缺失，库存条件更新拒绝执行");
+        }
+        return tenantId;
     }
 
     /**
