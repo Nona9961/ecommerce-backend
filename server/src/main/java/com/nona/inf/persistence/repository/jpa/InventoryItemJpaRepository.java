@@ -87,4 +87,25 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
             + "where p.id = :itemId and p.held >= :quantity and p.tenantID = :tenantId")
     int casRollback(@Param("itemId") Long itemId, @Param("quantity") int quantity,
                     @Param("tenantId") String tenantId);
+
+    /**
+     * 条件更新手工调整可售（防调整致负的持久化防线，与防超卖条件更新
+     * 同源）：可售 += delta、版本 += 1，WHERE 以 {@code available + delta
+     * >= 0} 为业务量条件（基于 DB 当前值判定——调整致负一律拒绝，不因
+     * 加载快照陈旧而放行）。SET 一律基于 DB 当前值算术推进；version 随
+     * 更新算术 +1，不参与条件判定（冲突检测辅助列）。租户条件显式
+     * 注入：参数由实现层从请求上下文读取（fail-closed），不接收调用方
+     * 传入的租户条件。
+     *
+     * @param itemId   库存聚合根 ID
+     * @param delta    可售调整量（带符号；非零，由聚合前置守卫先行校验）
+     * @param tenantId 当前请求租户（实现层从请求上下文读取注入）
+     * @return 受影响行数（1=命中并推进；0=调整致负或行不存在或跨店铺）
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update InventoryItemPO p set p.available = p.available + :delta, "
+            + "p.version = p.version + 1 "
+            + "where p.id = :itemId and p.available + :delta >= 0 and p.tenantID = :tenantId")
+    int casAdjust(@Param("itemId") Long itemId, @Param("delta") int delta,
+                  @Param("tenantId") String tenantId);
 }

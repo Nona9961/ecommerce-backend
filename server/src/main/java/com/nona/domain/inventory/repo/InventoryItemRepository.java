@@ -78,4 +78,18 @@ public interface InventoryItemRepository extends BaseRepository<Long, InventoryI
      * @return 受影响行数（1=成功；0=预占不足或行不存在或跨店铺）
      */
     int casRollback(Long itemId, int quantity);
+
+    /**
+     * 条件更新手工调整可售（防调整致负的持久化防线，与防超卖条件更新
+     * 同源）：单语句原子执行 <code>available += delta、version += 1</code>，
+     * WHERE 以 {@code available + delta >= 0} 为业务量条件（基于 DB 当前
+     * 值判定——调整致负一律拒绝，不因加载快照陈旧而放行）。形态约定同
+     * {@link #casPreoccupy(Long, int)}（返回受影响行数、租户条件注入、
+     * version 不参与判定；delta 带符号，正=增可售、负=减可售）。
+     *
+     * @param itemId 库存聚合根 ID
+     * @param delta  可售调整量（带符号；非零，由聚合前置守卫先行校验）
+     * @return 受影响行数（1=成功；0=调整致负或行不存在或跨店铺）
+     */
+    int casAdjust(Long itemId, int delta);
 }

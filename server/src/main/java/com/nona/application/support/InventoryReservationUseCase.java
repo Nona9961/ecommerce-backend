@@ -5,6 +5,7 @@ import com.nona.domain.inventory.entity.InventoryLog;
 import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.domain.inventory.repo.InventoryItemRepository;
 import com.nona.domain.inventory.repo.InventoryLogRepository;
+import com.nona.domain.inventory.service.InventoryEventRouter;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
  *     <li>聚合方法做领域前置守卫并内嵌构造流水（before/after 三态
  *         快照与 delta 在聚合内组装，基于加载快照的请求视角口径）；</li>
  *     <li>流水 append-only 追加——与条件更新同事务落库（任一失败整体
- *         回滚：不可追踪的库存变更不可能）。</li>
+ *         回滚：不可追踪的库存变更不可能）；</li>
+ *     <li>事件统一触发点判定（售罄/恢复）——变更后调用，与流水同事务
+ *         （发布动作不落库，事务提交后投递）。</li>
  * </ol>
  * 三个动作均为用例方法（事务边界）：域内编排（订单/支付用例同在应用
  * 层事务内调用时随 REQUIRED 语义并入）。
@@ -50,15 +53,23 @@ public class InventoryReservationUseCase {
     private final InventoryLogRepository inventoryLogRepository;
 
     /**
+     * 售罄/恢复事件统一触发点（订单驱动三操作路径接入）
+     */
+    private final InventoryEventRouter inventoryEventRouter;
+
+    /**
      * 构造库存保留用例。
      *
      * @param inventoryItemRepository 库存聚合根仓储
      * @param inventoryLogRepository  库存流水仓储
+     * @param inventoryEventRouter    事件统一触发点
      */
     public InventoryReservationUseCase(InventoryItemRepository inventoryItemRepository,
-                                       InventoryLogRepository inventoryLogRepository) {
+                                       InventoryLogRepository inventoryLogRepository,
+                                       InventoryEventRouter inventoryEventRouter) {
         this.inventoryItemRepository = inventoryItemRepository;
         this.inventoryLogRepository = inventoryLogRepository;
+        this.inventoryEventRouter = inventoryEventRouter;
     }
 
     /**
@@ -82,6 +93,7 @@ public class InventoryReservationUseCase {
         }
         final InventoryLog log = item.preoccupy(orderId, demand);
         inventoryLogRepository.append(log);
+        inventoryEventRouter.publishIfNeeded(log);
         return item;
     }
 
@@ -106,6 +118,7 @@ public class InventoryReservationUseCase {
         }
         final InventoryLog log = item.confirmDeduct(orderId, quantity);
         inventoryLogRepository.append(log);
+        inventoryEventRouter.publishIfNeeded(log);
         return item;
     }
 
@@ -130,6 +143,7 @@ public class InventoryReservationUseCase {
         }
         final InventoryLog log = item.rollback(orderId, quantity);
         inventoryLogRepository.append(log);
+        inventoryEventRouter.publishIfNeeded(log);
         return item;
     }
 

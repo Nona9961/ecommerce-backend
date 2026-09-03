@@ -160,6 +160,20 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * 条件更新手工调整可售（条件更新接缝：单语句条件 UPDATE——业务量
+     * 条件 available + delta >= 0 基于 DB 当前值判定，版本逐笔算术 +1
+     * 不参与条件；租户条件从请求上下文读取并显式注入 WHERE，上下文
+     * 缺失按 fail-closed 拒绝；受影响行数 1=命中推进、0=调整致负/行不
+     * 存在/跨店铺）。
+     */
+    @Override
+    public int casAdjust(Long itemId, int delta) {
+        return jpaRepository.casAdjust(itemId, delta, requiredTenantId());
+    }
+
+    /**
      * 读取当前请求租户作为条件更新注入值；上下文缺失按 fail-closed
      * 拒绝（不执行更新——跨店铺条件更新与视角缺失同语义拒绝）。
      *
