@@ -20,6 +20,7 @@ import com.nona.inf.persistence.po.catalog.ProductAttributePO;
 import com.nona.inf.persistence.po.catalog.ProductImagePO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import com.nona.inf.persistence.repository.jpa.SkuJpaRepository;
@@ -43,7 +44,8 @@ import java.util.List;
  * 租户过滤共同定位行集），每行装配完整聚合（概要计数派生自集合）。保存：
  * 变更集驱动落库——集合新增插行、删除删行、字段变更整行更新、根字段变更
  * 整行更新主表（含规格模板 JSON 列）。删除：deleteByID 级联删三个从表 +
- * 主表，返回真实删除条数。引用存在性查询（类目/品牌）供平台侧禁用守卫
+ * 编辑版本表（product_edit_version，保存留痕行一并清理）+ 主表，返回
+ * 真实删除条数。引用存在性查询（类目/品牌）供平台侧禁用守卫
  * 使用——跨租户全局语义，事务内需读放行（@CrossTenant，放行职责在用例层）。
  * <p>
  * 从表写路径的租户列由写门禁按请求上下文注入（商家请求 tenant=当前店铺），
@@ -91,6 +93,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private final SkuJpaRepository skuJpaRepository;
 
     /**
+     * 商品编辑版本子表 JPA 仓储（删除商品时的版本行级联清理）
+     */
+    private final ProductEditVersionJpaRepository editVersionJpaRepository;
+
+    /**
      * 图片行转换器
      */
     private final ProductImageConvertor imageConvertor;
@@ -118,6 +125,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * @param attributeConvertor     属性行转换器
      * @param skuJpaRepository       SKU 子表 JPA 仓储
      * @param skuConvertor           SKU 行转换器
+     * @param editVersionJpaRepository 编辑版本子表 JPA 仓储（级联清理）
      */
     public ProductRepositoryImpl(ProductJpaRepository repository,
                                  ThreadContext threadContext,
@@ -128,7 +136,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                                  ProductImageConvertor imageConvertor,
                                  ProductAttributeConvertor attributeConvertor,
                                  SkuJpaRepository skuJpaRepository,
-                                 SkuConvertor skuConvertor) {
+                                 SkuConvertor skuConvertor,
+                                 ProductEditVersionJpaRepository editVersionJpaRepository) {
         super(repository, threadContext, convertor, changeTrackerProvider);
         this.productJpaRepository = repository;
         this.imageJpaRepository = imageJpaRepository;
@@ -137,6 +146,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         this.attributeConvertor = attributeConvertor;
         this.skuJpaRepository = skuJpaRepository;
         this.skuConvertor = skuConvertor;
+        this.editVersionJpaRepository = editVersionJpaRepository;
     }
 
     /**
@@ -233,6 +243,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         imageJpaRepository.deleteByProductId(productId);
         attributeJpaRepository.deleteByProductId(productId);
         skuJpaRepository.deleteByProductId(productId);
+        editVersionJpaRepository.deleteByProductId(productId);
         if (!repository.existsById(productId)) {
             return 0;
         }

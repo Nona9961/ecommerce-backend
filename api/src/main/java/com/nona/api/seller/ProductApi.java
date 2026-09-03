@@ -156,4 +156,26 @@ public interface ProductApi {
      */
     HttpResponse<SkuItem> setSkuEnabled(Long productId, Long skuId,
                                         SkuEnabledRequest request);
+
+    /**
+     * 版本历史查询（按商品分页，新版本在前）：版本号/触发类型/操作人/
+     * 产生时间/内容摘要（每次保存与回滚均生成版本行——编辑留痕）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param query     分页参数（pageNum/pageSize 已归一化）
+     * @return 分页版本列表（新版本在前）
+     */
+    HttpResponse<PageResult<ProductVersionItem>> listVersions(Long productId, PageQuery query);
+
+    /**
+     * 回滚到指定版本：聚合内容重置为历史快照内容，再走保存流程生成新
+     * 版本行（trigger_type=ROLLBACK，版本号递增）——撤销误改的合法路径
+     * （历史版本行 append-only 只增不改）。目标版本不存在/不属于当前
+     * 商品按不存在呈现（404）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param versionNo 目标版本号（正整数）
+     * @return 回滚后的草稿详情（内容 = 目标版本内容）
+     */
+    HttpResponse<ProductDetail> rollbackProduct(Long productId, Integer versionNo);
 }

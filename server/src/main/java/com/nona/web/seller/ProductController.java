@@ -15,7 +15,9 @@ import com.nona.api.seller.SkuEnabledRequest;
 import com.nona.api.seller.SkuItem;
 import com.nona.api.seller.SkuPriceRequest;
 import com.nona.api.seller.SpecTemplateRequest;
+import com.nona.api.seller.ProductVersionItem;
 import com.nona.application.seller.ProductUseCase;
+import com.nona.application.seller.ProductVersionUseCase;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.ThreadContext;
@@ -49,6 +51,11 @@ public class ProductController implements ProductApi {
     private final ProductUseCase productUseCase;
 
     /**
+     * 商品编辑版本用例（版本历史/回滚编排）
+     */
+    private final ProductVersionUseCase productVersionUseCase;
+
+    /**
      * 请求上下文（取当前店铺 ID）
      */
     private final ThreadContext threadContext;
@@ -56,11 +63,15 @@ public class ProductController implements ProductApi {
     /**
      * 构造商品草稿控制器。
      *
-     * @param productUseCase 商品用例
-     * @param threadContext  请求上下文
+     * @param productUseCase        商品用例
+     * @param productVersionUseCase 商品编辑版本用例
+     * @param threadContext         请求上下文
      */
-    public ProductController(ProductUseCase productUseCase, ThreadContext threadContext) {
+    public ProductController(ProductUseCase productUseCase,
+                             ProductVersionUseCase productVersionUseCase,
+                             ThreadContext threadContext) {
         this.productUseCase = productUseCase;
+        this.productVersionUseCase = productVersionUseCase;
         this.threadContext = threadContext;
     }
 
@@ -204,6 +215,26 @@ public class ProductController implements ProductApi {
                                                @PathVariable("skuId") Long skuId,
                                                @Valid @RequestBody SkuEnabledRequest request) {
         return HttpResponse.ok(productUseCase.setSkuEnabled(productId, skuId, request));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @GetMapping("/seller/products/{productId}/versions")
+    public HttpResponse<PageResult<ProductVersionItem>> listVersions(@PathVariable("productId") Long productId,
+                                                                     PageQuery query) {
+        return HttpResponse.ok(productVersionUseCase.history(productId, query));
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    @PostMapping("/seller/products/{productId}/versions/{versionNo}/rollback")
+    public HttpResponse<ProductDetail> rollbackProduct(@PathVariable("productId") Long productId,
+                                                       @PathVariable("versionNo") Integer versionNo) {
+        return HttpResponse.ok(productVersionUseCase.rollback(productId, versionNo));
     }
 
     /**

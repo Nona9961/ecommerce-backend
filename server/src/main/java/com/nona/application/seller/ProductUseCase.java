@@ -66,6 +66,11 @@ public class ProductUseCase {
     private final ProductFactory productFactory;
 
     /**
+     * 商品编辑版本用例（保存留痕：每次实际落库的保存追加 EDIT 版本行）
+     */
+    private final ProductVersionUseCase productVersionUseCase;
+
+    /**
      * 平台分类仓储（引用存在性/启用校验）
      */
     private final PlatformCategoryRepository categoryRepository;
@@ -78,24 +83,28 @@ public class ProductUseCase {
     /**
      * 构造商品草稿用例。
      *
-     * @param productRepository  商品仓储
-     * @param productFactory     商品工厂
-     * @param categoryRepository 平台分类仓储
-     * @param brandRepository    品牌仓储
+     * @param productRepository      商品仓储
+     * @param productFactory         商品工厂
+     * @param productVersionUseCase  商品编辑版本用例（保存留痕）
+     * @param categoryRepository     平台分类仓储
+     * @param brandRepository        品牌仓储
      */
     public ProductUseCase(ProductRepository productRepository,
                           ProductFactory productFactory,
+                          ProductVersionUseCase productVersionUseCase,
                           PlatformCategoryRepository categoryRepository,
                           BrandRepository brandRepository) {
         this.productRepository = productRepository;
         this.productFactory = productFactory;
+        this.productVersionUseCase = productVersionUseCase;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
     }
 
     /**
      * 创建商品草稿：类目/品牌引用校验 → 工厂创建（ID 生成/归属定型/
-     * 状态 DRAFT）→ 落库。
+     * 状态 DRAFT）→ 落库 → 基线留痕（版本号=1，EDIT 触发类型——创建
+     * 即版本链起点）。
      *
      * @param shopId  当前店铺 ID（认证上下文）
      * @param request 草稿主体（名称必填；描述/类目/品牌可空）
@@ -107,6 +116,7 @@ public class ProductUseCase {
         final Product product = productFactory.createDraft(
                 shopId, request.name(), request.description(), request.categoryId(), request.brandId());
         productRepository.save(product);
+        productVersionUseCase.recordEdit(product);
         return toDetail(product);
     }
 
@@ -136,7 +146,7 @@ public class ProductUseCase {
 
     /**
      * 更新草稿主体：名称/描述/类目/品牌整体替换；引用变更时校验新目标
-     * 存在且启用（保留不变的历史归属合法）。
+     * 存在且启用（保留不变的历史归属合法）；实际落库后留痕。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   新主体
@@ -147,7 +157,9 @@ public class ProductUseCase {
         final Product product = requireProduct(productId);
         requireReferenceOnChange(product, request.categoryId(), request.brandId());
         product.updateInfo(request.name(), request.description(), request.categoryId(), request.brandId());
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toDetail(product);
     }
 
@@ -163,7 +175,8 @@ public class ProductUseCase {
     }
 
     /**
-     * 添加图片引用：工厂创建 → 聚合新增（主图唯一性聚合内保证）→ 落库。
+     * 添加图片引用：工厂创建 → 聚合新增（主图唯一性聚合内保证）→ 落库
+     * → 留痕。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   图片 URL 与主图标记
@@ -175,12 +188,14 @@ public class ProductUseCase {
         final ProductImage image = productFactory.createImage(
                 product, request.url(), Boolean.TRUE.equals(request.primary()));
         product.addImage(image);
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toImageItem(image);
     }
 
     /**
-     * 删除图片引用（主图被删后主图位清空）。
+     * 删除图片引用（主图被删后主图位清空；实际落库后留痕）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param imageId   图片引用 ID（必须属于当前商品，否则 404）
@@ -189,11 +204,13 @@ public class ProductUseCase {
     public void removeImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
         product.removeImage(imageId);
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
     }
 
     /**
-     * 设置主图（清除原主图标记，目标图片设为新主图）。
+     * 设置主图（清除原主图标记，目标图片设为新主图；实际落库后留痕）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param imageId   图片引用 ID（必须属于当前商品，否则 404）
@@ -203,14 +220,17 @@ public class ProductUseCase {
     public ProductImageItem setPrimaryImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
         product.setPrimaryImage(imageId);
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toImageItem(product.getImageById(imageId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_IMAGE_NOT_FOUND.code(), "图片不存在")));
     }
 
     /**
-     * 添加自定义属性：工厂创建 → 聚合新增（键唯一性聚合内保证）→ 落库。
+     * 添加自定义属性：工厂创建 → 聚合新增（键唯一性聚合内保证）→ 落库
+     * → 留痕。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   属性键值
@@ -222,12 +242,14 @@ public class ProductUseCase {
         final ProductAttribute attribute = productFactory.createAttribute(
                 product, request.key(), request.value());
         product.addAttribute(attribute);
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toAttributeItem(attribute);
     }
 
     /**
-     * 更新自定义属性（改键保持唯一；值可空）。
+     * 更新自定义属性（改键保持唯一；值可空；实际落库后留痕）。
      *
      * @param productId   商品 ID（必须属于当前店铺，否则 404）
      * @param attributeId 属性 ID（必须属于当前商品，否则 404）
@@ -239,14 +261,16 @@ public class ProductUseCase {
                                                 ProductAttributeRequest request) {
         final Product product = requireProduct(productId);
         product.updateAttribute(attributeId, request.key(), request.value());
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toAttributeItem(product.getAttributeById(attributeId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND.code(), "属性不存在")));
     }
 
     /**
-     * 删除自定义属性。
+     * 删除自定义属性（实际落库后留痕）。
      *
      * @param productId   商品 ID（必须属于当前店铺，否则 404）
      * @param attributeId 属性 ID（必须属于当前商品，否则 404）
@@ -255,13 +279,15 @@ public class ProductUseCase {
     public void removeAttribute(Long productId, Long attributeId) {
         final Product product = requireProduct(productId);
         product.removeAttribute(attributeId);
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
     }
 
     /**
      * 整体替换规格模板并重建 SKU 集：请求维度表 → 值对象构造（结构校验）
-     * → 聚合重建（组合匹配保留/新增/移除，上限守卫）→ 变更集落库。
-     * 空 dimensions = 空模板（清空 SKU 集）。
+     * → 聚合重建（组合匹配保留/新增/移除，上限守卫）→ 变更集落库 →
+     * 留痕。空 dimensions = 空模板（清空 SKU 集）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   新规格模板（整体替换；空 dimensions=清空 SKU 集）
@@ -271,12 +297,15 @@ public class ProductUseCase {
     public List<SkuItem> configureSpecTemplate(Long productId, SpecTemplateRequest request) {
         final Product product = requireProduct(productId);
         product.configureSpecTemplate(toTemplate(request));
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return product.skusOrdered().stream().map(ProductUseCase::toSkuItem).toList();
     }
 
     /**
-     * 更新 SKU 价格（null=清除价格复位未定价；非正数拒绝）。
+     * 更新 SKU 价格（null=清除价格复位未定价；非正数拒绝；实际落库后
+     * 留痕）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param skuId     SKU ID（必须属于当前商品，否则 404）
@@ -287,12 +316,14 @@ public class ProductUseCase {
     public SkuItem updateSkuPrice(Long productId, Long skuId, SkuPriceRequest request) {
         final Product product = requireProduct(productId);
         product.updateSkuPrice(skuId, request.price());
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toSkuItem(requireSku(product, skuId));
     }
 
     /**
-     * 切换 SKU 启用状态。
+     * 切换 SKU 启用状态（实际落库后留痕）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param skuId     SKU ID（必须属于当前商品，否则 404）
@@ -303,7 +334,9 @@ public class ProductUseCase {
     public SkuItem setSkuEnabled(Long productId, Long skuId, SkuEnabledRequest request) {
         final Product product = requireProduct(productId);
         product.setSkuEnabled(skuId, request.enabled());
-        productRepository.save(product);
+        if (productRepository.save(product)) {
+            productVersionUseCase.recordEdit(product);
+        }
         return toSkuItem(requireSku(product, skuId));
     }
 

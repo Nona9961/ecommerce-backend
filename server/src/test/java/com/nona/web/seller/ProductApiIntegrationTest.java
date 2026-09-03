@@ -11,6 +11,7 @@ import com.nona.inf.persistence.po.catalog.ShopPO;
 import com.nona.inf.persistence.repository.jpa.BrandJpaRepository;
 import com.nona.inf.persistence.repository.jpa.PlatformCategoryJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ShopJpaRepository;
@@ -144,12 +145,19 @@ class ProductApiIntegrationTest {
     private TenantPrivilege tenantPrivilege;
 
     /**
+     * 商品编辑版本子表 JPA（测试数据清理——写路径留痕行随用例销毁）
+     */
+    @Autowired
+    private ProductEditVersionJpaRepository editVersionJpaRepository;
+
+    /**
      * 每用例前：清空商品相关表（含 global 的类目/品牌引用表）并直插
      * A/B 两家店铺、一个启用类目、一个启用品牌，stub 两个商家上下文。
      */
     @BeforeEach
     void setUp() {
         tenantPrivilege.elevated(() -> {
+            editVersionJpaRepository.deleteAll();
             attributeJpaRepository.deleteAll();
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();

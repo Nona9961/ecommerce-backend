@@ -5,6 +5,7 @@ import com.nona.domain.catalog.entity.ShopStatus;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.po.catalog.ShopPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ShopJpaRepository;
@@ -125,11 +126,18 @@ class ProductSkuApiIntegrationTest {
     private TenantPrivilege tenantPrivilege;
 
     /**
+     * 商品编辑版本子表 JPA（测试数据清理——写路径留痕行随用例销毁）
+     */
+    @Autowired
+    private ProductEditVersionJpaRepository editVersionJpaRepository;
+
+    /**
      * 每用例前：清空商品相关表并直插 A/B 两家店铺，stub 两个商家上下文。
      */
     @BeforeEach
     void setUp() {
         tenantPrivilege.elevated(() -> {
+            editVersionJpaRepository.deleteAll();
             skuJpaRepository.deleteAll();
             attributeJpaRepository.deleteAll();
             imageJpaRepository.deleteAll();

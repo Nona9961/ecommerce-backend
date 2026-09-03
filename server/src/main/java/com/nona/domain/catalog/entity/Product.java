@@ -253,6 +253,68 @@ public class Product {
     }
 
     /**
+     * 整体内容重置（回滚路径唯一内容入口）：以历史版本快照重建的内容载体
+     * 替换聚合当前全部内容——主体（名称/描述/类目/品牌引用）+ 图片引用
+     * 集合 + 自定义属性集合 + 规格模板 + SKU 集合整体重置，等价于把聚合
+     * 恢复到保存该快照时刻的内容形态（SKU 实体身份/价格/启用状态一并
+     * 恢复，SKU 集不参与组合匹配存活语义——回滚是整版替换而非增量调节）。
+     * <p>
+     * 守卫（不变量收敛点）：
+     * <ol>
+     *     <li>名称必填非空（不变量 1）；</li>
+     *     <li>图片 URL 必填 / 主图至多一条 / ID 唯一（不变量 2/3/5，逐条
+     *         经既有新增守卫路径装载）；</li>
+     *     <li>属性键唯一与键必填（不变量 4，经既有新增守卫路径装载）；</li>
+     *     <li>规格模板结构合法性由值对象构造路径保证，组合数不超上限
+     *         （{@link #MAX_SKU_COMBINATIONS}）；模板 null = 清空模板与
+     *         SKU 集（快照内未配置模板的合法历史形态）；</li>
+     *     <li>SKU 集整体装入（装载语义，信任历史快照——快照保存时已通过
+     *         全部校验；装入校验为防御性兜底，默认由身份/组合摘要字段的
+     *         不可空性保证）。</li>
+     * </ol>
+     * 触发语义：内容重置（生成新版本行）与保存编排（用例层事务）同属
+     * 回滚流程——本方法只负责聚合内容形态，版本链留痕由用例层承载。
+     * 子实体归属重建：快照不承载卡片元素归属（版本行按商品维度定位，
+     * 归属恒等于所属商品），装载时以当前商品 ID 重建图片/属性/SKU 的
+     * 归属——子实体归属必为本聚合（聚合内身份一致性不变量）。
+     *
+     * @param content 内容载体（由历史版本快照重建；必填非空）
+     */
+    public void restoreContent(ProductContent content) {
+        if (content == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "内容载体不能为空");
+        }
+        this.name = requireName(content.name());
+        this.description = content.description();
+        this.categoryId = content.categoryId();
+        this.brandId = content.brandId();
+        if (content.specTemplate() == null) {
+            this.specTemplate = null;
+            skus.clear();
+        } else {
+            if (content.specTemplate().combinationCount() > MAX_SKU_COMBINATIONS) {
+                throw new BusinessException(
+                        EcommerceBusinessCode.CATALOG_PRODUCT_SKU_COUNT_EXCEEDED.code(), "SKU数量超上限");
+            }
+            this.specTemplate = content.specTemplate();
+            skus.clear();
+            for (final Sku sku : content.skus()) {
+                skus.add(new Sku(sku.getId(), id, sku.getSpecHash(), sku.getSpecSummary(),
+                        sku.getPrice(), sku.isEnabled()));
+            }
+        }
+        images.clear();
+        for (final ProductImage image : content.images()) {
+            addImage(new ProductImage(image.getId(), id, image.getUrl(), image.isPrimary()));
+        }
+        attributes.clear();
+        for (final ProductAttribute attribute : content.attributes()) {
+            addAttribute(new ProductAttribute(attribute.getId(), id, attribute.getKey(), attribute.getValue()));
+        }
+    }
+
+    /**
      * 新增图片引用（不变量 2/3/5）：URL 必填非空；ID 在聚合内唯一；
      * 请求设为主图时自动清除原主图标记（至多一条主图）。
      *

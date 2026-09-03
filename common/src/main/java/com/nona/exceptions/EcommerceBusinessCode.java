@@ -245,6 +245,17 @@ public enum EcommerceBusinessCode {
     CATALOG_PRODUCT_SKU_NOT_FOUND("catalog.product_sku_not_found", 404),
 
     /**
+     * 商品域：编辑版本不存在（目标版本号不属于当前商品，按不存在呈现——
+     * 回滚/历史查询命中不存在或跨店铺的版本）。
+     */
+    CATALOG_PRODUCT_VERSION_NOT_FOUND("catalog.product_version_not_found", 404),
+
+    /**
+     * 商品域：编辑版本号非法（回滚路径版本号非正数；防御性拒绝）。
+     */
+    CATALOG_PRODUCT_VERSION_INVALID("catalog.product_version_invalid", 400),
+
+    /**
      * 商品域：平台分类已禁用（新商品不可挂载禁用分类；已挂商品的保留历史归属合法）。
      */
     CATALOG_CATEGORY_DISABLED("catalog.category_disabled", 400),
