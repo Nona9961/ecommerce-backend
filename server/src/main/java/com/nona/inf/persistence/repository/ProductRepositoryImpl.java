@@ -5,12 +5,15 @@ import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.changeTracking.domain.model.changeset.ItemAddedChange;
 import com.nona.changeTracking.domain.model.changeset.ItemRemovedChange;
 import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
+import com.nona.domain.catalog.entity.EditSensitivity;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.ProductAttributeConvertor;
 import com.nona.inf.persistence.converters.ProductChildPos;
 import com.nona.inf.persistence.converters.ProductConvertor;
@@ -98,6 +101,12 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private final ProductEditVersionJpaRepository editVersionJpaRepository;
 
     /**
+     * 租户提权工具（提权写路径——平台审核跨店铺保存——PO 租户显式承载；
+     * 非提权商家路径由写门禁按请求上下文注入，保持既有语义）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 图片行转换器
      */
     private final ProductImageConvertor imageConvertor;
@@ -137,7 +146,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                                  ProductAttributeConvertor attributeConvertor,
                                  SkuJpaRepository skuJpaRepository,
                                  SkuConvertor skuConvertor,
-                                 ProductEditVersionJpaRepository editVersionJpaRepository) {
+                                 ProductEditVersionJpaRepository editVersionJpaRepository,
+                                 TenantPrivilege tenantPrivilege) {
         super(repository, threadContext, convertor, changeTrackerProvider);
         this.productJpaRepository = repository;
         this.imageJpaRepository = imageJpaRepository;
@@ -147,6 +157,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         this.skuJpaRepository = skuJpaRepository;
         this.skuConvertor = skuConvertor;
         this.editVersionJpaRepository = editVersionJpaRepository;
+        this.tenantPrivilege = tenantPrivilege;
     }
 
     /**
@@ -177,17 +188,19 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     /**
      * {@inheritDoc}
      * <p>
-     * 插入根行 + 全部从表行（新草稿首次落库）。
+     * 插入根行 + 全部从表行（新草稿首次落库）。根行与从表行的租户归属
+     * 均显式承载（tenant=shopId，从聚合根延伸）——提权写路径（平台审核
+     * 跨店铺保存）不依赖请求上下文注入，归属必得。
      */
     @Override
     protected void doInsert(Product root) {
-        repository.save(convertor.convertToPO(root));
+        repository.save(ownedBy(convertor.convertToPO(root), root));
         root.imagesOrdered().forEach(image ->
-                imageJpaRepository.save(imageConvertor.toPO(image)));
+                imageJpaRepository.save(ownedBy(imageConvertor.toPO(image), root)));
         root.attributesOrdered().forEach(attribute ->
-                attributeJpaRepository.save(attributeConvertor.toPO(attribute)));
+                attributeJpaRepository.save(ownedBy(attributeConvertor.toPO(attribute), root)));
         root.skusOrdered().forEach(sku ->
-                skuJpaRepository.save(skuConvertor.toPO(sku)));
+                skuJpaRepository.save(ownedBy(skuConvertor.toPO(sku), root)));
     }
 
     /**
@@ -200,7 +213,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     @Override
     protected void doUpdate(Product root, ChangeSet changeSet) {
         if (!repository.existsById(root.getId())) {
-            repository.save(convertor.convertToPO(root));
+            repository.save(ownedBy(convertor.convertToPO(root), root));
         }
         boolean rootRowDirty = false;
         for (final Change change : changeSet.getLeafChanges()) {
@@ -215,7 +228,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
             }
         }
         if (rootRowDirty) {
-            repository.save(convertor.convertToPO(root));
+            repository.save(ownedBy(convertor.convertToPO(root), root));
         }
     }
 
@@ -286,6 +299,75 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * 平台审核列表查询（管理员视角跨店铺全集）：按商品状态过滤分页，
+     * 每行装配完整聚合（概要派生自集合）。
+     */
+    @Override
+    public List<Product> listByStatusPaged(ProductStatus status, int offset, int limit) {
+        final Page<ProductPO> page = productJpaRepository.findByStatusOrderByIdAsc(
+                status, pageRequestAscending(offset, limit));
+        return page.stream().map(this::assemble).toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countByStatus(ProductStatus status) {
+        return productJpaRepository.countByStatus(status);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 全量分页查询（平台商品列表无状态过滤路径）：每行装配完整聚合。
+     */
+    @Override
+    public List<Product> listAllPaged(int offset, int limit) {
+        final Page<ProductPO> page = productJpaRepository.listAll(pageRequestAscending(offset, limit));
+        return page.stream().map(this::assemble).toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long countAll() {
+        return productJpaRepository.count();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 变更集投影：取当前变更追踪器变更集 → 叶子变更路径集合 + 增删集合
+     * 名集合 → 域判定契约（{@link Product#classifyEditSensitivity}）。
+     * 判定为纯函数（输入投影与输出路由分离）：变更路径按叶子节点 path
+     * 收集（集合元素 ID 掩除后与敏感字段集比对），集合增删按集合字段名
+     * 收集（SKU 集合增删 = 规格构成变化）。
+     */
+    @Override
+    public EditSensitivity summarizeSensitiveEdit(Product product) {
+        final ChangeSet changeSet = getOrCreateChangeTracker().calculateChanges();
+        if (changeSet.isEmpty()) {
+            return EditSensitivity.NONE;
+        }
+        final java.util.Set<String> changedPaths = new java.util.HashSet<>();
+        final java.util.Set<String> mutatedCollections = new java.util.HashSet<>();
+        for (final Change change : changeSet.getLeafChanges()) {
+            if (change instanceof ItemAddedChange || change instanceof ItemRemovedChange) {
+                if (change.collectionFieldName() != null) {
+                    mutatedCollections.add(change.collectionFieldName());
+                }
+            } else if (change.path() != null) {
+                changedPaths.add(change.path());
+            }
+        }
+        return Product.classifyEditSensitivity(changedPaths, mutatedCollections);
+    }
+
+    /**
      * 按变更节点分发图片集合变更：新增插行、删除删行、字段变更整行更新。
      *
      * @param root   聚合根
@@ -295,7 +377,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         if (change instanceof ItemAddedChange added) {
             final Long imageId = extractIdentifier(added.addedItem());
             root.getImageById(imageId).ifPresent(image ->
-                    imageJpaRepository.save(imageConvertor.toPO(image)));
+                    imageJpaRepository.save(ownedBy(imageConvertor.toPO(image), root)));
         } else if (change instanceof ItemRemovedChange removed) {
             final Long imageId = extractIdentifier(removed.removedItem());
             imageJpaRepository.deleteById(imageId);
@@ -314,7 +396,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         if (change instanceof ItemAddedChange added) {
             final Long attributeId = extractIdentifier(added.addedItem());
             root.getAttributeById(attributeId).ifPresent(attribute ->
-                    attributeJpaRepository.save(attributeConvertor.toPO(attribute)));
+                    attributeJpaRepository.save(ownedBy(attributeConvertor.toPO(attribute), root)));
         } else if (change instanceof ItemRemovedChange removed) {
             final Long attributeId = extractIdentifier(removed.removedItem());
             attributeJpaRepository.deleteById(attributeId);
@@ -333,7 +415,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         final Long imageId = extractIdFromPath(change.path());
         if (imageId != null) {
             root.getImageById(imageId)
-                    .ifPresent(image -> imageJpaRepository.save(imageConvertor.toPO(image)));
+                    .ifPresent(image -> imageJpaRepository.save(ownedBy(imageConvertor.toPO(image), root)));
         }
     }
 
@@ -347,7 +429,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         final Long attributeId = extractIdFromPath(change.path());
         if (attributeId != null) {
             root.getAttributeById(attributeId)
-                    .ifPresent(attribute -> attributeJpaRepository.save(attributeConvertor.toPO(attribute)));
+                    .ifPresent(attribute -> attributeJpaRepository.save(ownedBy(attributeConvertor.toPO(attribute), root)));
         }
     }
 
@@ -361,7 +443,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         if (change instanceof ItemAddedChange added) {
             final Long skuId = extractIdentifier(added.addedItem());
             root.getSkuById(skuId).ifPresent(sku ->
-                    skuJpaRepository.save(skuConvertor.toPO(sku)));
+                    skuJpaRepository.save(ownedBy(skuConvertor.toPO(sku), root)));
         } else if (change instanceof ItemRemovedChange removed) {
             final Long skuId = extractIdentifier(removed.removedItem());
             skuJpaRepository.deleteById(skuId);
@@ -380,8 +462,26 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         final Long skuId = extractIdFromPath(change.path());
         if (skuId != null) {
             root.getSkuById(skuId)
-                    .ifPresent(sku -> skuJpaRepository.save(skuConvertor.toPO(sku)));
+                    .ifPresent(sku -> skuJpaRepository.save(ownedBy(skuConvertor.toPO(sku), root)));
         }
+    }
+
+    /**
+     * 商品行/从表行租户承载：提权写路径（平台审核跨店铺保存）显式锚定
+     * tenant=shopId——归属必得，不依赖请求上下文；非提权商家路径保持
+     * 既有注入语义（行租户由写门禁按请求上下文注入，显式值缺失即放行
+     * 注入）。
+     *
+     * @param po   行 PO
+     * @param root 商品聚合根（租户锚点）
+     * @return 承载租户后的 PO
+     * @param <T>  行 PO 类型
+     */
+    private <T extends com.nona.inf.persistence.po.TenantScopedBasePO> T ownedBy(T po, Product root) {
+        if (tenantPrivilege.isActive()) {
+            po.setTenantID(String.valueOf(root.getShopId()));
+        }
+        return po;
     }
 
     /**
@@ -403,6 +503,17 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      */
     private static PageRequest pageRequest(int offset, int limit) {
         return PageRequest.of(offset / limit, limit, Sort.by(Sort.Direction.DESC, "id"));
+    }
+
+    /**
+     * 组装平台分页请求（创建序——ID 升序，先创建的先审）。
+     *
+     * @param offset 首条偏移量
+     * @param limit  每页条数
+     * @return 分页请求
+     */
+    private static PageRequest pageRequestAscending(int offset, int limit) {
+        return PageRequest.of(offset / limit, limit, Sort.by(Sort.Direction.ASC, "id"));
     }
 
     /**

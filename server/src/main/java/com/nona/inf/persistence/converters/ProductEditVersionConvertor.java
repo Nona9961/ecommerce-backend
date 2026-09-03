@@ -1,5 +1,6 @@
 package com.nona.inf.persistence.converters;
 
+import com.nona.domain.catalog.entity.EditVersionTriggerType;
 import com.nona.domain.catalog.entity.ProductEditVersion;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import org.springframework.stereotype.Component;
@@ -38,7 +39,8 @@ public class ProductEditVersionConvertor implements PoConverter<ProductEditVersi
     /**
      * {@inheritDoc}
      * <p>
-     * 审计时间戳与租户列由持久化层填充，转换不负责。
+     * 审计时间戳与租户列由持久化层填充，转换不负责。驳回原因随实体
+     * 读取（审核结论行承载）。
      */
     @Override
     public ProductEditVersionPO toPO(ProductEditVersion domain) {
@@ -49,17 +51,27 @@ public class ProductEditVersionConvertor implements PoConverter<ProductEditVersi
         po.setSnapshotJson(domain.getSnapshotJson());
         po.setOperator(domain.getOperator());
         po.setTriggerType(domain.getTriggerType());
+        po.setReviewReason(domain.getReviewReason());
         return po;
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 版本产生时间取审计 create_time（读回路径）。
+     * 版本产生时间取审计 create_time（读回路径）。审核结论行（驳回原因）
+     * 的读回经审核结论构造路径接线（触发类型 REVIEW_PASS / REJECT 行走
+     * 审核结论构造，其余触发类型走既有构造路径）。
      */
     @Override
     public ProductEditVersion toDomain(ProductEditVersionPO po) {
+        final EditVersionTriggerType triggerType = po.getTriggerType();
+        if (triggerType == EditVersionTriggerType.REVIEW_PASS
+                || triggerType == EditVersionTriggerType.REJECT) {
+            return new ProductEditVersion(po.getId(), po.getProductId(), po.getVersionNo(),
+                    po.getSnapshotJson(), po.getOperator(), triggerType,
+                    po.getReviewReason(), po.getCreateTime());
+        }
         return new ProductEditVersion(po.getId(), po.getProductId(), po.getVersionNo(),
-                po.getSnapshotJson(), po.getOperator(), po.getTriggerType(), po.getCreateTime());
+                po.getSnapshotJson(), po.getOperator(), triggerType, po.getCreateTime());
     }
 }

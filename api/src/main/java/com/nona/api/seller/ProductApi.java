@@ -12,8 +12,8 @@ import java.util.List;
  * <p>
  * 当前店铺由认证上下文定位（登录时账号-店铺关联写入用户上下文，过滤器填充
  * 请求租户=当前店铺 ID）；商品归属当前店铺，跨店铺商品访问按不存在呈现
- * （404，不泄露归属，fail-closed）。草稿可保存不生效（状态恒 DRAFT，
- * 一期无发布/审核链路）；类目/品牌引用非空时目标必须存在且启用。
+ * （404，不泄露归属，fail-closed）。草稿可保存不生效（状态 DRAFT，
+ * 提交审核后转待审核）；类目/品牌引用非空时目标必须存在且启用。
  * 图片只管理 URL 引用（上传走 {@code POST /files}），删除引用
  * 不删除文件。
  *
@@ -57,6 +57,8 @@ public interface ProductApi {
 
     /**
      * 删除草稿（物理删除：级联删除图片/属性引用行；删除引用不删除文件）。
+     * 仅草稿可删除：非草稿状态（含待审中）删除拒绝（完整性语义：审核/在售
+     * 生命周期无删除端点，后续阶段另行定义）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @return 成功响应
@@ -178,4 +180,15 @@ public interface ProductApi {
      * @return 回滚后的草稿详情（内容 = 目标版本内容）
      */
     HttpResponse<ProductDetail> rollbackProduct(Long productId, Integer versionNo);
+
+    /**
+     * 提交上架：草稿转待审核（完整性校验：规格模板非空且至少一个启用
+     * SKU、全部 SKU 已定价、有主图、已挂平台类目与品牌——任一不满足拒绝）。
+     * 提交后内容冻结：审核期内不再允许编辑，审核通过转在售、驳回回草稿
+     * （可修改重提）；待审核状态商品买家不可见。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 提交后的商品详情（状态 PENDING_REVIEW）
+     */
+    HttpResponse<ProductDetail> submitForReview(Long productId);
 }

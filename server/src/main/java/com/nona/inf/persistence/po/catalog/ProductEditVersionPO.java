@@ -21,9 +21,9 @@ import jakarta.persistence.UniqueConstraint;
  * (product_id, version_no) 唯一约束兜底并发重复插入（MAX+1 分配的 DB
  * 级防线）；snapshot_json 为保存时刻聚合全部内容的全量 JSON 快照
  * （体量小，全量优于增量 patch）；operator 为操作人（认证上下文身份
- * 标识）；trigger_type 为触发类型（本期 EDIT/ROLLBACK，REVIEW_PASS/
- * REJECT 为审核流预留值属后续阶段）。创建时间承载版本产生时间
- * （create_time 审计列），版本行只增不改（无 update 路径）。
+ * 标识）；trigger_type 为触发类型（EDIT / ROLLBACK / REVIEW_PASS /
+ * REJECT；审核结论行另以 review_reason 承载驳回原因）。创建时间承载
+ * 版本产生时间（create_time 审计列），版本行只增不改（无 update 路径）。
  *
  * @author nona9961
  */
@@ -62,11 +62,18 @@ public class ProductEditVersionPO extends TenantScopedBasePO {
     private String operator;
 
     /**
-     * 触发类型（EDIT / ROLLBACK；REVIEW_PASS / REJECT 属后续阶段）
+     * 触发类型（EDIT / ROLLBACK / REVIEW_PASS / REJECT）
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16, name = "trigger_type")
     private EditVersionTriggerType triggerType;
+
+    /**
+     * 审核驳回原因（可空：仅 trigger_type=REJECT 的审核结论行承载驳回
+     * 原因；其余触发类型行为 null——一致性由实体构造路径校验）
+     */
+    @Column(length = 512, name = "review_reason")
+    private String reviewReason;
 
     /**
      * 归属商品 ID。
@@ -156,5 +163,23 @@ public class ProductEditVersionPO extends TenantScopedBasePO {
      */
     public void setTriggerType(EditVersionTriggerType triggerType) {
         this.triggerType = triggerType;
+    }
+
+    /**
+     * 审核驳回原因。
+     *
+     * @return 驳回原因；非 REJECT 行/未驳回为 null
+     */
+    public String getReviewReason() {
+        return reviewReason;
+    }
+
+    /**
+     * 设置审核驳回原因。
+     *
+     * @param reviewReason 驳回原因；null=无驳回原因
+     */
+    public void setReviewReason(String reviewReason) {
+        this.reviewReason = reviewReason;
     }
 }

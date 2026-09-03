@@ -1,6 +1,8 @@
 package com.nona.domain.catalog.repo;
 
+import com.nona.domain.catalog.entity.EditSensitivity;
 import com.nona.domain.catalog.entity.Product;
+import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.persistence.BaseRepository;
 
 import java.util.List;
@@ -54,4 +56,56 @@ public interface ProductRepository extends BaseRepository<Long, Product> {
      * @return 存在引用返回 true
      */
     boolean existsByBrandId(Long brandId);
+
+    /**
+     * 按商品状态分页列出商品（平台审核列表用；管理员视角跨店铺全集，
+     * 调用方需读放行——查询放行职责在应用层用例）。行集按创建序
+     * （先创建的先审）。
+     *
+     * @param status 商品状态过滤
+     * @param offset 首条偏移量（从 0 开始）
+     * @param limit  每页条数
+     * @return 商品列表（按创建序）；无数据为空列表
+     */
+    List<Product> listByStatusPaged(ProductStatus status, int offset, int limit);
+
+    /**
+     * 按商品状态统计商品数（分页 total 用；管理员视角跨店铺全集，
+     * 调用方需读放行）。
+     *
+     * @param status 商品状态
+     * @return 商品数
+     */
+    long countByStatus(ProductStatus status);
+
+    /**
+     * 全量分页列出商品（平台商品列表无状态过滤路径；管理员视角跨店铺
+     * 全集，调用方需读放行）。行集按创建序（先创建的先审）。
+     *
+     * @param offset 首条偏移量（从 0 开始）
+     * @param limit  每页条数
+     * @return 商品列表（按创建序）；无数据为空列表
+     */
+    List<Product> listAllPaged(int offset, int limit);
+
+    /**
+     * 全量统计商品数（分页 total 用；管理员视角跨店铺全集，调用方需
+     * 读放行）。
+     *
+     * @return 商品数
+     */
+    long countAll();
+
+    /**
+     * 汇总一次待保存编辑的变更敏感性（字段级审核分流判定输入）：投影
+     * 当前变更追踪器变更集 → 变更路径/增删集合 → {@link EditSensitivity}
+     * 判定结果。调用方（应用层用例）在领域操作完成后、保存前调用——
+     * 变更集为「当前聚合 vs 加载快照」的差异，判定为纯函数（领域常量
+     * 配置，见 Product 判定契约）。
+     *
+     * @param product 已发生领域操作的聚合（其加载快照已登记追踪）
+     * @return 编辑方向判定结果（NONE=无变更 / DISPLAY_ONLY=直改免审 /
+     *         SENSITIVE=转待审核）
+     */
+    EditSensitivity summarizeSensitiveEdit(Product product);
 }

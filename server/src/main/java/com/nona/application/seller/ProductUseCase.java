@@ -17,10 +17,13 @@ import com.nona.api.seller.SpecTemplateRequest;
 import com.nona.domain.catalog.entity.Brand;
 import com.nona.domain.catalog.entity.BrandStatus;
 import com.nona.domain.catalog.entity.CategoryStatus;
+import com.nona.domain.catalog.entity.EditSensitivity;
 import com.nona.domain.catalog.entity.PlatformCategory;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
+import com.nona.domain.catalog.entity.ProductContent;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.entity.SpecItem;
 import com.nona.domain.catalog.entity.SpecTemplate;
@@ -30,6 +33,7 @@ import com.nona.domain.catalog.repo.PlatformCategoryRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +52,11 @@ import java.util.Objects;
  * 类目/品牌引用校验（引用查询能力由平台分类/品牌仓储提供）：引用非空时目标必须存在且
  * 启用（禁用态不可挂载）；更新场景引用保持不变时保留历史归属合法
  * （域内既有商品在类目/品牌禁用后维持可见，此路径允许保留引用）。
- * 草稿状态恒 DRAFT（可保存不生效——发布/审核链路属后续阶段）。
+ * 编辑分流路由（字段级审核白名单）：草稿/驳回态直改留痕；在售商品保存前
+ * 投影变更敏感性——敏感字段编辑（标题/类目/品牌/SKU 价格/SKU 规格构成）
+ * 转待审核（编辑内容入待审草稿位、生效内容回退旧版，不产生编辑版本行），
+ * 展示类编辑（描述/详情图/自定义属性/启停）直改免审（留痕）；待审核期
+ * 写面冻结（聚合守卫，驳回后回草稿可改）。
  *
  * @author nona9961
  */
@@ -81,6 +89,12 @@ public class ProductUseCase {
     private final BrandRepository brandRepository;
 
     /**
+     * 商品内容快照转换器（在售敏感编辑分流的生效内容快照化：编辑前
+     * 留存生效内容载体，分流回退输入）
+     */
+    private final ProductSnapshotConvertor snapshotConvertor;
+
+    /**
      * 构造商品草稿用例。
      *
      * @param productRepository      商品仓储
@@ -88,17 +102,20 @@ public class ProductUseCase {
      * @param productVersionUseCase  商品编辑版本用例（保存留痕）
      * @param categoryRepository     平台分类仓储
      * @param brandRepository        品牌仓储
+     * @param snapshotConvertor      商品内容快照转换器（敏感编辑分流回退）
      */
     public ProductUseCase(ProductRepository productRepository,
                           ProductFactory productFactory,
                           ProductVersionUseCase productVersionUseCase,
                           PlatformCategoryRepository categoryRepository,
-                          BrandRepository brandRepository) {
+                          BrandRepository brandRepository,
+                          ProductSnapshotConvertor snapshotConvertor) {
         this.productRepository = productRepository;
         this.productFactory = productFactory;
         this.productVersionUseCase = productVersionUseCase;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
+        this.snapshotConvertor = snapshotConvertor;
     }
 
     /**
@@ -156,21 +173,25 @@ public class ProductUseCase {
     public ProductDetail update(Long productId, ProductDraftRequest request) {
         final Product product = requireProduct(productId);
         requireReferenceOnChange(product, request.categoryId(), request.brandId());
-        product.updateInfo(request.name(), request.description(), request.categoryId(), request.brandId());
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.updateInfo(
+                request.name(), request.description(), request.categoryId(), request.brandId()));
         return toDetail(product);
     }
 
     /**
-     * 删除草稿（物理删除：级联删图片/属性引用行）。
+     * 删除商品（物理删除：级联删图片/属性/SKU/版本行）。非草稿状态删除
+     * 拒绝（完整性语义：待审/在售/已下架生命周期无删除端点，下架与注销
+     * 路径属后续阶段）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      */
     @Transactional
     public void delete(Long productId) {
-        requireProduct(productId);
+        final Product product = requireProduct(productId);
+        if (product.getStatus() != ProductStatus.DRAFT) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_STATUS_ILLEGAL.code(), "仅草稿商品可删除");
+        }
         productRepository.deleteByID(productId);
     }
 
@@ -187,15 +208,13 @@ public class ProductUseCase {
         final Product product = requireProduct(productId);
         final ProductImage image = productFactory.createImage(
                 product, request.url(), Boolean.TRUE.equals(request.primary()));
-        product.addImage(image);
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.addImage(image));
         return toImageItem(image);
     }
 
     /**
-     * 删除图片引用（主图被删后主图位清空；实际落库后留痕）。
+     * 删除图片引用（主图被删后主图位清空——在售商品删主图拒绝；实际落库
+     * 后留痕）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param imageId   图片引用 ID（必须属于当前商品，否则 404）
@@ -203,10 +222,7 @@ public class ProductUseCase {
     @Transactional
     public void removeImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
-        product.removeImage(imageId);
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.removeImage(imageId));
     }
 
     /**
@@ -219,10 +235,7 @@ public class ProductUseCase {
     @Transactional
     public ProductImageItem setPrimaryImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
-        product.setPrimaryImage(imageId);
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.setPrimaryImage(imageId));
         return toImageItem(product.getImageById(imageId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_IMAGE_NOT_FOUND.code(), "图片不存在")));
@@ -241,10 +254,7 @@ public class ProductUseCase {
         final Product product = requireProduct(productId);
         final ProductAttribute attribute = productFactory.createAttribute(
                 product, request.key(), request.value());
-        product.addAttribute(attribute);
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.addAttribute(attribute));
         return toAttributeItem(attribute);
     }
 
@@ -260,10 +270,7 @@ public class ProductUseCase {
     public ProductAttributeItem updateAttribute(Long productId, Long attributeId,
                                                 ProductAttributeRequest request) {
         final Product product = requireProduct(productId);
-        product.updateAttribute(attributeId, request.key(), request.value());
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.updateAttribute(attributeId, request.key(), request.value()));
         return toAttributeItem(product.getAttributeById(attributeId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND.code(), "属性不存在")));
@@ -278,16 +285,13 @@ public class ProductUseCase {
     @Transactional
     public void removeAttribute(Long productId, Long attributeId) {
         final Product product = requireProduct(productId);
-        product.removeAttribute(attributeId);
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.removeAttribute(attributeId));
     }
 
     /**
      * 整体替换规格模板并重建 SKU 集：请求维度表 → 值对象构造（结构校验）
      * → 聚合重建（组合匹配保留/新增/移除，上限守卫）→ 变更集落库 →
-     * 留痕。空 dimensions = 空模板（清空 SKU 集）。
+     * 留痕/分流。空 dimensions = 空模板（清空 SKU 集）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   新规格模板（整体替换；空 dimensions=清空 SKU 集）
@@ -296,16 +300,13 @@ public class ProductUseCase {
     @Transactional
     public List<SkuItem> configureSpecTemplate(Long productId, SpecTemplateRequest request) {
         final Product product = requireProduct(productId);
-        product.configureSpecTemplate(toTemplate(request));
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.configureSpecTemplate(toTemplate(request)));
         return product.skusOrdered().stream().map(ProductUseCase::toSkuItem).toList();
     }
 
     /**
      * 更新 SKU 价格（null=清除价格复位未定价；非正数拒绝；实际落库后
-     * 留痕）。
+     * 留痕/分流——在售改价为敏感编辑转待审核）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param skuId     SKU ID（必须属于当前商品，否则 404）
@@ -315,15 +316,12 @@ public class ProductUseCase {
     @Transactional
     public SkuItem updateSkuPrice(Long productId, Long skuId, SkuPriceRequest request) {
         final Product product = requireProduct(productId);
-        product.updateSkuPrice(skuId, request.price());
-        if (productRepository.save(product)) {
-            productVersionUseCase.recordEdit(product);
-        }
+        persistEdit(product, () -> product.updateSkuPrice(skuId, request.price()));
         return toSkuItem(requireSku(product, skuId));
     }
 
     /**
-     * 切换 SKU 启用状态（实际落库后留痕）。
+     * 切换 SKU 启用状态（实际落库后留痕/分流——启停为展示类直改免审）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param skuId     SKU ID（必须属于当前商品，否则 404）
@@ -333,11 +331,83 @@ public class ProductUseCase {
     @Transactional
     public SkuItem setSkuEnabled(Long productId, Long skuId, SkuEnabledRequest request) {
         final Product product = requireProduct(productId);
-        product.setSkuEnabled(skuId, request.enabled());
-        if (productRepository.save(product)) {
+        persistEdit(product, () -> product.setSkuEnabled(skuId, request.enabled()));
+        return toSkuItem(requireSku(product, skuId));
+    }
+
+    /**
+     * 提交上架：草稿 → 待审核（完整性校验由聚合 submitForReview 守卫承载，
+     * 校验失败拒绝并逐项细化业务码）→ 状态迁移落库。提交无内容变化
+     * （待审内容 = 草稿当前内容），不产生编辑版本行；审核结论版本行由
+     * 平台侧审核用例承载。
+     * <p>
+     * 待审核期内容冻结：提交后本商品所有写面拒绝编辑（聚合守卫），
+     * 驳回后回草稿可修改重提。跨店铺商品按不存在呈现（404——租户过滤
+     * fail-closed，不泄露归属）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 提交后的商品详情（状态 PENDING_REVIEW）
+     */
+    @Transactional
+    public ProductDetail submitForReview(Long productId) {
+        final Product product = requireProduct(productId);
+        product.submitForReview();
+        productRepository.save(product);
+        return toDetail(product);
+    }
+
+    /**
+     * 保存路径统一编排（编辑分流 + 落库 + 留痕）：执行领域编辑后，在售
+     * 商品按变更敏感性路由（敏感字段编辑 → 待审草稿位装载 + 生效内容
+     * 回退 + 转待审核，不插编辑版本行；展示类编辑 → 直改留痕）；草稿/
+     * 驳回态直改留痕。保存仅在变更集非空时落库（不重复留痕）。
+     *
+     * @param product 已加载的商品聚合（变更追踪已登记）
+     * @param edit    领域编辑操作（聚合写方法；写面冻结守卫在聚合内）
+     */
+    private void persistEdit(Product product, Runnable edit) {
+        final ProductContent effectiveBefore = product.getStatus() == ProductStatus.ON_SALE
+                ? captureEffectiveBefore(product) : null;
+        edit.run();
+        final boolean routed = routeSensitiveEdit(product, effectiveBefore);
+        if (productRepository.save(product) && !routed) {
             productVersionUseCase.recordEdit(product);
         }
-        return toSkuItem(requireSku(product, skuId));
+    }
+
+    /**
+     * 在售商品编辑分流路由：保存前投影变更敏感性——敏感字段编辑（标题/
+     * 类目/品牌/SKU 价格/SKU 规格构成）转待审核（编辑内容入待审草稿位、
+     * 生效内容回退编辑前旧版，买家继续可见旧内容直至平台裁定）；展示类
+     * 编辑不路由（直改免审）。
+     *
+     * @param product        已发生领域编辑的聚合
+     * @param effectiveBefore 编辑前生效内容载体（在售分流回退输入；非在售
+     *                        路径传 null 不路由）
+     * @return 已转待审核分流返回 true（调用方跳过编辑版本行留痕）
+     */
+    private boolean routeSensitiveEdit(Product product, ProductContent effectiveBefore) {
+        if (product.getStatus() != ProductStatus.ON_SALE) {
+            return false;
+        }
+        final EditSensitivity sensitivity = productRepository.summarizeSensitiveEdit(product);
+        if (sensitivity != EditSensitivity.SENSITIVE) {
+            return false;
+        }
+        product.stageSensitiveEdit(effectiveBefore);
+        return true;
+    }
+
+    /**
+     * 编辑前生效内容快照（在售敏感编辑回退输入）：聚合当前全部内容经
+     * 快照中间形态往返重建独立载体（与聚合内子实体引用解耦，后续编辑
+     * 不影响回退载体）。
+     *
+     * @param product 商品聚合（编辑前状态）
+     * @return 生效内容载体
+     */
+    private ProductContent captureEffectiveBefore(Product product) {
+        return snapshotConvertor.toContent(snapshotConvertor.toSnapshotJson(product));
     }
 
     /**

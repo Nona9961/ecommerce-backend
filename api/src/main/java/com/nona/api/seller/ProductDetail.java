@@ -15,9 +15,11 @@ import java.util.Objects;
  * @param description 商品描述（可空）
  * @param categoryId  平台类目 ID（可空）
  * @param brandId     品牌 ID（可空）
- * @param status      商品状态（一期恒 DRAFT）
+ * @param status      商品状态（DRAFT 草稿 / PENDING_REVIEW 待审核 / ON_SALE 在售）
  * @param images      图片引用列表（按加入序；无图片为空列表）
  * @param attributes  自定义属性列表（按加入序；无属性为空列表）
+ *
+ * @author nona9961
  */
 public record ProductDetail(
         Long id,

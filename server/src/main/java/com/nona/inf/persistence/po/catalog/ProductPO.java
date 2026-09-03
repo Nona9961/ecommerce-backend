@@ -67,12 +67,22 @@ public class ProductPO extends TenantScopedBasePO {
     /**
      * 规格模板 JSON（可空=尚未配置模板；空数组=空模板）：规格模板为聚合
      * 内值对象（整体替换语义），以 JSON 载体随主表行走——结构序列化/
-     * 反序列化由转换器经中间形态完成（specTemplate_json 列与 TD 系列的
-     * JSON 扩展列同形态）。
+     * 反序列化由转换器经中间形态完成（specTemplate_json 列与 JSON 扩展
+     * 列同形态）。
      */
     @Lob
     @Column(name = "spec_template_json")
     private String specTemplateJson;
+
+    /**
+     * 待审草稿 JSON（可空=无待审草稿）：敏感字段编辑分流后的新内容暂存
+     * 位（字段级分流承载）——与生效内容分离，审核通过后覆盖正式
+     * 内容、驳回后作废；序列化形态与版本快照一致（快照中间形态复用），
+     * 由转换器双向转换。
+     */
+    @Lob
+    @Column(name = "pending_draft_json")
+    private String pendingDraftJson;
 
     /**
      * 所属店铺 ID。
@@ -198,5 +208,23 @@ public class ProductPO extends TenantScopedBasePO {
      */
     public void setSpecTemplateJson(String specTemplateJson) {
         this.specTemplateJson = specTemplateJson;
+    }
+
+    /**
+     * 待审草稿 JSON 内容。
+     *
+     * @return JSON 字符串；无待审草稿返回 null
+     */
+    public String getPendingDraftJson() {
+        return pendingDraftJson;
+    }
+
+    /**
+     * 设置待审草稿 JSON 内容。
+     *
+     * @param pendingDraftJson JSON 字符串；null=无待审草稿
+     */
+    public void setPendingDraftJson(String pendingDraftJson) {
+        this.pendingDraftJson = pendingDraftJson;
     }
 }

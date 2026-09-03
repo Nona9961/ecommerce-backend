@@ -1,6 +1,9 @@
 package com.nona.inf.persistence.converters;
 
 import com.nona.domain.catalog.entity.Product;
+import com.nona.domain.catalog.entity.ProductAttribute;
+import com.nona.domain.catalog.entity.ProductContent;
+import com.nona.domain.catalog.entity.ProductImage;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.entity.SpecItem;
 import com.nona.domain.catalog.entity.SpecTemplate;
@@ -27,6 +30,13 @@ import java.util.List;
  */
 @Component
 public class ProductConvertor extends AbstractConvertor<Product, ProductPO, ProductChildPos> {
+
+    /**
+     * 待审草稿子实体归属商品 ID 占位值（待审草稿 JSON 不承载卡片元素
+     * 归属；审批覆盖路径由聚合 restoreContent 以当前商品 ID 重建归属——
+     * 子实体归属恒等于所属商品）
+     */
+    private static final long UNBOUND_PRODUCT_ID = 0L;
 
     /**
      * 图片行转换器
@@ -75,6 +85,7 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
         po.setBrandId(root.getBrandId());
         po.setStatus(root.getStatus());
         po.setSpecTemplateJson(toSpecTemplateJson(root.getSpecTemplate().orElse(null)));
+        po.setPendingDraftJson(toPendingDraftJson(root.getPendingContent().orElse(null)));
         return po;
     }
 
@@ -82,19 +93,21 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
      * {@inheritDoc}
      * <p>
      * 从表行逐个经子转换器转换并装载（图片先于属性装载，各保持加入序；
-     * SKU 集经 V2 构造随模板一并装入）。
+     * SKU 集经 V2 构造随模板一并装入）；待审草稿位（pending_draft_json
+     * 列）读回经聚合装载路径接线（持久化读回：信任列数据，直接装载）。
      */
     @Override
     protected Product safedConvertToRoot(ProductPO po, ProductChildPos childPos) {
         final Product product = new Product(po.getId(), po.getShopId(), po.getName(),
                 po.getDescription(), po.getCategoryId(), po.getBrandId(), po.getStatus(),
                 fromSpecTemplateJson(po.getSpecTemplateJson()), toSkus(childPos));
+        product.restorePendingContent(fromPendingDraftJson(po.getPendingDraftJson()));
         if (childPos != null) {
             for (final var imagePo : childPos.images()) {
-                product.addImage(imageConvertor.toDomain(imagePo));
+                product.restoreImage(imageConvertor.toDomain(imagePo));
             }
             for (final var attributePo : childPos.attributes()) {
-                product.addAttribute(attributeConvertor.toDomain(attributePo));
+                product.restoreAttribute(attributeConvertor.toDomain(attributePo));
             }
         }
         return product;
@@ -134,6 +147,83 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
         return new SpecTemplate(dto.dimensions().stream()
                 .map(dimension -> new SpecItem(dimension.name(), dimension.values()))
                 .toList());
+    }
+
+    /**
+     * 待审草稿内容 → JSON 列内容（null=无待审草稿）：序列化形态与版本
+     * 快照一致（复用 {@link ProductSnapshotJson} 中间形态——待审草稿内容
+     * 与版本快照同为「全量内容」语义）。
+     *
+     * @param content 待审草稿内容；null=无待审草稿
+     * @return JSON 字符串；无待审草稿返回 null
+     */
+    private static String toPendingDraftJson(ProductContent content) {
+        if (content == null) {
+            return null;
+        }
+        final ProductSnapshotJson snapshot = new ProductSnapshotJson(
+                content.name(),
+                content.description(),
+                content.categoryId(),
+                content.brandId(),
+                content.images().stream()
+                        .map(image -> new ProductSnapshotJson.SnapshotImage(
+                                image.getId(), image.getUrl(), image.isPrimary()))
+                        .toList(),
+                content.attributes().stream()
+                        .map(attribute -> new ProductSnapshotJson.SnapshotAttribute(
+                                attribute.getId(), attribute.getKey(), attribute.getValue()))
+                        .toList(),
+                content.specTemplate() == null ? null : content.specTemplate().dimensionsOrdered().stream()
+                        .map(dimension -> new SpecDimensionJson(
+                                dimension.getName(), dimension.valuesOrdered()))
+                        .toList(),
+                content.skus().stream()
+                        .map(sku -> new ProductSnapshotJson.SnapshotSku(
+                                sku.getId(), sku.getSpecHash(), sku.getSpecSummary(),
+                                sku.getPrice(), sku.isEnabled()))
+                        .toList());
+        return JacksonUtil.toJsonString(snapshot);
+    }
+
+    /**
+     * JSON 列内容 → 待审草稿内容（持久化读回；null/空白 = 无待审草稿）。
+     * 序列化形态与版本快照一致（复用 {@link ProductSnapshotJson} 中间
+     * 形态），反序列化路径与版本快照读回同构（子实体归属以当前商品 ID
+     * 由聚合装载路径重建）。
+     *
+     * @param json 待审草稿 JSON 列内容；null/空白=无待审草稿
+     * @return 待审草稿内容；无待审草稿返回 null
+     */
+    private static ProductContent fromPendingDraftJson(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        final ProductSnapshotJson snapshot = JacksonUtil.fromJsonString(json, ProductSnapshotJson.class);
+        if (snapshot == null) {
+            return null;
+        }
+        return new ProductContent(
+                snapshot.name(),
+                snapshot.description(),
+                snapshot.categoryId(),
+                snapshot.brandId(),
+                snapshot.images().stream()
+                        .map(image -> new ProductImage(image.id(), UNBOUND_PRODUCT_ID, image.url(), image.primary()))
+                        .toList(),
+                snapshot.attributes().stream()
+                        .map(attribute -> new ProductAttribute(
+                                attribute.id(), UNBOUND_PRODUCT_ID, attribute.key(), attribute.value()))
+                        .toList(),
+                snapshot.specTemplate() == null
+                        ? null
+                        : new SpecTemplate(snapshot.specTemplate().stream()
+                                .map(dimension -> new SpecItem(dimension.name(), dimension.values()))
+                                .toList()),
+                snapshot.skus().stream()
+                        .map(sku -> new Sku(sku.id(), UNBOUND_PRODUCT_ID, sku.specHash(), sku.specSummary(),
+                                sku.price(), sku.enabled()))
+                        .toList());
     }
 
     /**

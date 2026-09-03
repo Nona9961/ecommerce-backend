@@ -6,11 +6,13 @@ import com.nona.api.seller.ProductAttributeItem;
 import com.nona.api.seller.ProductDetail;
 import com.nona.api.seller.ProductImageItem;
 import com.nona.api.seller.ProductVersionItem;
+import com.nona.domain.catalog.entity.EditSensitivity;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductContent;
 import com.nona.domain.catalog.entity.ProductEditVersion;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.factory.ProductEditVersionFactory;
 import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
@@ -38,6 +40,11 @@ import java.util.List;
  * 不来自请求体）；当前店铺由租户过滤定位（跨店铺商品与版本行在数据访问
  * 层即被拦截，按不存在呈现，fail-closed）。版本号分配：同商品 MAX+1 +
  * DB 唯一约束 (product_id, version_no) 兜底并发冲突。
+ * <p>
+ * 回滚分流（编辑分流同一语义）：在售商品回滚（内容重置命中敏感字段）→
+ * 转待审核——生效内容不直接变更（买家继续可见旧版），回滚目标内容入待审
+ * 草稿位，待平台裁定后覆盖生效；待审核期回滚冻结（内容冻结语义），驳回
+ * 后回草稿可回滚。
  * <p>
  * 保存触发点（每次保存生成版本）：商品各变更面用例
  * （ProductUseCase 写路径）在聚合保存成功后调用本用例 {@link #recordEdit}
@@ -138,18 +145,20 @@ public class ProductVersionUseCase {
     }
 
     /**
-     * 回滚到指定版本：目标版本快照 → 内容载体重建 → 聚合整体重置
-     * （restoreContent，不变量由聚合守卫）→ 聚合保存 → ROLLBACK 版本行
-     * 插入（版本号递增）——回滚生成新版本，历史版本行只增不改。目标
-     * 版本不存在/不属于当前商品按不存在呈现（404）；版本号非正数
-     * 拒绝（400）。
+     * 内容留痕 + 回滚素材双重语义】。目标版本不存在/不属于当前商品按不存在呈
+     * 现（404）；版本号非正数拒绝（400）；待审核期回滚冻结（提交冻结内容，
+     * 驳回后可改）、已下架态回滚拒绝；在售商品回滚命中敏感字段（内容重置
+     * 通常含标题/类目/品牌/SKU）→ 转待审核分流：生效内容不直接回滚，回滚
+     * 目标内容入待审草稿位（不插回滚版本行——待审内容不是生效内容，版本链
+     * 只留痕生效内容）；草稿/驳回态回滚直改生效（生成 ROLLBACK 行）。
      * <p>
      * 回滚流程（加载 → 重置 → 保存 → 新版本行）同属本方法事务：任一
      * 环节失败整体回滚——内容变更与留痕不可分割。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param versionNo 目标版本号（正整数）
-     * @return 回滚后的草稿详情（内容 = 目标版本内容）
+     * @return 回滚后的商品详情（内容 = 目标版本内容；在售分流后为
+     *         生效旧内容，状态 PENDING_REVIEW）
      */
     @Transactional
     public ProductDetail rollback(Long productId, int versionNo) {
@@ -158,6 +167,14 @@ public class ProductVersionUseCase {
                     EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本号必须为正整数");
         }
         final Product product = requireProduct(productId);
+        if (product.getStatus() == ProductStatus.PENDING_REVIEW) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_EDIT_FORBIDDEN.code(), "待审核期内容冻结，驳回后可回滚");
+        }
+        if (product.getStatus() == ProductStatus.DELISTED) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_STATUS_ILLEGAL.code(), "已下架商品不可回滚");
+        }
         final ProductEditVersion target =
                 editVersionRepository.getByProductAndVersion(productId, versionNo);
         if (target == null) {
@@ -165,12 +182,28 @@ public class ProductVersionUseCase {
                     EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_NOT_FOUND.code(), "版本不存在");
         }
         final ProductContent content = snapshotConvertor.toContent(target.getSnapshotJson());
+        final boolean onSale = product.getStatus() == ProductStatus.ON_SALE;
+        final ProductContent effectiveBefore = onSale
+                ? snapshotConvertor.toContent(snapshotConvertor.toSnapshotJson(product)) : null;
         product.restoreContent(content);
+        final boolean routed;
+        if (onSale) {
+            final EditSensitivity sensitivity =
+                    productRepository.summarizeSensitiveEdit(product);
+            routed = sensitivity == EditSensitivity.SENSITIVE;
+            if (routed) {
+                product.stageSensitiveEdit(effectiveBefore);
+            }
+        } else {
+            routed = false;
+        }
         productRepository.save(product);
-        final String snapshotJson = snapshotConvertor.toSnapshotJson(product);
-        final int nextVersionNo = editVersionRepository.maxVersionNo(productId) + 1;
-        editVersionRepository.append(editVersionFactory.createRollback(
-                productId, nextVersionNo, snapshotJson, currentOperator()));
+        if (!routed) {
+            final String snapshotJson = snapshotConvertor.toSnapshotJson(product);
+            final int nextVersionNo = editVersionRepository.maxVersionNo(productId) + 1;
+            editVersionRepository.append(editVersionFactory.createRollback(
+                    productId, nextVersionNo, snapshotJson, currentOperator()));
+        }
         return toDetail(product);
     }
 

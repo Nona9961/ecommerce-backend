@@ -5,6 +5,7 @@ import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.inf.persistence.converters.ProductEditVersionConvertor;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
@@ -37,23 +38,35 @@ public class ProductEditVersionRepositoryImpl implements ProductEditVersionRepos
     private final ProductEditVersionConvertor convertor;
 
     /**
+     * 商品主表 JPA 仓储（版本行租户锚定：版本行归属商品店铺）
+     */
+    private final ProductJpaRepository productJpaRepository;
+
+    /**
      * 构造版本仓储。
      *
-     * @param jpaRepository 版本表 JPA 仓储
-     * @param convertor     版本行转换器
+     * @param jpaRepository        版本表 JPA 仓储
+     * @param convertor            版本行转换器
+     * @param productJpaRepository 商品主表 JPA 仓储（租户锚定）
      */
     public ProductEditVersionRepositoryImpl(ProductEditVersionJpaRepository jpaRepository,
-                                            ProductEditVersionConvertor convertor) {
+                                            ProductEditVersionConvertor convertor,
+                                            ProductJpaRepository productJpaRepository) {
         this.jpaRepository = jpaRepository;
         this.convertor = convertor;
+        this.productJpaRepository = productJpaRepository;
     }
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 追加插入（append-only：save 即插一行，无更新路径）：租户归属从归属
+     * 商品主表显式锚定（tenant=shopId）——提权写路径（平台审核结论行）
+     * 与商家请求路径（注入语义等价）统一；归属商品不存在按业务不存在拒绝。
      */
     @Override
     public ProductEditVersion append(ProductEditVersion version) {
-        return convertor.toDomain(jpaRepository.save(convertor.toPO(version)));
+        return convertor.toDomain(jpaRepository.save(ownedBy(convertor.toPO(version))));
     }
 
     /**
@@ -109,12 +122,28 @@ public class ProductEditVersionRepositoryImpl implements ProductEditVersionRepos
     /**
      * {@inheritDoc}
      * <p>
-     * 追加插入（append-only：save 即插一行，无更新路径）。
+     * 追加插入（append-only：save 即插一行，无更新路径）：租户归属从归属
+     * 商品主表显式锚定（与 {@link #append} 同路径）。
      */
     @Override
     public boolean save(ProductEditVersion version) {
-        jpaRepository.save(convertor.toPO(version));
+        jpaRepository.save(ownedBy(convertor.toPO(version)));
         return true;
+    }
+
+    /**
+     * 版本行租户承载：归属商品存在时显式锚定 tenant=shopId（平台审核
+     * 提权路径——跨店铺追加结论行——归属必得，不依赖请求上下文）；归属
+     * 商品不存在（历史直插形态/独立行装配）保持既有注入语义（非提权时
+     * 由写门禁按请求上下文注入，提权下缺失归属由写门禁 fail-closed 拒绝）。
+     *
+     * @param po 版本行 PO
+     * @return 承载租户后的 PO
+     */
+    private ProductEditVersionPO ownedBy(ProductEditVersionPO po) {
+        productJpaRepository.findById(po.getProductId())
+                .ifPresent(product -> po.setTenantID(String.valueOf(product.getShopId())));
+        return po;
     }
 
     /**

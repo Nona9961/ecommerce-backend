@@ -238,6 +238,18 @@ public class ProductController implements ProductApi {
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * 提交上架：完整性校验（聚合守卫）→ 草稿转待审核；跨店铺商品按不存在
+     * 呈现（404，fail-closed）。
+     */
+    @Override
+    @PostMapping("/seller/products/{productId}/submit")
+    public HttpResponse<ProductDetail> submitForReview(@PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.submitForReview(productId));
+    }
+
+    /**
      * 当前店铺 ID（认证过滤器写入 ThreadContext.tenantID 的租户值=当前店铺 ID）。
      *
      * @return 店铺 ID

@@ -1,8 +1,10 @@
 package com.nona.inf.persistence.repository.jpa;
 
 import com.nona.inf.persistence.po.catalog.ProductPO;
+import com.nona.domain.catalog.entity.ProductStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.ListCrudRepository;
 
 /**
@@ -50,4 +52,34 @@ public interface ProductJpaRepository extends ListCrudRepository<ProductPO, Long
      * @return 存在引用返回 true
      */
     boolean existsByBrandId(Long brandId);
+
+    /**
+     * 按商品状态分页查询（平台审核列表，先创建的先审——ID 升序）。
+     * 管理员视角跨店铺全集，调用方需读放行（@CrossTenant，放行职责在
+     * 应用层用例）。
+     *
+     * @param status   商品状态
+     * @param pageable 分页参数（页码/条数/排序）
+     * @return 分页结果（total 供统计复用）
+     */
+    Page<ProductPO> findByStatusOrderByIdAsc(ProductStatus status, Pageable pageable);
+
+    /**
+     * 按商品状态统计商品数（待审列表分页 total 用；跨店铺全集，调用方
+     * 需读放行）。
+     *
+     * @param status 商品状态
+     * @return 商品数
+     */
+    long countByStatus(ProductStatus status);
+
+    /**
+     * 全量分页查询（平台商品列表无状态过滤路径；排序由 PageRequest
+     * 携带——创建序 ID 升序，先创建的先审）。
+     *
+     * @param pageable 分页参数（页码/条数/排序）
+     * @return 分页结果
+     */
+    @Query("select p from ProductPO p")
+    Page<ProductPO> listAll(Pageable pageable);
 }

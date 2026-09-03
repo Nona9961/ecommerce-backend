@@ -256,6 +256,57 @@ public enum EcommerceBusinessCode {
     CATALOG_PRODUCT_VERSION_INVALID("catalog.product_version_invalid", 400),
 
     /**
+     * 商品域：商品状态非法（非法状态迁移——未提交直接审批、驳回态重复驳回、
+     * 在售直接提交、下架态任何迁移等违例，由聚合状态机守卫抛出）。
+     */
+    CATALOG_PRODUCT_STATUS_ILLEGAL("catalog.product_status_illegal", 400),
+
+    /**
+     * 商品域：提交上架缺少规格模板（模板未配置或为空模板——提交要求：
+     * 规格模板非空且至少一个启用 SKU）。
+     */
+    CATALOG_PRODUCT_SPEC_REQUIRED("catalog.product_spec_required", 400),
+
+    /**
+     * 商品域：提交上架缺少启用 SKU（规格模板已配置但 SKU 全部停用——
+     * 至少一个启用 SKU 才可提交）。
+     */
+    CATALOG_PRODUCT_SKU_ENABLED_REQUIRED("catalog.product_sku_enabled_required", 400),
+
+    /**
+     * 商品域：提交上架存在未定价 SKU（提交要求：所有 SKU 价格必须已定价
+     * 且为正整数分，未定价拒绝）。
+     */
+    CATALOG_PRODUCT_SKU_PRICE_UNSET("catalog.product_sku_price_unset", 400),
+
+    /**
+     * 商品域：提交上架缺少主图（提交要求：在售商品必须有主图；在售状态
+     * 删除唯一主图同样拒绝）。
+     */
+    CATALOG_PRODUCT_MAIN_IMAGE_REQUIRED("catalog.product_main_image_required", 400),
+
+    /**
+     * 商品域：提交上架缺少平台类目（提交要求：在售商品必须挂载平台类目）。
+     */
+    CATALOG_PRODUCT_CATEGORY_REQUIRED("catalog.product_category_required", 400),
+
+    /**
+     * 商品域：提交上架缺少品牌（提交要求：在售商品必须挂载品牌）。
+     */
+    CATALOG_PRODUCT_BRAND_REQUIRED("catalog.product_brand_required", 400),
+
+    /**
+     * 商品域：审核驳回原因必填（驳回必须附原因，商家据此修改重提）。
+     */
+    CATALOG_PRODUCT_REJECT_REASON_BLANK("catalog.product_reject_reason_blank", 400),
+
+    /**
+     * 商品域：审核期内编辑被拒绝（待审核内容冻结：提交审核后不许再改，
+     * 修改须等驳回后重新编辑重提）。
+     */
+    CATALOG_PRODUCT_EDIT_FORBIDDEN("catalog.product_edit_forbidden", 400),
+
+    /**
      * 商品域：平台分类已禁用（新商品不可挂载禁用分类；已挂商品的保留历史归属合法）。
      */
     CATALOG_CATEGORY_DISABLED("catalog.category_disabled", 400),

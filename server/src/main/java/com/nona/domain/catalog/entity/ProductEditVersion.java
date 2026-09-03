@@ -53,9 +53,16 @@ public class ProductEditVersion {
     private final String operator;
 
     /**
-     * 触发类型（EDIT / ROLLBACK；REVIEW_PASS / REJECT 属后续阶段）
+     * 触发类型（EDIT / ROLLBACK / REVIEW_PASS / REJECT）
      */
     private final EditVersionTriggerType triggerType;
+
+    /**
+     * 审核驳回原因（trigger_type=REJECT 的审核结论承载；其余触发类型恒为
+     * null——原因与触发类型一致性由构造路径校验；REVIEW_PASS 结论中的
+     * 审核人/时间由操作人/产生时间承载，无独立原因）
+     */
+    private final String reviewReason;
 
     /**
      * 版本产生时间（持久化审计填充；新建路径尚未落库时为 null）
@@ -75,7 +82,7 @@ public class ProductEditVersion {
     public ProductEditVersion(Long id, Long productId, int versionNo,
                               String snapshotJson, String operator,
                               EditVersionTriggerType triggerType) {
-        this(id, productId, versionNo, snapshotJson, operator, triggerType, null);
+        this(id, productId, versionNo, snapshotJson, operator, triggerType, (java.time.LocalDateTime) null);
     }
 
     /**
@@ -119,6 +126,97 @@ public class ProductEditVersion {
         this.snapshotJson = snapshotJson;
         this.operator = operator;
         this.triggerType = triggerType;
+        this.reviewReason = null;
+        this.createdAt = createdAt;
+    }
+
+    /**
+     * 构造审核结论版本（完整形态）——审核结论（通过/驳回）落版本行的
+     * 构造路径。
+     * <p>
+     * 守卫（构造路径校验）：<ol>
+     *     <li>触发类型必须为 REVIEW_PASS 或 REJECT（审核结论行类型限定）；</li>
+     *     <li>{@code REJECT} 必须携带非空驳回原因（无原因驳回无业务意义——
+     *         商家据此修改重提）；非 REJECT 行原因必须为空（结论一致性：
+     *         原因与触发类型互斥绑定）；</li>
+     *     <li>同一商品版本号严格递增由分配方保证，唯一性由 DB 约束兜底。
+     *     </li></ol>
+     * 其余字段校验与既有构造器一致。
+     *
+     * @param id           行 ID
+     * @param productId    归属商品 ID
+     * @param versionNo    版本号（正整数）
+     * @param snapshotJson 审核时刻生效内容快照 JSON（必填非空；驳回行=驳回
+     *                     时刻生效内容，通过行=通过后生效内容）
+     * @param operator     审核人身份标识（必填非空）
+     * @param triggerType  触发类型（REVIEW_PASS / REJECT）
+     * @param reviewReason 驳回原因（REJECT 必填非空；其余类型必须为 null）
+     */
+    public ProductEditVersion(Long id, Long productId, int versionNo,
+                              String snapshotJson, String operator,
+                              EditVersionTriggerType triggerType, String reviewReason) {
+        this(id, productId, versionNo, snapshotJson, operator, triggerType, reviewReason, null);
+    }
+
+    /**
+     * 构造审核结论版本（含持久化读回时间）：校验语义与
+     * {@link #ProductEditVersion(Long, Long, int, String, String, EditVersionTriggerType, String)}
+     * 一致；createdAt 为持久化读回值（null=新建路径尚未落库）。
+     *
+     * @param id           行 ID
+     * @param productId    归属商品 ID
+     * @param versionNo    版本号（正整数）
+     * @param snapshotJson 审核时刻生效内容快照 JSON（必填非空）
+     * @param operator     审核人身份标识（必填非空）
+     * @param triggerType  触发类型（REVIEW_PASS / REJECT）
+     * @param reviewReason 驳回原因（REJECT 必填非空；其余类型必须为 null）
+     * @param createdAt    版本产生时间（读回路径由审计列填充）
+     */
+    public ProductEditVersion(Long id, Long productId, int versionNo,
+                              String snapshotJson, String operator,
+                              EditVersionTriggerType triggerType, String reviewReason,
+                              LocalDateTime createdAt) {
+        if (productId == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本归属商品不能为空");
+        }
+        if (versionNo <= 0) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本号必须为正整数");
+        }
+        if (snapshotJson == null || snapshotJson.isBlank()) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本快照不能为空");
+        }
+        if (operator == null || operator.isBlank()) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本操作人不能为空");
+        }
+        if (triggerType == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "版本触发类型不能为空");
+        }
+        if (triggerType != EditVersionTriggerType.REVIEW_PASS
+                && triggerType != EditVersionTriggerType.REJECT) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "审核结论行触发类型限定为通过/驳回");
+        }
+        if (triggerType == EditVersionTriggerType.REJECT
+                && (reviewReason == null || reviewReason.isBlank())) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_REJECT_REASON_BLANK.code(), "驳回结论必须携带驳回原因");
+        }
+        if (triggerType != EditVersionTriggerType.REJECT && reviewReason != null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code(), "驳回原因仅驳回结论行可承载");
+        }
+        this.id = id;
+        this.productId = productId;
+        this.versionNo = versionNo;
+        this.snapshotJson = snapshotJson;
+        this.operator = operator;
+        this.triggerType = triggerType;
+        this.reviewReason = reviewReason;
         this.createdAt = createdAt;
     }
 
@@ -170,10 +268,19 @@ public class ProductEditVersion {
     /**
      * 触发类型。
      *
-     * @return 触发类型（EDIT / ROLLBACK；REVIEW_PASS / REJECT 属后续阶段）
+     * @return 触发类型（EDIT / ROLLBACK；REVIEW_PASS / REJECT 为审核结论行）
      */
     public EditVersionTriggerType getTriggerType() {
         return triggerType;
+    }
+
+    /**
+     * 审核驳回原因。
+     *
+     * @return 驳回原因；非 REJECT 行为 null，未驳回为 null
+     */
+    public String getReviewReason() {
+        return reviewReason;
     }
 
     /**
