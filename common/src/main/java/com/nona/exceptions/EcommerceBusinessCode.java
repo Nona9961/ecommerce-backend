@@ -95,6 +95,12 @@ public enum EcommerceBusinessCode {
     CATALOG_SHOP_CATEGORY_DUPLICATE("catalog.shop_category_duplicate", 400),
 
     /**
+     * 商品域：店铺分类已被商品引用（删除前须解除全部绑定——S7.1 商品
+     * 店铺分类多对多绑定就位后启用，冲突语义 409）。
+     */
+    CATALOG_SHOP_CATEGORY_IN_USE("catalog.shop_category_in_use", 409),
+
+    /**
      * 商品域：平台分类不存在（按 ID 操作命中不存在的平台分类）。
      */
     CATALOG_CATEGORY_NOT_FOUND("catalog.category_not_found", 404),

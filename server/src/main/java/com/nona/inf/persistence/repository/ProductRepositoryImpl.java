@@ -9,6 +9,7 @@ import com.nona.domain.catalog.entity.EditSensitivity;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductImage;
+import com.nona.domain.catalog.entity.ProductShopCategoryRef;
 import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.repo.ProductRepository;
@@ -18,14 +19,17 @@ import com.nona.inf.persistence.converters.ProductAttributeConvertor;
 import com.nona.inf.persistence.converters.ProductChildPos;
 import com.nona.inf.persistence.converters.ProductConvertor;
 import com.nona.inf.persistence.converters.ProductImageConvertor;
+import com.nona.inf.persistence.converters.ProductShopCategoryRelConvertor;
 import com.nona.inf.persistence.converters.SkuConvertor;
 import com.nona.inf.persistence.po.catalog.ProductAttributePO;
 import com.nona.inf.persistence.po.catalog.ProductImagePO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
+import com.nona.inf.persistence.po.catalog.SkuPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductImageJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
+import com.nona.inf.persistence.repository.jpa.ProductShopCategoryRelJpaRepository;
 import com.nona.inf.persistence.repository.jpa.SkuJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
 import org.springframework.data.domain.Page;
@@ -34,22 +38,26 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 商品仓储落地：继承 {@link DifferRepository}（主表快照 + 变更追踪），
  * 主表 product（id=商品 ID，tenant=shopId）+ 从表 product_image /
- * product_attribute / product_sku（均为 tenant=shopId）。
+ * product_attribute / product_sku / product_shop_category_rel（均为
+ * tenant=shopId）。
  * <p>
- * 读：按主表主键加载（track 快照）+ getOther 经租户过滤加载本商品三个
+ * 读：按主表主键加载（track 快照）+ getOther 经租户过滤加载本商品四个
  * 从表集合（图片/属性按加入序、SKU 按 ID 升序——ID 升序近似创建序，维度
  * 调序重建后存活旧 SKU 与新 SKU 混合时读回序与模板展开序不一致，展示方
- * 需按组合序重排）；分页列表按店铺查询（与
- * 租户过滤共同定位行集），每行装配完整聚合（概要计数派生自集合）。保存：
- * 变更集驱动落库——集合新增插行、删除删行、字段变更整行更新、根字段变更
- * 整行更新主表（含规格模板 JSON 列）。删除：deleteByID 级联删三个从表 +
- * 编辑版本表（product_edit_version，保存留痕行一并清理）+ 主表，返回
- * 真实删除条数。引用存在性查询（类目/品牌）供平台侧禁用守卫
- * 使用——跨租户全局语义，事务内需读放行（@CrossTenant，放行职责在用例层）。
+ * 需按组合序重排；店铺分类绑定行按 ID 升序≈绑定序）；分页列表按店铺
+ * 查询（与租户过滤共同定位行集），每行装配完整聚合（概要计数派生自
+ * 集合）。保存：变更集驱动落库——集合新增插行、删除删行、字段变更整行
+ * 更新、根字段变更整行更新主表（含规格模板 JSON 列）。删除：deleteByID
+ * 级联删四个从表 + 编辑版本表（product_edit_version，保存留痕行一并
+ * 清理）+ 主表，返回真实删除条数。引用存在性查询（类目/品牌）供平台侧
+ * 禁用守卫使用——跨租户全局语义，事务内需读放行（@CrossTenant，放行
+ * 职责在用例层）。
  * <p>
  * 从表写路径的租户列由写门禁按请求上下文注入（商家请求 tenant=当前店铺），
  * 读路径由 Hibernate 租户过滤保证 fail-closed（跨店铺加载不到商品行）。
@@ -76,6 +84,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private static final String SKUS_FIELD = "skus";
 
     /**
+     * 店铺分类绑定集合在聚合中的字段名（变更集路径解析用）
+     */
+    private static final String SHOP_CATEGORY_REFS_FIELD = "shopCategoryRefs";
+
+    /**
      * 商品主表 JPA 仓储（分页/统计/引用存在性查询）
      */
     private final ProductJpaRepository productJpaRepository;
@@ -94,6 +107,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * 商品 SKU 子表 JPA 仓储（从表加载与落库）
      */
     private final SkuJpaRepository skuJpaRepository;
+
+    /**
+     * 商品-店铺分类绑定从表 JPA 仓储（从表加载与落库）
+     */
+    private final ProductShopCategoryRelJpaRepository shopCategoryRelJpaRepository;
 
     /**
      * 商品编辑版本子表 JPA 仓储（删除商品时的版本行级联清理）
@@ -122,6 +140,11 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
     private final SkuConvertor skuConvertor;
 
     /**
+     * 店铺分类绑定行转换器
+     */
+    private final ProductShopCategoryRelConvertor shopCategoryRefConvertor;
+
+    /**
      * 构造商品仓储。
      *
      * @param repository             商品主表 JPA 仓储
@@ -146,6 +169,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                                  ProductAttributeConvertor attributeConvertor,
                                  SkuJpaRepository skuJpaRepository,
                                  SkuConvertor skuConvertor,
+                                 ProductShopCategoryRelJpaRepository shopCategoryRelJpaRepository,
+                                 ProductShopCategoryRelConvertor shopCategoryRefConvertor,
                                  ProductEditVersionJpaRepository editVersionJpaRepository,
                                  TenantPrivilege tenantPrivilege) {
         super(repository, threadContext, convertor, changeTrackerProvider);
@@ -156,6 +181,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         this.attributeConvertor = attributeConvertor;
         this.skuJpaRepository = skuJpaRepository;
         this.skuConvertor = skuConvertor;
+        this.shopCategoryRelJpaRepository = shopCategoryRelJpaRepository;
+        this.shopCategoryRefConvertor = shopCategoryRefConvertor;
         this.editVersionJpaRepository = editVersionJpaRepository;
         this.tenantPrivilege = tenantPrivilege;
     }
@@ -172,7 +199,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         return new ProductChildPos(
                 imageJpaRepository.findByProductIdOrderByIdAsc(po.getId()),
                 attributeJpaRepository.findByProductIdOrderByIdAsc(po.getId()),
-                skuJpaRepository.findByProductIdOrderByIdAsc(po.getId()));
+                skuJpaRepository.findByProductIdOrderByIdAsc(po.getId()),
+                shopCategoryRelJpaRepository.findByProductIdOrderByIdAsc(po.getId()));
     }
 
     /**
@@ -201,6 +229,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                 attributeJpaRepository.save(ownedBy(attributeConvertor.toPO(attribute), root)));
         root.skusOrdered().forEach(sku ->
                 skuJpaRepository.save(ownedBy(skuConvertor.toPO(sku), root)));
+        root.shopCategoryRefsOrdered().forEach(ref ->
+                shopCategoryRelJpaRepository.save(ownedBy(shopCategoryRefConvertor.toPO(ref), root)));
     }
 
     /**
@@ -223,6 +253,8 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                 dispatchAttributeChange(root, change);
             } else if (SKUS_FIELD.equals(change.collectionFieldName())) {
                 dispatchSkuChange(root, change);
+            } else if (SHOP_CATEGORY_REFS_FIELD.equals(change.collectionFieldName())) {
+                dispatchShopCategoryRefChange(root, change);
             } else {
                 rootRowDirty = true;
             }
@@ -256,6 +288,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         imageJpaRepository.deleteByProductId(productId);
         attributeJpaRepository.deleteByProductId(productId);
         skuJpaRepository.deleteByProductId(productId);
+        shopCategoryRelJpaRepository.deleteByProductId(productId);
         editVersionJpaRepository.deleteByProductId(productId);
         if (!repository.existsById(productId)) {
             return 0;
@@ -548,5 +581,104 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /**
+     * 按变更节点分发店铺分类绑定集合变更：新增插行、删除删行（删除
+     * 后立即 flush——整体替换含同分类重建时避免「先插后删」命中
+     * (product_id, shop_category_id) 唯一约束）、字段变更整行更新。
+     *
+     * @param root   聚合根
+     * @param change 集合变更节点
+     */
+    private void dispatchShopCategoryRefChange(Product root, Change change) {
+        if (change instanceof ItemAddedChange added) {
+            final Long refId = extractIdentifier(added.addedItem());
+            root.getShopCategoryRefById(refId).ifPresent(ref ->
+                    shopCategoryRelJpaRepository.save(ownedBy(shopCategoryRefConvertor.toPO(ref), root)));
+        } else if (change instanceof ItemRemovedChange removed) {
+            final Long refId = extractIdentifier(removed.removedItem());
+            shopCategoryRelJpaRepository.deleteById(refId);
+            shopCategoryRelJpaRepository.flush();
+        } else {
+            saveChangedShopCategoryRefRow(root, change);
+        }
+    }
+
+    /**
+     * 从 root 中按变更路径里的绑定行 ID 找到实体，整行更新（绑定值为
+     * 不可变 record，该分支理论上不可达——insert/remove 之外的变化
+     * 防御性整行保存）。
+     *
+     * @param root   聚合根
+     * @param change 字段变更（path 形如 shopCategoryRefs[&lt;id&gt;].field）
+     */
+    private void saveChangedShopCategoryRefRow(Product root, Change change) {
+        final Long refId = extractIdFromPath(change.path());
+        if (refId != null) {
+            root.getShopCategoryRefById(refId).ifPresent(ref ->
+                    shopCategoryRelJpaRepository.save(ownedBy(shopCategoryRefConvertor.toPO(ref), root)));
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 售罄事件消费定位：经 SKU 从表反查归属商品 ID（SKU 行主键=SKU ID）
+     * ——反查读在调用方（事件消费用例）的放行上下文内执行（跨店铺/无
+     * 租户视角读需提权或读放行，职责在应用层用例）。
+     */
+    @Override
+    public Long findProductIdBySkuId(Long skuId) {
+        if (skuId == null) {
+            return null;
+        }
+        return skuJpaRepository.findById(skuId).map(SkuPO::getProductId).orElse(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 分类删除守卫：从表 rel 绑定行存在性查询（租户过滤内同店——商家
+     * 删除本店分类场景，调用方为当前店铺上下文）。
+     */
+    @Override
+    public boolean existsProductBoundToShopCategory(Long shopCategoryId) {
+        if (shopCategoryId == null) {
+            return false;
+        }
+        return shopCategoryRelJpaRepository.existsByShopCategoryId(shopCategoryId);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 按店铺分类筛选商品：绑定行分页反查商品 ID（创建序）→ 主表行加载
+     * 装配完整聚合（租户过滤内同店）。
+     */
+    @Override
+    public List<Product> listByShopCategoryPaged(Long shopCategoryId, int offset, int limit) {
+        final Page<Long> productIds = shopCategoryRelJpaRepository
+                .findProductIdPageByShopCategoryId(shopCategoryId, pageRequestAscending(offset, limit));
+        if (productIds.isEmpty()) {
+            return List.of();
+        }
+        final Map<Long, ProductPO> byId = productJpaRepository.findAllById(productIds.toList()).stream()
+                .collect(Collectors.toMap(ProductPO::getId, java.util.function.Function.identity()));
+        return productIds.stream()
+                .map(byId::get)
+                .filter(java.util.Objects::nonNull)
+                .map(this::assemble)
+                .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 按店铺分类统计绑定商品数（分页 total 用）。
+     */
+    @Override
+    public long countByShopCategory(Long shopCategoryId) {
+        return shopCategoryRelJpaRepository.countByShopCategoryId(shopCategoryId);
     }
 }

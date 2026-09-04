@@ -113,6 +113,21 @@ public class Product {
     private ProductContent pendingContent;
 
     /**
+     * 运费模板 ID（可空引用，主表列承载）：商品级绑定店铺运费模板
+     * （S9.2 商品绑模板；同店铺 freight_template 聚合根引用，绑定目标
+     * 存在性/归属校验在用例层）。可空=未绑定（详情运费区按无模板呈现，
+     * 下单运费语义由订单域按模板缺失自行裁定）。
+     */
+    private Long freightTemplateId;
+
+    /**
+     * 店铺分类绑定集合（从表 product_shop_category_rel 行，元素=绑定
+     * 值对象）：商品可属多个店铺分类（S7.1 多对多，商品侧持有分类 id
+     * 集合——店铺分类实体生命周期归 Shop 聚合，本聚合只持引用）。
+     */
+    private final List<ProductShopCategoryRef> shopCategoryRefs = new ArrayList<>();
+
+    /**
      * 构造商品（仅 Factory 与仓储加载重建调用）：名称必填校验，
      * 其余主体字段可空（草稿允许不完整）。
      *
@@ -483,6 +498,224 @@ public class Product {
      */
     public boolean hasPendingContent() {
         return pendingContent != null;
+    }
+
+    /**
+     * 手动下架：在售 → 已下架（S4.5 ①——手动下架生效后买家不可见）。
+     * <p>
+     * 守卫（不变量收敛点）：仅 ON_SALE 可下架——草稿/待审/已下架态下架
+     * 为非法迁移拒绝（{@code CATALOG_PRODUCT_STATUS_ILLEGAL}）；驳回/待审
+     * 商品无下架语义（未生效内容无需下架）。
+     * <p>
+     * 触发语义：下架为生命周期状态迁移（非内容变更），不产生编辑版本行；
+     * 状态落库由用例层编排。
+     */
+    public void delist() {
+        if (status != ProductStatus.ON_SALE) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_STATUS_ILLEGAL.code(), "仅在售商品可手动下架");
+        }
+        status = ProductStatus.DELISTED;
+    }
+
+    /**
+     * 手动重新上架：已下架 → 在售（状态机「在售 ⇄ 已下架」回迁语义——
+     * 下架期间内容冻结不可编辑，重新上架内容 = 曾审核通过的生效内容，
+     * 免重审直回在售）。
+     * <p>
+     * 守卫（不变量收敛点）：
+     * <ol>
+     *     <li>仅 DELISTED 可重新上架（其余状态上架为非法迁移，拒绝）；</li>
+     *     <li>完整性防御校验：上架前生效内容必须仍满足在售要求（模板/启用
+     *         SKU/全定价/主图/类目/品牌——内容在下架期冻结，防御脏数据
+     *         形态兜底）。</li>
+     * </ol>
+     * 触发语义：重新上架无内容变化，不产生编辑版本行；状态落库由用例层编排。
+     */
+    public void relist() {
+        if (status != ProductStatus.DELISTED) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_STATUS_ILLEGAL.code(), "仅已下架商品可重新上架");
+        }
+        requireRelistCompleteness();
+        status = ProductStatus.ON_SALE;
+    }
+
+    /**
+     * 重新上架完整性防御校验（下架期内容冻结，防御脏数据形态兜底）：
+     * 上架前生效内容必须仍满足在售要求——主图/平台类目/品牌齐备（引用
+     * 与展示要素，先校验）→ 规格模板非空且含启用 SKU、全部 SKU 已定价
+     * 且为正整数分。逐项细化业务码（商家据此修正）；校验顺序为在售
+     * 展示要素在前（下架商品的最常见失效形态为主图/引用缺失）。
+     */
+    private void requireRelistCompleteness() {
+        if (images.stream().noneMatch(ProductImage::isPrimary)) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_MAIN_IMAGE_REQUIRED.code(), "重新上架要求有主图");
+        }
+        if (categoryId == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_CATEGORY_REQUIRED.code(), "重新上架要求已挂平台类目");
+        }
+        if (brandId == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_BRAND_REQUIRED.code(), "重新上架要求已挂品牌");
+        }
+        if (specTemplate == null || specTemplate.combinationCount() == 0) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_SPEC_REQUIRED.code(), "重新上架要求规格模板非空");
+        }
+        if (skus.isEmpty() || skus.stream().noneMatch(Sku::isEnabled)) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_SKU_ENABLED_REQUIRED.code(), "重新上架要求至少一个启用SKU");
+        }
+        if (skus.stream().anyMatch(sku -> sku.getPrice() == null || sku.getPrice() <= 0)) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_PRODUCT_SKU_PRICE_UNSET.code(), "重新上架要求全部SKU已定价");
+        }
+    }
+
+    /**
+     * 整体替换店铺分类绑定集（S7.1 商品侧绑定/解绑的表单语义——店铺分类
+     * 编辑页多选勾选，保存即整体替换；分类集合可为空=清空全部绑定）。
+     * <p>
+     * 守卫（不变量收敛点）：
+     * <ol>
+     *     <li>写面冻结守卫：待审核期（内容冻结）与已下架态（无编辑路径）
+     *         拒绝绑定（与既有编辑路径同语义）；</li>
+     *     <li>元素守卫：分类 ID 必填非空、集合内去重（同一分类重复绑定无
+     *         业务意义，绑定行 (product_id, shop_category_id) 唯一约束
+     *         双保险）；</li>
+     *     <li>绑定目标归属校验在用例层（分类必须属于本商品所属店铺——
+     *         Shop 聚合加载校验，本聚合不感知外部资源）。</li>
+     * </ol>
+     * 替换语义：旧绑定行整体移除、新绑定行重建（绑定低频，不做行级
+     * diff 最小化；从表行变更仍由仓储变更集驱动落库）。分类变更属展示类
+     * 编辑（TD-03 敏感字段集不含店铺分类）——在售态直改免审。
+     *
+     * @param shopCategoryIds 目标店铺分类 ID 集合（null 按空集=清空）
+     */
+    public void replaceShopCategories(java.util.Collection<Long> shopCategoryIds) {
+        requireEditable();
+        final java.util.LinkedHashSet<Long> targets = new java.util.LinkedHashSet<>();
+        final java.util.Collection<Long> requested = shopCategoryIds == null ? java.util.List.of() : shopCategoryIds;
+        for (final Long categoryId : requested) {
+            if (categoryId == null) {
+                throw new BusinessException(
+                        com.nona.exceptions.BusinessCode.VALIDATION_FAILED.code(), "店铺分类不能为空");
+            }
+            targets.add(categoryId);
+        }
+        shopCategoryRefs.clear();
+        for (final Long categoryId : targets) {
+            shopCategoryRefs.add(new ProductShopCategoryRef(IDUtils.generateID(), id, categoryId));
+        }
+    }
+
+    /**
+     * 装载店铺分类绑定行（持久化加载装配路径专用：由仓储从从表行重建
+     * 绑定集合——装载路径信任持久化数据，且不受写面冻结守卫约束；编辑
+     * 业务路径不得调用）。
+     *
+     * @param ref 绑定行（持久化读回，其 ID 为行主键）
+     */
+    public void restoreShopCategoryRef(ProductShopCategoryRef ref) {
+        appendShopCategoryRef(ref);
+    }
+
+    /**
+     * 装载店铺分类绑定行（聚合内从表行装载路径共用）：id 在聚合内唯一
+     * （不变量 5）、归属商品必为本聚合——装载路径信任持久化数据，校验
+     * 为防御性兜底；不受写面冻结守卫约束（待审核/在售商品装配需要装载
+     * 从表行）。
+     *
+     * @param ref 绑定行（持久化读回，其 ID 为行主键）
+     */
+    private void appendShopCategoryRef(ProductShopCategoryRef ref) {
+        if (ref == null) {
+            throw new BusinessException(
+                    com.nona.exceptions.BusinessCode.VALIDATION_FAILED.code(), "绑定行不能为空");
+        }
+        if (getShopCategoryRefById(ref.id()).isPresent()) {
+            throw new BusinessException(
+                    com.nona.exceptions.BusinessCode.VALIDATION_FAILED.code(), "绑定行已存在");
+        }
+        if (!ref.productId().equals(id)) {
+            throw new BusinessException(
+                    com.nona.exceptions.BusinessCode.VALIDATION_FAILED.code(), "绑定行归属不符");
+        }
+        shopCategoryRefs.add(ref);
+    }
+
+    /**
+     * 按 ID 取店铺分类绑定行（变更集分发用：从表行增删按行主键定位）。
+     *
+     * @param refId 绑定行 ID
+     * @return 绑定行；不存在返回空
+     */
+    public Optional<ProductShopCategoryRef> getShopCategoryRefById(Long refId) {
+        return shopCategoryRefs.stream().filter(ref -> ref.id().equals(refId)).findFirst();
+    }
+
+    /**
+     * 店铺分类绑定集合快照（保持绑定序，不可变副本）。
+     *
+     * @return 绑定行列表
+     */
+    public List<ProductShopCategoryRef> shopCategoryRefsOrdered() {
+        return List.copyOf(shopCategoryRefs);
+    }
+
+    /**
+     * 已绑定的店铺分类 ID 列表（保持绑定序，不可变副本；回显与差集计算
+     * 用）。
+     *
+     * @return 分类 ID 列表；无绑定为空列表
+     */
+    public List<Long> shopCategoryIdsOrdered() {
+        return shopCategoryRefs.stream().map(ProductShopCategoryRef::shopCategoryId).toList();
+    }
+
+    /**
+     * 绑定/解绑运费模板（S9.2 商品绑模板；null=解绑——运费模板为可空
+     * 引用，未绑定商品详情运费区按无模板呈现）。
+     * <p>
+     * 守卫（不变量收敛点）：
+     * <ol>
+     *     <li>写面冻结守卫：待审核期（内容冻结）与已下架态（无编辑路径）
+     *         拒绝绑定（与既有编辑路径同语义）；</li>
+     *     <li>绑定目标校验在用例层（模板必须存在且属于本商品所属店铺——
+     *         FreightTemplate 聚合加载校验；停用模板允许绑定——展示历史
+     *         归属合法，新订单计费守卫由运费计算器承载）。</li>
+     * </ol>
+     * 模板绑定属展示/运营配置（TD-03 敏感字段集不含运费模板引用）——
+     * 在售态直改免审。
+     *
+     * @param freightTemplateId 目标模板 ID（null=解绑）
+     */
+    public void bindFreightTemplate(Long freightTemplateId) {
+        requireEditable();
+        this.freightTemplateId = freightTemplateId;
+    }
+
+    /**
+     * 装载运费模板引用（持久化加载装配路径专用：由仓储从主表列重建
+     * 引用——装载路径信任持久化数据，不受写面冻结守卫约束；编辑/审批
+     * 业务路径不得调用）。
+     *
+     * @param freightTemplateId 模板 ID（持久化读回；null=未绑定）
+     */
+    public void restoreFreightTemplateId(Long freightTemplateId) {
+        this.freightTemplateId = freightTemplateId;
+    }
+
+    /**
+     * 已绑定的运费模板 ID。
+     *
+     * @return 模板 ID；未绑定返回 null
+     */
+    public Long getFreightTemplateId() {
+        return freightTemplateId;
     }
 
     /**
@@ -987,9 +1220,10 @@ public class Product {
 
     /**
      * 写面冻结守卫：待审核期编辑拒绝（提交冻结内容，驳回后回草稿可修改
-     * 重提——编辑冻结业务码）；已下架态无编辑路径（状态非法业务码——下架
-     * 端点属后续阶段）。在售态编辑放行（敏感字段编辑转待审核分流、展示
-     * 字段直改免审均由用例层路由，本守卫不拦截）。
+     * 重提——编辑冻结业务码）；已下架态无编辑路径（状态非法业务码——
+     * 下架期内容冻结，改内容先重新上架或回草稿生命周期）。在售态编辑
+     * 放行（敏感字段编辑转待审核分流、展示字段直改免审均由用例层路由，
+     * 本守卫不拦截）。
      */
     private void requireEditable() {
         if (status == ProductStatus.PENDING_REVIEW) {

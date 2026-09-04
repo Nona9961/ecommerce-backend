@@ -39,3 +39,4 @@ change-tracking:
     com.nona.domain.catalog.entity.ProductImage: getId
     com.nona.domain.catalog.entity.ProductAttribute: getId
     com.nona.domain.catalog.entity.Sku: getId
+    com.nona.domain.catalog.entity.ProductShopCategoryRef: id

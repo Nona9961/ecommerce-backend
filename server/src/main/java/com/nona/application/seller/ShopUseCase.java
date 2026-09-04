@@ -7,6 +7,7 @@ import com.nona.api.seller.ShopInfoRequest;
 import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.entity.ShopCategory;
 import com.nona.domain.catalog.factory.ShopFactory;
+import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.domain.catalog.repo.ShopRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
@@ -40,14 +41,23 @@ public class ShopUseCase {
     private final ShopFactory shopFactory;
 
     /**
+     * 商品仓储（分类删除引用守卫：删除前须零商品绑定——引用查询租户
+     * 过滤内同店）
+     */
+    private final ProductRepository productRepository;
+
+    /**
      * 构造店铺用例。
      *
-     * @param shopRepository 店铺仓储
-     * @param shopFactory    店铺工厂
+     * @param shopRepository    店铺仓储
+     * @param shopFactory       店铺聚合工厂
+     * @param productRepository 商品仓储（分类删除引用守卫）
      */
-    public ShopUseCase(ShopRepository shopRepository, ShopFactory shopFactory) {
+    public ShopUseCase(ShopRepository shopRepository, ShopFactory shopFactory,
+                       ProductRepository productRepository) {
         this.shopRepository = shopRepository;
         this.shopFactory = shopFactory;
+        this.productRepository = productRepository;
     }
 
     /**
@@ -112,6 +122,11 @@ public class ShopUseCase {
 
     /**
      * 删除店铺分类（物理删除；其余分类排序不重排）。
+     * <p>
+     * 引用守卫（S7.1）：删除前分类必须零商品绑定——存在商品引用时按
+     * 冲突拒绝（{@code CATALOG_SHOP_CATEGORY_IN_USE} 409，商家先解绑
+     * 再删）；无绑定删除语义与既有一致。目标分类必须属于当前店铺
+     * （否则按不存在呈现 404）。
      *
      * @param shopId     当前店铺 ID（认证上下文）
      * @param categoryId 分类 ID（必须属于当前店铺，否则 404）
@@ -119,6 +134,14 @@ public class ShopUseCase {
     @Transactional
     public void removeCategory(Long shopId, Long categoryId) {
         final Shop shop = requireShop(shopId);
+        if (shop.getCategoryById(categoryId).isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.CATALOG_SHOP_CATEGORY_NOT_FOUND.code(),
+                    "店铺分类不存在", 404);
+        }
+        if (productRepository.existsProductBoundToShopCategory(categoryId)) {
+            throw new BusinessException(EcommerceBusinessCode.CATALOG_SHOP_CATEGORY_IN_USE.code(),
+                    "店铺分类已被商品引用，请先解除绑定");
+        }
         shop.removeCategory(categoryId);
         shopRepository.save(shop);
     }

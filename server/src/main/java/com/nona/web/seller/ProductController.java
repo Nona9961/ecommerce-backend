@@ -15,6 +15,9 @@ import com.nona.api.seller.SkuEnabledRequest;
 import com.nona.api.seller.SkuItem;
 import com.nona.api.seller.SkuPriceRequest;
 import com.nona.api.seller.SpecTemplateRequest;
+import com.nona.api.seller.ShopCategoryBindRequest;
+import com.nona.api.seller.ShopCategoryItem;
+import com.nona.api.seller.FreightTemplateBindRequest;
 import com.nona.api.seller.ProductVersionItem;
 import com.nona.application.seller.ProductUseCase;
 import com.nona.application.seller.ProductVersionUseCase;
@@ -247,6 +250,67 @@ public class ProductController implements ProductApi {
     @PostMapping("/seller/products/{productId}/submit")
     public HttpResponse<ProductDetail> submitForReview(@PathVariable("productId") Long productId) {
         return HttpResponse.ok(productUseCase.submitForReview(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 手动下架端点。
+     */
+    @Override
+    @PostMapping("/seller/products/{productId}/delist")
+    public HttpResponse<ProductDetail> delist(@PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.delist(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 手动重新上架端点。
+     */
+    @Override
+    @PostMapping("/seller/products/{productId}/relist")
+    public HttpResponse<ProductDetail> relist(@PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.relist(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 商品店铺分类整体替换端点。
+     */
+    @Override
+    @PutMapping("/seller/products/{productId}/shop-categories")
+    public HttpResponse<List<ShopCategoryItem>> updateShopCategories(
+            @PathVariable("productId") Long productId,
+            @RequestBody @Valid ShopCategoryBindRequest request) {
+        return HttpResponse.ok(productUseCase.updateShopCategories(productId, request));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 商品店铺分类回显端点。
+     */
+    @Override
+    @GetMapping("/seller/products/{productId}/shop-categories")
+    public HttpResponse<List<ShopCategoryItem>> listShopCategories(
+            @PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.listShopCategories(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 商品运费模板绑定端点。
+     */
+    @Override
+    @PutMapping("/seller/products/{productId}/freight-template")
+    public HttpResponse<Void> bindFreightTemplate(
+            @PathVariable("productId") Long productId,
+            @RequestBody @Valid FreightTemplateBindRequest request) {
+        productUseCase.bindFreightTemplate(productId, request);
+        return HttpResponse.ok();
     }
 
     /**

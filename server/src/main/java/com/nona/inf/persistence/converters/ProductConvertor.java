@@ -54,18 +54,26 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
     private final SkuConvertor skuConvertor;
 
     /**
+     * 店铺分类绑定行转换器
+     */
+    private final ProductShopCategoryRelConvertor shopCategoryRefConvertor;
+
+    /**
      * 构造商品转换器。
      *
-     * @param imageConvertor     图片行转换器
-     * @param attributeConvertor 属性行转换器
-     * @param skuConvertor       SKU 行转换器
+     * @param imageConvertor         图片行转换器
+     * @param attributeConvertor     属性行转换器
+     * @param skuConvertor           SKU 行转换器
+     * @param shopCategoryRefConvertor 店铺分类绑定行转换器
      */
     public ProductConvertor(ProductImageConvertor imageConvertor,
                             ProductAttributeConvertor attributeConvertor,
-                            SkuConvertor skuConvertor) {
+                            SkuConvertor skuConvertor,
+                            ProductShopCategoryRelConvertor shopCategoryRefConvertor) {
         this.imageConvertor = imageConvertor;
         this.attributeConvertor = attributeConvertor;
         this.skuConvertor = skuConvertor;
+        this.shopCategoryRefConvertor = shopCategoryRefConvertor;
     }
 
     /**
@@ -86,6 +94,7 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
         po.setStatus(root.getStatus());
         po.setSpecTemplateJson(toSpecTemplateJson(root.getSpecTemplate().orElse(null)));
         po.setPendingDraftJson(toPendingDraftJson(root.getPendingContent().orElse(null)));
+        po.setFreightTemplateId(root.getFreightTemplateId());
         return po;
     }
 
@@ -102,12 +111,16 @@ public class ProductConvertor extends AbstractConvertor<Product, ProductPO, Prod
                 po.getDescription(), po.getCategoryId(), po.getBrandId(), po.getStatus(),
                 fromSpecTemplateJson(po.getSpecTemplateJson()), toSkus(childPos));
         product.restorePendingContent(fromPendingDraftJson(po.getPendingDraftJson()));
+        product.restoreFreightTemplateId(po.getFreightTemplateId());
         if (childPos != null) {
             for (final var imagePo : childPos.images()) {
                 product.restoreImage(imageConvertor.toDomain(imagePo));
             }
             for (final var attributePo : childPos.attributes()) {
                 product.restoreAttribute(attributeConvertor.toDomain(attributePo));
+            }
+            for (final var refPo : childPos.shopCategoryRefs()) {
+                product.restoreShopCategoryRef(shopCategoryRefConvertor.toDomain(refPo));
             }
         }
         return product;

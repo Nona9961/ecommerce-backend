@@ -108,4 +108,43 @@ public interface ProductRepository extends BaseRepository<Long, Product> {
      *         SENSITIVE=转待审核）
      */
     EditSensitivity summarizeSensitiveEdit(Product product);
+
+    /**
+     * 按 SKU ID 反查归属商品 ID（售罄事件消费定位用：SelloutEvent 只
+     * 携带 skuId，消费方经本查询定位 SKU 所属商品后再加载聚合）。
+     * 跨店铺语义：事件消费上下文无请求租户时需读放行/提权（放行职责在
+     * 应用层用例）；SKU 不存在或不可见返回 null（不抛异常）。
+     *
+     * @param skuId SKU ID
+     * @return 归属商品 ID；SKU 不存在返回 null
+     */
+    Long findProductIdBySkuId(Long skuId);
+
+    /**
+     * 是否存在商品绑定指定店铺分类（分类删除守卫用：删除店铺分类前须
+     * 零商品引用——租户过滤内同店查询，调用方为当前店铺上下文）。
+     *
+     * @param shopCategoryId 店铺分类 ID
+     * @return 存在引用返回 true
+     */
+    boolean existsProductBoundToShopCategory(Long shopCategoryId);
+
+    /**
+     * 按店铺分类分页列出绑定的商品（S7.1 ②「按店铺分类可筛选商品」：
+     * 绑定行反查本店商品列表，每行装配完整聚合）。行集按创建序。
+     *
+     * @param shopCategoryId 店铺分类 ID
+     * @param offset         首条偏移量（从 0 开始）
+     * @param limit          每页条数
+     * @return 商品列表；无数据为空列表
+     */
+    List<Product> listByShopCategoryPaged(Long shopCategoryId, int offset, int limit);
+
+    /**
+     * 按店铺分类统计绑定商品数（分页 total 用）。
+     *
+     * @param shopCategoryId 店铺分类 ID
+     * @return 商品数
+     */
+    long countByShopCategory(Long shopCategoryId);
 }

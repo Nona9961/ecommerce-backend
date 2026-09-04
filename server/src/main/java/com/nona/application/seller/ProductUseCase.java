@@ -12,25 +12,33 @@ import com.nona.api.seller.ProductImageRequest;
 import com.nona.api.seller.SkuEnabledRequest;
 import com.nona.api.seller.SkuItem;
 import com.nona.api.seller.SkuPriceRequest;
+import com.nona.api.seller.ShopCategoryBindRequest;
+import com.nona.api.seller.ShopCategoryItem;
+import com.nona.api.seller.FreightTemplateBindRequest;
 import com.nona.api.seller.SpecDimensionRequest;
 import com.nona.api.seller.SpecTemplateRequest;
 import com.nona.domain.catalog.entity.Brand;
 import com.nona.domain.catalog.entity.BrandStatus;
 import com.nona.domain.catalog.entity.CategoryStatus;
 import com.nona.domain.catalog.entity.EditSensitivity;
+import com.nona.domain.catalog.entity.FreightTemplate;
 import com.nona.domain.catalog.entity.PlatformCategory;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductContent;
 import com.nona.domain.catalog.entity.ProductImage;
 import com.nona.domain.catalog.entity.ProductStatus;
+import com.nona.domain.catalog.entity.Shop;
+import com.nona.domain.catalog.entity.ShopCategory;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.entity.SpecItem;
 import com.nona.domain.catalog.entity.SpecTemplate;
 import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.BrandRepository;
+import com.nona.domain.catalog.repo.FreightTemplateRepository;
 import com.nona.domain.catalog.repo.PlatformCategoryRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
+import com.nona.domain.catalog.repo.ShopRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
@@ -39,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * 商家端商品草稿用例：草稿 CRUD、图片引用管理（增删/设主图）、
@@ -95,6 +104,16 @@ public class ProductUseCase {
     private final ProductSnapshotConvertor snapshotConvertor;
 
     /**
+     * 店铺仓储（店铺分类绑定目标归属校验：分类必须属于商品所属店铺）
+     */
+    private final ShopRepository shopRepository;
+
+    /**
+     * 运费模板仓储（模板绑定目标归属校验：模板必须属于商品所属店铺）
+     */
+    private final FreightTemplateRepository freightTemplateRepository;
+
+    /**
      * 构造商品草稿用例。
      *
      * @param productRepository      商品仓储
@@ -103,19 +122,25 @@ public class ProductUseCase {
      * @param categoryRepository     平台分类仓储
      * @param brandRepository        品牌仓储
      * @param snapshotConvertor      商品内容快照转换器（敏感编辑分流回退）
+     * @param shopRepository         店铺仓储（店铺分类绑定归属校验）
+     * @param freightTemplateRepository 运费模板仓储（模板绑定归属校验）
      */
     public ProductUseCase(ProductRepository productRepository,
                           ProductFactory productFactory,
                           ProductVersionUseCase productVersionUseCase,
                           PlatformCategoryRepository categoryRepository,
                           BrandRepository brandRepository,
-                          ProductSnapshotConvertor snapshotConvertor) {
+                          ProductSnapshotConvertor snapshotConvertor,
+                          ShopRepository shopRepository,
+                          FreightTemplateRepository freightTemplateRepository) {
         this.productRepository = productRepository;
         this.productFactory = productFactory;
         this.productVersionUseCase = productVersionUseCase;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.snapshotConvertor = snapshotConvertor;
+        this.shopRepository = shopRepository;
+        this.freightTemplateRepository = freightTemplateRepository;
     }
 
     /**
@@ -354,6 +379,151 @@ public class ProductUseCase {
         product.submitForReview();
         productRepository.save(product);
         return toDetail(product);
+    }
+
+    /**
+     * 手动下架编排：加载商品（租户
+     * 过滤 fail-closed）→ 聚合迁移（仅 ON_SALE 可下架，守卫在聚合）→
+     * 变更集落库。下架为生命周期迁移，不插编辑版本行。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 下架后的商品详情（状态 DELISTED）
+     */
+    @Transactional
+    public ProductDetail delist(Long productId) {
+        final Product product = requireProduct(productId);
+        product.delist();
+        productRepository.save(product);
+        return toDetail(product);
+    }
+
+    /**
+     * 手动重新上架编排：加载商品（租户
+     * 过滤 fail-closed）→ 聚合迁移（仅 DELISTED 可上架 + 完整性防御校验，
+     * 守卫在聚合）→ 变更集落库。重新上架无内容变化，不插编辑版本行。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 上架后的商品详情（状态 ON_SALE）
+     */
+    @Transactional
+    public ProductDetail relist(Long productId) {
+        final Product product = requireProduct(productId);
+        product.relist();
+        productRepository.save(product);
+        return toDetail(product);
+    }
+
+    /**
+     * 整体替换商品店铺分类绑定：加载
+     * 商品（租户过滤 fail-closed）→ 绑定目标归属校验（分类必须属于商品
+     * 所属店铺——Shop 聚合加载校验，跨店铺/不存在按 404 呈现）→ 聚合
+     * 整体替换（守卫：待审核期/已下架态冻结、去重）→ 变更集落库（从表
+     * rel 行）。分类变更为展示类编辑：在售态直改免审，草稿/驳回态直改
+     * 留痕（复用 persistEdit 保存语义）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   目标分类集合（整体替换；空=清空全部绑定）
+     * @return 绑定后的分类条目列表（含名称，按绑定序）
+     */
+    @Transactional
+    public List<ShopCategoryItem> updateShopCategories(Long productId,
+                                                       ShopCategoryBindRequest request) {
+        final Product product = requireProduct(productId);
+        final List<Long> targets = request.shopCategoryIds() == null ? List.of() : request.shopCategoryIds();
+        final Shop shop = requireShopOf(product);
+        for (final Long categoryId : targets) {
+            if (categoryId != null && shop.getCategoryById(categoryId).isEmpty()) {
+                throw new BusinessException(
+                        EcommerceBusinessCode.CATALOG_SHOP_CATEGORY_NOT_FOUND.code(), "店铺分类不存在", 404);
+            }
+        }
+        persistEdit(product, () -> product.replaceShopCategories(targets));
+        return toShopCategoryItems(product, shop);
+    }
+
+    /**
+     * 商品店铺分类绑定回显：加载商品
+     * → 按绑定分类 ID 集合在所属店铺分类中取名称 → 条目列表（按绑定序）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 已绑定分类条目列表；无绑定为空列表
+     */
+    public List<ShopCategoryItem> listShopCategories(Long productId) {
+        final Product product = requireProduct(productId);
+        final List<Long> boundIds = product.shopCategoryIdsOrdered();
+        if (boundIds.isEmpty()) {
+            return List.of();
+        }
+        return toShopCategoryItems(product, requireShopOf(product));
+    }
+
+    /**
+     * 商品运费模板绑定/解绑：加载商品
+     * （租户过滤 fail-closed）→ 目标模板归属校验（模板必须存在且属于商品
+     * 所属店铺，跨店铺/不存在按 404 呈现；停用模板允许绑定）→ 聚合绑定
+     * （守卫：待审核期/已下架态冻结）→ 变更集落库。绑定属运营配置：在售
+     * 态直改免审，草稿/驳回态直改留痕（复用 persistEdit 保存语义）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @param request   目标模板 ID（null=解绑）
+     */
+    @Transactional
+    public void bindFreightTemplate(Long productId, FreightTemplateBindRequest request) {
+        final Product product = requireProduct(productId);
+        final Long templateId = request.freightTemplateId();
+        if (templateId != null) {
+            final FreightTemplate template = freightTemplateRepository.getByID(templateId);
+            if (template == null) {
+                throw new BusinessException(
+                        EcommerceBusinessCode.CATALOG_FREIGHT_TEMPLATE_NOT_FOUND.code(), "运费模板不存在", 404);
+            }
+        }
+        persistEdit(product, () -> product.bindFreightTemplate(templateId));
+    }
+
+    /**
+     * 加载商品所属店铺并断言存在（店铺分类绑定校验/名称映射载体：商品
+     * 归属店铺行必在——行缺失为数据不一致异常态，按不存在呈现 404）。
+     *
+     * @param product 商品聚合
+     * @return 店铺聚合
+     */
+    private Shop requireShopOf(Product product) {
+        final Shop shop = shopRepository.getByID(product.getShopId());
+        if (shop == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_SHOP_NOT_FOUND.code(), "店铺不存在", 404);
+        }
+        return shop;
+    }
+
+    /**
+     * 绑定分类条目列表（按绑定序，含名称与排序）：名称映射经商品所属
+     * 店铺分类集合——绑定目标在绑定前已校验归属（必在集合内）；历史
+     * 悬挂引用（引用目标已失效的异常形态）按不存在跳过，回显只列有效
+     * 绑定。
+     *
+     * @param product 商品聚合
+     * @param shop    商品所属店铺聚合
+     * @return 分类条目列表；无绑定为空列表
+     */
+    private static List<ShopCategoryItem> toShopCategoryItems(Product product, Shop shop) {
+        return product.shopCategoryIdsOrdered().stream()
+                .map(shop::getCategoryById)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(ProductUseCase::toShopCategoryItem)
+                .toList();
+    }
+
+    /**
+     * 领域店铺分类 → 契约条目。
+     *
+     * @param category 店铺分类
+     * @return 契约条目
+     */
+    private static ShopCategoryItem toShopCategoryItem(ShopCategory category) {
+        return new ShopCategoryItem(category.getId(), category.getName(), category.getOrder());
     }
 
     /**

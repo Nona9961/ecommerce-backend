@@ -85,6 +85,14 @@ public class ProductPO extends TenantScopedBasePO {
     private String pendingDraftJson;
 
     /**
+     * 运费模板 ID（可空引用列）：商品级绑定店铺运费模板（S9.2 商品绑
+     * 模板）——绑/解绑经商品聚合（写面冻结守卫），目标存在性/归属校验
+     * 在用例层；null=未绑定（详情运费区按无模板呈现）。
+     */
+    @Column(name = "freight_template_id")
+    private Long freightTemplateId;
+
+    /**
      * 所属店铺 ID。
      *
      * @return 店铺 ID
@@ -226,5 +234,23 @@ public class ProductPO extends TenantScopedBasePO {
      */
     public void setPendingDraftJson(String pendingDraftJson) {
         this.pendingDraftJson = pendingDraftJson;
+    }
+
+    /**
+     * 运费模板 ID。
+     *
+     * @return 模板 ID；未绑定返回 null
+     */
+    public Long getFreightTemplateId() {
+        return freightTemplateId;
+    }
+
+    /**
+     * 设置运费模板 ID。
+     *
+     * @param freightTemplateId 模板 ID；null=未绑定
+     */
+    public void setFreightTemplateId(Long freightTemplateId) {
+        this.freightTemplateId = freightTemplateId;
     }
 }
