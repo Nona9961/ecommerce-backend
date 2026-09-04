@@ -7,6 +7,7 @@ package com.nona.api.admin;
  * @param name   品牌名称
  * @param logo   品牌 logo URL（可空）
  * @param status 品牌状态（ENABLED 启用 / DISABLED 禁用）
+ * @author nona9961
  */
 public record BrandItem(
         Long id,

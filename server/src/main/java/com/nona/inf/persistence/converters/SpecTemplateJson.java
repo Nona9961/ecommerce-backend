@@ -14,6 +14,7 @@ import java.util.Objects;
  * （null=尚未配置模板）。
  *
  * @param dimensions 规格维度列表（按配置序；空列表=空模板）
+ * @author nona9961
  */
 public record SpecTemplateJson(List<SpecDimensionJson> dimensions) {
 

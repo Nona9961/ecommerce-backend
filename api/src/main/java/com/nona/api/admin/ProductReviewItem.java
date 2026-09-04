@@ -17,6 +17,7 @@ import com.nona.api.common.ProductLifecycleStatus;
  * @param imageCount      图片引用数
  * @param enabledSkuCount 启用 SKU 数
  * @param status          商品生命周期状态
+ * @author nona9961
  */
 public record ProductReviewItem(
         Long id,

@@ -50,9 +50,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 售罄自动下架编排集成测试（WU-19：C8/S4.5 ②——inventory
- * SelloutEvent 消费 → catalog 自动下架，真实 Spring 上下文 + H2 + 租户
- * 提权编排）。
+ * 售罄自动下架编排集成测试（inventory SelloutEvent 消费 → catalog
+ * 自动下架，真实 Spring 上下文 + H2 + 租户提权编排）。
  * <p>
  * 编排契约：skuId → 商品定位 → 非 ON_SALE 静默跳过 → 全部启用 SKU
  * 可售均为 0 才下架（部分售罄不下架）→ 提权事务内聚合迁移落库。

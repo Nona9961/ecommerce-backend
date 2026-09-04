@@ -50,9 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商家端商品上下架 + 运费模板绑定 REST 端点集成测试（WU-19：
- * S4.5 手动下架 / 重新上架回迁 / S9.2 商品绑模板——真实 Security 链 +
- * JWT + H2 + 租户上下文）。
+ * 商家端商品上下架 + 运费模板绑定 REST 端点集成测试：手动下架 /
+ * 重新上架回迁 / 商品绑模板（真实 Security 链 + JWT + H2 + 租户上下文）。
  * <p>
  * 覆盖：happy（在售下架 / 下架重新上架 / 绑模板）、critical（上架-下架
  * 闭环）、error（草稿下架 400 / 跨店 404 / 待审下架 400 / 未认证 401 /

@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotBlank;
  *
  * @param key   属性键（必填）
  * @param value 属性值（可空）
+ * @author nona9961
  */
 public record ProductAttributeRequest(
         @NotBlank(message = "属性键不能为空") String key,

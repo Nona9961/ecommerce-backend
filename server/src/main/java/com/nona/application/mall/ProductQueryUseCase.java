@@ -12,7 +12,7 @@ import com.nona.inf.context.CrossTenant;
 import org.springframework.stereotype.Service;
 
 /**
- * 买家端商品查询用例：商品详情读（B6，主库强一致）编排——经
+ * 买家端商品查询用例：商品详情读（主库强一致）编排——经
  * {@link CrossTenant} 显式放行后调用商品查询门面（买家视角 contextTenant
  * 空，读 tenant 表商品/SKU/运费模板必须读放行——放行只出现在应用层用例
  * 方法），并在本层完成买家视图 → 契约 DTO 的映射。
@@ -43,7 +43,7 @@ public class ProductQueryUseCase {
     }
 
     /**
-     * 商品详情（B6.1/B6.2 详情页数据）。
+     * 商品详情（详情页数据）。
      *
      * @param productId 商品 ID
      * @return 买家商品详情

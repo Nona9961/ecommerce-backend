@@ -21,10 +21,9 @@ import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
 
 /**
- * 售罄自动下架消费方（C8/S4.5 ②——inventory 售罄事件 → catalog 自动
- * 下架）。
+ * 售罄自动下架消费方（inventory 售罄事件 → catalog 自动下架）。
  * <p>
- * 装配形态（对齐 WU-23 事件链路契约）：
+ * 装配形态（对齐库存事件链路契约）：
  * <ul>
  *     <li>订阅：{@link TransactionalEventListener} AFTER_COMMIT 监听库存
  *         事务提交后的 {@link SelloutEvent}（消费方只见已提交库存状态）；
@@ -33,10 +32,10 @@ import java.util.stream.Collectors;
  *     <li>异步：监听方法把自动下架任务提交到库存事件执行器
  *         （stockEventExecutor——上下文传播装饰器随任务携带发布线程的
  *         租户快照；任务内编排自管事务与放行，不依赖请求上下文）；</li>
- *     <li>消费失败不影响库存主链路（任务体双层容错，同 WU-23 日志消费
+ *     <li>消费失败不影响库存主链路（任务体双层容错，同库存日志消费
  *         形制）。</li>
  * </ul>
- * 编排语义（绿阶段落点，本类 javadoc 即契约）：
+ * 编排语义（本类 javadoc 即契约）：
  * <ol>
  *     <li>skuId → 商品定位：经商品仓储反查归属商品 ID（跨店铺读放行/
  *         提权上下文内执行——SKU 已不存在/不可见返回空并静默跳过）；</li>
@@ -80,7 +79,7 @@ public class ProductAutoDelistListener {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * 事件异步执行器（库存事件执行器——与 WU-23 事件消费共用装配点与
+     * 事件异步执行器（库存事件执行器——与既有事件消费共用装配点与
      * 上下文传播装饰器）
      */
     private final Executor stockEventExecutor;

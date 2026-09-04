@@ -50,9 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 买家商品详情 REST 端点集成测试（WU-19：B6.1/B6.2 详情读 + 主库
- * 强一致 + @CrossTenant 显式放行形态——真实 Security 链 + JWT + H2 +
- * 买家视角（tenant 空））。
+ * 买家商品详情 REST 端点集成测试（详情读 + 主库强一致 + @CrossTenant
+ * 显式放行形态——真实 Security 链 + JWT + H2 + 买家视角（tenant 空））。
  * <p>
  * 覆盖：happy（在售详情 200：主体/主图/属性/SKU 价格与可售量 zip/店铺
  * 卡片）、critical（部分 SKU 无库存行按可售 0 呈现）、error（草稿/待审/
@@ -162,7 +161,7 @@ class BuyerProductDetailApiIntegrationTest {
     // ---- Happy path ----
 
     /**
-     * happy：在售商品详情 200（B6.1 主体/主图/属性/店铺 + B6.2 SKU 价格
+     * happy：在售商品详情 200（主体/主图/属性/店铺 + SKU 价格
      * 与可售量随动数据——买家视角 tenant 空，@CrossTenant 放行后跨租户
      * 读生效）。
      */
@@ -185,7 +184,7 @@ class BuyerProductDetailApiIntegrationTest {
     }
 
     /**
-     * critical：无库存行的 SKU 按可售 0 呈现（B6.2 无库存 SKU 置灰——
+     * critical：无库存行的 SKU 按可售 0 呈现（无库存 SKU 置灰——
      * 未初始化/缺行统一 0，zip 语义）。
      */
     @Test
@@ -229,8 +228,7 @@ class BuyerProductDetailApiIntegrationTest {
     }
 
     /**
-     * error：已下架商品详情按不存在呈现（404——S4.5 ①手动下架生效买家
-     * 不可见）。
+     * error：已下架商品详情按不存在呈现（404——手动下架生效买家不可见）。
      */
     @Test
     @DisplayName("已下架商品详情404")

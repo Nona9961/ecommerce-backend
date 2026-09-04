@@ -193,7 +193,7 @@ public interface ProductApi {
     HttpResponse<ProductDetail> submitForReview(Long productId);
 
     /**
-     * 手动下架：在售 → 已下架（S4.5 ①——下架后买家不可见）。仅 ON_SALE
+     * 手动下架：在售 → 已下架（下架后买家不可见）。仅 ON_SALE
      * 可下架：草稿/待审/已下架态下架拒绝（400 非法状态）。下架为生命
      * 周期迁移，不产生编辑版本行。
      *
@@ -213,11 +213,11 @@ public interface ProductApi {
     HttpResponse<ProductDetail> relist(Long productId);
 
     /**
-     * 整体替换商品店铺分类绑定集（S7.1 商品侧多对多：一个商品可属多个
+     * 整体替换商品店铺分类绑定集（商品侧多对多：一个商品可属多个
      * 店铺分类；编辑页多选勾选保存 = 整体替换，空集合=清空全部绑定）。
      * 绑定目标必须属于商品所属店铺（跨店铺分类 404）；待审核期/已下架态
-     * 绑定拒绝（写面冻结）。分类变更属展示类编辑（TD-03 敏感字段集不含
-     * 店铺分类），在售态直改免审。
+     * 绑定拒绝（写面冻结）。分类变更属展示类编辑（敏感字段集不含店铺
+     * 分类），在售态直改免审。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @param request   目标分类集合（整体替换语义）
@@ -227,7 +227,7 @@ public interface ProductApi {
                                                               ShopCategoryBindRequest request);
 
     /**
-     * 商品店铺分类绑定回显（S07 编辑页多选勾选初始值）。
+     * 商品店铺分类绑定回显（编辑页多选勾选初始值）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @return 已绑定店铺分类条目列表（含名称，按绑定序）；无绑定为空列表
@@ -235,7 +235,7 @@ public interface ProductApi {
     HttpResponse<List<ShopCategoryItem>> listShopCategories(Long productId);
 
     /**
-     * 绑定/解绑商品运费模板（S9.2：模板必须存在且属于商品所属店铺，
+     * 绑定/解绑商品运费模板（模板必须存在且属于商品所属店铺，
      * 跨店铺模板 404；停用模板允许绑定）。待审核期/已下架态绑定拒绝
      * （写面冻结）。模板绑定属运营配置，在售态直改免审。
      *

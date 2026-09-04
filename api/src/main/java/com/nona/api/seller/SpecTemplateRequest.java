@@ -15,6 +15,7 @@ import java.util.Objects;
  * 维度名/值约束（非空、唯一）由领域值对象构造路径校验。
  *
  * @param dimensions 规格维度列表（按配置序；null 或空 = 空模板清空 SKU 集）
+ * @author nona9961
  */
 public record SpecTemplateRequest(@Valid List<SpecDimensionRequest> dimensions) {
 

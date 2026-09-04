@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
  * （fail-closed：商家显式启用）。目标 SKU 必须属于请求商品，否则 404。
  *
  * @param enabled 是否启用（必填）
+ * @author nona9961
  */
 public record SkuEnabledRequest(
         @NotNull(message = "启用状态不能为空") Boolean enabled

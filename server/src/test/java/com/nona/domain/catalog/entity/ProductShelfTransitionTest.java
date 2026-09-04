@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Product 聚合上下架状态机契约测试（WU-19）：手动下架（S4.5 ①
- * ON_SALE → DELISTED）+ 手动重新上架（DELISTED → ON_SALE 回迁）——迁移
+ * Product 聚合上下架状态机契约测试：手动下架（ON_SALE → DELISTED）
+ * + 手动重新上架（DELISTED → ON_SALE 回迁）——迁移
  * 守卫收敛在聚合方法（delist/relist），断言覆盖状态机全迁移矩阵
  * （happy/非法迁移拒绝/完整性防御/往返闭环）。
  * <p>

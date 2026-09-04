@@ -4,7 +4,7 @@ package com.nona.domain.catalog.entity;
  * 商品-店铺分类绑定行（Product 聚合从表 product_shop_category_rel 行的
  * 域内承载，值对象——不可变，无独立行为）。
  * <p>
- * 多对多语义：商品（Product 聚合）可属多个店铺分类（S7.1——店铺分类
+ * 多对多语义：商品（Product 聚合）可属多个店铺分类（店铺分类
  * 实体生命周期归 Shop 聚合，商品侧只持分类引用 ID）；从表行以
  * productId（rootId）归属商品主表，行主键为独立 Snowflake ID（行自身
  * 无业务身份，主键供变更追踪按元素身份驱动落库）；(product_id,

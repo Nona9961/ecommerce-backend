@@ -15,6 +15,7 @@ package com.nona.api.seller;
  * @param baseFreight    基础运费（分；仅 THRESHOLD_FREE）
  * @param freeThreshold  免邮阈值（分；仅 THRESHOLD_FREE）
  * @param status         模板状态（ENABLED 启用 / DISABLED 停用）
+ * @author nona9961
  */
 public record FreightTemplateDetail(
         Long id,

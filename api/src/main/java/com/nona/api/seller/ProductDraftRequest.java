@@ -14,6 +14,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param description 商品描述（可空）
  * @param categoryId  平台类目 ID（可空；非空时目标必须存在且启用）
  * @param brandId     品牌 ID（可空；非空时目标必须存在且启用）
+ * @author nona9961
  */
 public record ProductDraftRequest(
         @NotBlank(message = "商品名称不能为空") String name,

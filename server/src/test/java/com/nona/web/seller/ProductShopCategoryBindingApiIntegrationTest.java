@@ -50,9 +50,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商家端商品-店铺分类绑定 REST 端点集成测试（WU-19：S7.1 商品侧
- * 多对多绑定/解绑/回显 + 分类删除引用守卫——真实 Security 链 + JWT +
- * H2 + 租户上下文）。
+ * 商家端商品-店铺分类绑定 REST 端点集成测试（商品侧多对多绑定/解绑/
+ * 回显 + 分类删除引用守卫——真实 Security 链 + JWT + H2 + 租户上下文）。
  * <p>
  * 覆盖：happy（整体替换绑定多分类 / 回显 / 差集收敛 / 清空）、error
  * （跨店铺分类绑定 404 / 删除有绑定商品的分类 409 / 不存在商品 404）。
@@ -180,7 +179,7 @@ class ProductShopCategoryBindingApiIntegrationTest {
     }
 
     /**
-     * happy：绑定回显（S07 编辑页多选勾选初始值）——GET 返回绑定条目。
+     * happy：绑定回显（编辑页多选勾选初始值）——GET 返回绑定条目。
      */
     @Test
     @DisplayName("绑定回显列表")
@@ -280,7 +279,7 @@ class ProductShopCategoryBindingApiIntegrationTest {
     }
 
     /**
-     * error：删除有商品绑定的店铺分类拒绝（409 冲突——S7.1 引用守卫：
+     * error：删除有商品绑定的店铺分类拒绝（409 冲突——引用守卫：
      * 删除前分类必须零商品绑定，有绑定先解绑再删）。
      */
     @Test

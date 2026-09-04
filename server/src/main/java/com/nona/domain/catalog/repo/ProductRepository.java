@@ -130,7 +130,7 @@ public interface ProductRepository extends BaseRepository<Long, Product> {
     boolean existsProductBoundToShopCategory(Long shopCategoryId);
 
     /**
-     * 按店铺分类分页列出绑定的商品（S7.1 ②「按店铺分类可筛选商品」：
+     * 按店铺分类分页列出绑定的商品（「按店铺分类可筛选商品」：
      * 绑定行反查本店商品列表，每行装配完整聚合）。行集按创建序。
      *
      * @param shopCategoryId 店铺分类 ID

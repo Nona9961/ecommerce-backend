@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param perItemPrice   按件单价（分，PER_ITEM 必填）
  * @param baseFreight    基础运费（分，THRESHOLD_FREE 必填）
  * @param freeThreshold  免邮阈值（分，THRESHOLD_FREE 必填）
+ * @author nona9961
  */
 public record FreightTemplateRequest(
         @NotBlank(message = "模板名称不能为空") String name,

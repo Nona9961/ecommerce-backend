@@ -1,10 +1,10 @@
 package com.nona.api.mall;
 
 /**
- * 买家商品详情-SKU 行（规格联动数据：选择后价格/库存随动 B6.2③）。
+ * 买家商品详情-SKU 行（规格联动数据：选择后价格/库存随动）。
  * <p>
  * specHash/specSummary 与商品规格模板展开序对齐——前端按当前选中规格
- * 组合摘要定位 SKU；available=0 置灰不可选（无库存 SKU 置灰 B6.2②）。
+ * 组合摘要定位 SKU；available=0 置灰不可选（无库存 SKU 置灰）。
  * 金额单位分。
  *
  * @param skuId       SKU ID

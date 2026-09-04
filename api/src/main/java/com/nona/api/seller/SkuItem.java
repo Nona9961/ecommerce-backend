@@ -13,6 +13,7 @@ package com.nona.api.seller;
  * @param specSummary 规格组合可读摘要
  * @param price       销售价（分；null=未定价）
  * @param enabled     是否启用
+ * @author nona9961
  */
 public record SkuItem(
         Long id,

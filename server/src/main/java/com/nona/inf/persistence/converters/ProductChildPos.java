@@ -19,6 +19,7 @@ import java.util.List;
  * @param attributes      属性行（按加入序）
  * @param skus            SKU 行（按模板展开序）
  * @param shopCategoryRefs 店铺分类绑定行（按绑定序）
+ * @author nona9961
  */
 public record ProductChildPos(
         List<ProductImagePO> images,

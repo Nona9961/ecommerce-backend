@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Positive;
  * 领域聚合守卫双保险）。目标 SKU 必须属于请求商品，否则 404。
  *
  * @param price 新价格（分；null=清除价格复位未定价）
+ * @author nona9961
  */
 public record SkuPriceRequest(
         @Positive(message = "SKU价格必须为正整数") Long price

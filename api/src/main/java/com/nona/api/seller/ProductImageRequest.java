@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
  *
  * @param url    图片 URL（必填）
  * @param primary 是否设为主图（可空，默认 false）
+ * @author nona9961
  */
 public record ProductImageRequest(
         @NotBlank(message = "图片URL不能为空") String url,

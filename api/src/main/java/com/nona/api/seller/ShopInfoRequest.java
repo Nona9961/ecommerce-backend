@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
  * @param name        店铺名称（必填）
  * @param logo        店铺 logo（可空）
  * @param description 店铺简介（可空）
+ * @author nona9961
  */
 public record ShopInfoRequest(
         @NotBlank(message = "店铺名称不能为空") String name,

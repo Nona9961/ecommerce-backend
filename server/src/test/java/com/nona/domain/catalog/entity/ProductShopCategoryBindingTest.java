@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Product 聚合店铺分类绑定/运费模板绑定契约测试（WU-19）：S7.1
- * 商品-店铺分类多对多（整体替换 + 从表行装载）+ S9.2 商品运费模板绑定。
+ * Product 聚合店铺分类绑定/运费模板绑定契约测试：商品-店铺分类
+ * 多对多（整体替换 + 从表行装载）+ 商品运费模板绑定。
  * 归属校验（分类/模板属于商品店铺）在用例层（跨聚合读
  * Shop/FreightTemplate），本文件只覆盖聚合内守卫与集合语义。
  *

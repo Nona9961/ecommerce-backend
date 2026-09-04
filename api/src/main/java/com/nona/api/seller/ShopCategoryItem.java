@@ -6,6 +6,7 @@ package com.nona.api.seller;
  * @param id    分类 ID
  * @param name  分类名称
  * @param order 展示排序（新增自动分配，删除不重排）
+ * @author nona9961
  */
 public record ShopCategoryItem(
         Long id,

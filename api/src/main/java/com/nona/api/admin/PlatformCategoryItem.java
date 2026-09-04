@@ -7,6 +7,7 @@ package com.nona.api.admin;
  * @param name   分类名称
  * @param order  展示排序（正数；列表按此升序）
  * @param status 分类状态（ENABLED 启用 / DISABLED 禁用）
+ * @author nona9961
  */
 public record PlatformCategoryItem(
         Long id,

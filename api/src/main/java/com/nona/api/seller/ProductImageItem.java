@@ -9,6 +9,7 @@ package com.nona.api.seller;
  * @param id      图片引用 ID
  * @param url     图片 URL（/files/{objectKey} 形态）
  * @param primary 是否主图（至多一条为 true）
+ * @author nona9961
  */
 public record ProductImageItem(
         Long id,

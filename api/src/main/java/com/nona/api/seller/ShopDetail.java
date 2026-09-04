@@ -13,6 +13,7 @@ import java.util.Objects;
  * @param description 店铺简介（可空）
  * @param status      店铺状态（NORMAL 正常 / FROZEN 冻结）
  * @param categories  店铺分类列表（按展示排序升序；无分类为空列表）
+ * @author nona9961
  */
 public record ShopDetail(
         Long id,

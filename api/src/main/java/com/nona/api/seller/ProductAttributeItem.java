@@ -9,6 +9,7 @@ package com.nona.api.seller;
  * @param id    属性 ID
  * @param key   属性键（同商品内唯一，必填）
  * @param value 属性值（可空）
+ * @author nona9961
  */
 public record ProductAttributeItem(
         Long id,

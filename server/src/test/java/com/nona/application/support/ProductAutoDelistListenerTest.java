@@ -21,7 +21,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 /**
- * 售罄自动下架消费监听单元测试（WU-19）：{@link TransactionalEventListener}
+ * 售罄自动下架消费监听单元测试：{@link TransactionalEventListener}
  * AFTER_COMMIT 订阅的监听方法把自动下架任务提交到库存事件执行器——异步
  * 消费与库存主链路解耦（提交/执行失败均捕获为告警，不向发布侧传播异常）。
  * <p>
@@ -88,7 +88,7 @@ class ProductAutoDelistListenerTest {
 
     /**
      * 正常路径：任务体执行时抛异常不向监听线程传播（自动下架失败仅告警，
-     * 不影响库存主链路——与 WU-23 事件消费容错形制一致）。
+     * 不影响库存主链路——与库存事件消费容错形制一致）。
      */
     @Test
     @DisplayName("任务执行失败不向监听线程传播")

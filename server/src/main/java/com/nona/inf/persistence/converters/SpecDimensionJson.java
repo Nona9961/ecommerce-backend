@@ -10,6 +10,7 @@ import java.util.Objects;
  *
  * @param name   维度名称
  * @param values 维度值列表（按配置序）
+ * @author nona9961
  */
 public record SpecDimensionJson(String name, List<String> values) {
 

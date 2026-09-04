@@ -15,6 +15,7 @@ import java.util.List;
  *
  * @param name   维度名称（必填非空）
  * @param values 维度值列表（必填非空，元素非空）
+ * @author nona9961
  */
 public record SpecDimensionRequest(
         @NotBlank(message = "维度名不能为空") String name,

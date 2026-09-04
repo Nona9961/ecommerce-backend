@@ -13,6 +13,7 @@ package com.nona.api.seller;
  * @param brandId        品牌 ID（可空）
  * @param imageCount     图片引用数
  * @param attributeCount 自定义属性数
+ * @author nona9961
  */
 public record ProductDraftItem(
         Long id,
