@@ -18,7 +18,7 @@ import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
 import com.nona.inf.persistence.converters.ProductSnapshotJson;
 import com.nona.util.JacksonUtil;
@@ -36,7 +36,7 @@ import java.util.List;
  * 事务边界：留痕（版本行插入）与回滚（内容重置 + 聚合保存 + ROLLBACK
  * 版本行插入）均为用例事务内完成——版本链写入与聚合保存同事务
  * （all-or-nothing：内容变更与留痕不可分割）；历史查询为读路径。
- * 操作人取认证上下文身份标识（ThreadContext.identity，认证过滤器写入，
+ * 操作人取认证上下文身份标识（跟踪作用域 identity，认证过滤器写入，
  * 不来自请求体）；当前店铺由租户过滤定位（跨店铺商品与版本行在数据访问
  * 层即被拦截，按不存在呈现，fail-closed）。版本号分配：同商品 MAX+1 +
  * DB 唯一约束 (product_id, version_no) 兜底并发冲突。
@@ -75,7 +75,7 @@ public class ProductVersionUseCase {
     /**
      * 请求上下文（操作人身份标识取值）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 商品内容快照转换器（快照序列化/反序列化）
@@ -94,12 +94,12 @@ public class ProductVersionUseCase {
     public ProductVersionUseCase(ProductRepository productRepository,
                                  ProductEditVersionRepository editVersionRepository,
                                  ProductEditVersionFactory editVersionFactory,
-                                 ThreadContext threadContext,
+                                 TenantContextAccessor tenantContextAccessor,
                                  ProductSnapshotConvertor snapshotConvertor) {
         this.productRepository = productRepository;
         this.editVersionRepository = editVersionRepository;
         this.editVersionFactory = editVersionFactory;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
         this.snapshotConvertor = snapshotConvertor;
     }
 
@@ -308,6 +308,6 @@ public class ProductVersionUseCase {
      * @return 操作人身份标识；缺失返回 null
      */
     private String currentOperator() {
-        return threadContext.getIdentity();
+        return tenantContextAccessor.getIdentity();
     }
 }

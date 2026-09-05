@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
  * 在方法/类作用域内建立读放行状态（读路径关闭租户过滤），退出后自动恢复。
  * <p>
  * 实现走 {@link TenantPrivilege#withReadBypass(Runnable)}（独立 ScopedValue 读放行状态）——
- * 不写 ThreadContext（与旧 ThreadContext 标记实现的区别）、不激活写提权（写门禁仍只认
+ * 不写租户/跟踪上下文（读放行状态独立于跟踪作用域持有者）、不激活写提权（写门禁仍只认
  * {@link TenantPrivilege#isActive()}）。时序：{@link Ordered#HIGHEST_PRECEDENCE} 保证先于
  * 事务拦截器设置状态，session 打开时 resolver 自查能读到正确模式（提权/读放行须罩住事务边界的时序约定）。
  *

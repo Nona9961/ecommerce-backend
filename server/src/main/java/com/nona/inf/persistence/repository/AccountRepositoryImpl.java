@@ -4,7 +4,6 @@ import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.identity.entity.Account;
 import com.nona.domain.identity.entity.AccountType;
 import com.nona.domain.identity.repo.AccountRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.RdbGeneralConvertor;
 import com.nona.inf.persistence.po.identity.AccountPO;
 import com.nona.inf.persistence.repository.jpa.AccountJpaRepository;
@@ -36,15 +35,13 @@ public class AccountRepositoryImpl extends DifferRepository<Account, AccountPO, 
      * 构造仓储实现。
      *
      * @param repository            账号 JPA 仓储
-     * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             DO ↔ PO 转换器
      * @param changeTrackerProvider 变更追踪器提供者
      */
     public AccountRepositoryImpl(AccountJpaRepository repository,
-                                 ThreadContext threadContext,
                                  RdbGeneralConvertor<Account, AccountPO, Void> convertor,
                                  ChangeTrackerProvider changeTrackerProvider) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
     }
 

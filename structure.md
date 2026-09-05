@@ -47,7 +47,7 @@
 | `com.nona.domain.{identity,payment,search}` | 通用域：用户 IAM/支付（网关抽象+mock）/搜索（纯读 PG） |
 | `com.nona.domain.{logistics}` | 支撑域：物流运单（一期实现，模拟推进） |
 | `com.nona.domain.{marketing,review,settlement,notification,analytics}` | 支撑域（II 期占位） |
-| `com.nona.inf.context` | 跨切面请求上下文：`ThreadContext`、`TenantContextAccessor`、`TenantPrivilege`、`@CrossTenant`、异步传播装饰器 |
+| `com.nona.inf.context` | 跨切面请求上下文：`TrackingContext` / `TrackingScope`（单级 ScopedValue 主通道）、`TrackingFilter`、`TenantContextAccessor`、`TenantPrivilege`（提权/读放行作用域）、`@CrossTenant`、异步传播装饰器 |
 | `com.nona.inf.persistence` | 持久化基础设施：PO 基类 / 转换器 / DifferRepository / 多租户 / 变更追踪 |
 | `com.nona.inf.{replica,security,storage,timeout}` | 基础设施占位：PG 读库 / JWT 安全链 / 文件存储防腐层 / 超时调度引擎 |
 | `com.nona.web.{mall,seller,admin}` | REST controller（路由前缀 /mall /seller /admin） |

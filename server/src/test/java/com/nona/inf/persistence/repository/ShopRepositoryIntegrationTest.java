@@ -4,8 +4,8 @@ import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.entity.ShopCategory;
 import com.nona.domain.catalog.factory.ShopFactory;
 import com.nona.domain.catalog.repo.ShopRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ShopCategoryPO;
 import com.nona.inf.persistence.po.catalog.ShopPO;
 import com.nona.inf.persistence.repository.jpa.ShopCategoryJpaRepository;
@@ -16,10 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -76,11 +73,6 @@ class ShopRepositoryIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -97,17 +89,6 @@ class ShopRepositoryIntegrationTest {
             shopCategoryJpaRepository.deleteAll();
             shopJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -117,30 +98,34 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("新增店铺后主表存在根行且分类从表落库")
     void save_insertsRootRowAndCategoryRows() {
-        final Shop shop = tx.execute(status -> {
-            final Shop created = shopFactory.createShop("测试店铺", "logo.png", "简介");
-            created.addCategory(shopFactory.createCategory(created, "零食"));
-            created.addCategory(shopFactory.createCategory(created, "饮料"));
-            shopRepository.save(created);
-            return created;
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = tx.execute(status -> {
+                final Shop created = shopFactory.createShop("测试店铺", "logo.png", "简介");
+                created.addCategory(shopFactory.createCategory(created, "零食"));
+                created.addCategory(shopFactory.createCategory(created, "饮料"));
+                shopRepository.save(created);
+                return created;
+            });
+            assertThat(shop).isNotNull();
+
+            assertThat(shopJpaRepository.existsById(shop.getId())).isTrue();
+            final ShopPO rootPo = shopJpaRepository.findById(shop.getId()).orElseThrow();
+            assertThat(rootPo.getName()).isEqualTo("测试店铺");
+            assertThat(rootPo.getStatus().name()).isEqualTo("NORMAL");
+            assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shop.getId())).hasSize(2);
+
+            final Shop loaded = shopRepository.getByID(shop.getId());
+            assertThat(loaded).isNotNull();
+            assertThat(loaded.getId()).isEqualTo(shop.getId());
+            assertThat(loaded.categoriesOrdered()).hasSize(2);
+            assertThat(loaded.categoriesOrdered().get(0).getName()).isEqualTo("零食");
+            assertThat(loaded.categoriesOrdered().get(0).getOrder()).isEqualTo(1);
+            assertThat(loaded.categoriesOrdered().get(1).getName()).isEqualTo("饮料");
+            assertThat(loaded.categoriesOrdered().get(1).getOrder()).isEqualTo(2);
+    
         });
-        assertThat(shop).isNotNull();
-
-        assertThat(shopJpaRepository.existsById(shop.getId())).isTrue();
-        final ShopPO rootPo = shopJpaRepository.findById(shop.getId()).orElseThrow();
-        assertThat(rootPo.getName()).isEqualTo("测试店铺");
-        assertThat(rootPo.getStatus().name()).isEqualTo("NORMAL");
-        assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shop.getId())).hasSize(2);
-
-        final Shop loaded = shopRepository.getByID(shop.getId());
-        assertThat(loaded).isNotNull();
-        assertThat(loaded.getId()).isEqualTo(shop.getId());
-        assertThat(loaded.categoriesOrdered()).hasSize(2);
-        assertThat(loaded.categoriesOrdered().get(0).getName()).isEqualTo("零食");
-        assertThat(loaded.categoriesOrdered().get(0).getOrder()).isEqualTo(1);
-        assertThat(loaded.categoriesOrdered().get(1).getName()).isEqualTo("饮料");
-        assertThat(loaded.categoriesOrdered().get(1).getOrder()).isEqualTo(2);
-    }
+}
 
     /**
      * 更新：快照基线后编辑店铺信息，save 只落变更行（根行字段更新，子表不动）。
@@ -148,19 +133,23 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("编辑店铺信息后变更集驱动更新根行")
     void save_updateAppliesRootRow() {
-        final Shop shop = shopFactory.createShop("原店铺", null, null);
-        shopRepository.save(shop);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = shopFactory.createShop("原店铺", null, null);
+            shopRepository.save(shop);
 
-        final Shop loaded = shopRepository.getByID(shop.getId());
-        loaded.updateInfo("新店铺", "logo-b.png", "新简介");
-        shopRepository.save(loaded);
+            final Shop loaded = shopRepository.getByID(shop.getId());
+            loaded.updateInfo("新店铺", "logo-b.png", "新简介");
+            shopRepository.save(loaded);
 
-        final ShopPO rootPo = shopJpaRepository.findById(shop.getId()).orElseThrow();
-        assertThat(rootPo.getName()).isEqualTo("新店铺");
-        assertThat(rootPo.getLogo()).isEqualTo("logo-b.png");
-        assertThat(rootPo.getDescription()).isEqualTo("新简介");
-        assertThat(rootPo.getStatus().name()).isEqualTo("NORMAL");
-    }
+            final ShopPO rootPo = shopJpaRepository.findById(shop.getId()).orElseThrow();
+            assertThat(rootPo.getName()).isEqualTo("新店铺");
+            assertThat(rootPo.getLogo()).isEqualTo("logo-b.png");
+            assertThat(rootPo.getDescription()).isEqualTo("新简介");
+            assertThat(rootPo.getStatus().name()).isEqualTo("NORMAL");
+    
+        });
+}
 
     /**
      * 更新：分类改名 → 从表行 name 更新、order 保持不变（不重排）。
@@ -168,22 +157,26 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("分类改名后从表行更新且排序保持")
     void save_renameCategoryKeepsOrder() {
-        final Shop shop = shopFactory.createShop("店铺", null, null);
-        final ShopCategory first = shopFactory.createCategory(shop, "零食");
-        final ShopCategory second = shopFactory.createCategory(shop, "饮料");
-        shop.addCategory(first);
-        shop.addCategory(second);
-        shopRepository.save(shop);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = shopFactory.createShop("店铺", null, null);
+            final ShopCategory first = shopFactory.createCategory(shop, "零食");
+            final ShopCategory second = shopFactory.createCategory(shop, "饮料");
+            shop.addCategory(first);
+            shop.addCategory(second);
+            shopRepository.save(shop);
 
-        final Shop loaded = shopRepository.getByID(shop.getId());
-        loaded.renameCategory(first.getId(), "休闲零食");
-        shopRepository.save(loaded);
+            final Shop loaded = shopRepository.getByID(shop.getId());
+            loaded.renameCategory(first.getId(), "休闲零食");
+            shopRepository.save(loaded);
 
-        final ShopCategoryPO firstPo = shopCategoryJpaRepository.findById(first.getId()).orElseThrow();
-        assertThat(firstPo.getName()).isEqualTo("休闲零食");
-        assertThat(firstPo.getOrderNo()).isEqualTo(1);
-        assertThat(shopCategoryJpaRepository.findById(second.getId()).orElseThrow().getOrderNo()).isEqualTo(2);
-    }
+            final ShopCategoryPO firstPo = shopCategoryJpaRepository.findById(first.getId()).orElseThrow();
+            assertThat(firstPo.getName()).isEqualTo("休闲零食");
+            assertThat(firstPo.getOrderNo()).isEqualTo(1);
+            assertThat(shopCategoryJpaRepository.findById(second.getId()).orElseThrow().getOrderNo()).isEqualTo(2);
+    
+        });
+}
 
     /**
      * 更新：新增分类 → 从表插行且排序取当前最大 +1。
@@ -191,22 +184,26 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("新增分类后从表插行且排序递增")
     void save_addCategoryInsertsRow() {
-        final Shop shop = shopFactory.createShop("店铺", null, null);
-        shop.addCategory(shopFactory.createCategory(shop, "零食"));
-        shopRepository.save(shop);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = shopFactory.createShop("店铺", null, null);
+            shop.addCategory(shopFactory.createCategory(shop, "零食"));
+            shopRepository.save(shop);
 
-        final Shop loaded = shopRepository.getByID(shop.getId());
-        final ShopCategory added = shopFactory.createCategory(loaded, "饮料");
-        loaded.addCategory(added);
-        shopRepository.save(loaded);
+            final Shop loaded = shopRepository.getByID(shop.getId());
+            final ShopCategory added = shopFactory.createCategory(loaded, "饮料");
+            loaded.addCategory(added);
+            shopRepository.save(loaded);
 
-        final ShopCategoryPO addedPo = shopCategoryJpaRepository.findById(added.getId()).orElseThrow();
-        assertThat(addedPo.getName()).isEqualTo("饮料");
-        assertThat(addedPo.getOrderNo()).isEqualTo(2);
-        final Shop reloaded = shopRepository.getByID(shop.getId());
-        assertThat(reloaded.categoriesOrdered()).hasSize(2);
-        assertThat(reloaded.categoriesOrdered().get(1).getName()).isEqualTo("饮料");
-    }
+            final ShopCategoryPO addedPo = shopCategoryJpaRepository.findById(added.getId()).orElseThrow();
+            assertThat(addedPo.getName()).isEqualTo("饮料");
+            assertThat(addedPo.getOrderNo()).isEqualTo(2);
+            final Shop reloaded = shopRepository.getByID(shop.getId());
+            assertThat(reloaded.categoriesOrdered()).hasSize(2);
+            assertThat(reloaded.categoriesOrdered().get(1).getName()).isEqualTo("饮料");
+    
+        });
+}
 
     /**
      * 更新：删除分类 → 从表删行、其余分类 order 保持（不重排）。
@@ -214,20 +211,24 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("删除分类后从表删行且其余排序保持")
     void save_removeCategoryDeletesRow() {
-        final Shop shop = shopFactory.createShop("店铺", null, null);
-        final ShopCategory first = shopFactory.createCategory(shop, "零食");
-        final ShopCategory second = shopFactory.createCategory(shop, "饮料");
-        shop.addCategory(first);
-        shop.addCategory(second);
-        shopRepository.save(shop);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = shopFactory.createShop("店铺", null, null);
+            final ShopCategory first = shopFactory.createCategory(shop, "零食");
+            final ShopCategory second = shopFactory.createCategory(shop, "饮料");
+            shop.addCategory(first);
+            shop.addCategory(second);
+            shopRepository.save(shop);
 
-        final Shop loaded = shopRepository.getByID(shop.getId());
-        loaded.removeCategory(first.getId());
-        shopRepository.save(loaded);
+            final Shop loaded = shopRepository.getByID(shop.getId());
+            loaded.removeCategory(first.getId());
+            shopRepository.save(loaded);
 
-        assertThat(shopCategoryJpaRepository.existsById(first.getId())).isFalse();
-        assertThat(shopCategoryJpaRepository.findById(second.getId()).orElseThrow().getOrderNo()).isEqualTo(2);
-    }
+            assertThat(shopCategoryJpaRepository.existsById(first.getId())).isFalse();
+            assertThat(shopCategoryJpaRepository.findById(second.getId()).orElseThrow().getOrderNo()).isEqualTo(2);
+    
+        });
+}
 
     /**
      * 删除：deleteByID 级联删从表行 + 根行，返回真实删除条数（1）；不存在返回 0。
@@ -235,18 +236,22 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("删除店铺级联删从表与根表并返回真实行数")
     void deleteByID_cascadeDeletesRows() {
-        final Shop shop = shopFactory.createShop("店铺", null, null);
-        shop.addCategory(shopFactory.createCategory(shop, "零食"));
-        shopRepository.save(shop);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shop = shopFactory.createShop("店铺", null, null);
+            shop.addCategory(shopFactory.createCategory(shop, "零食"));
+            shopRepository.save(shop);
 
-        final int deleted = tx.execute(status -> shopRepository.deleteByID(shop.getId()));
-        assertThat(deleted).isEqualTo(1);
-        assertThat(shopJpaRepository.existsById(shop.getId())).isFalse();
-        assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shop.getId())).isEmpty();
+            final int deleted = tx.execute(status -> shopRepository.deleteByID(shop.getId()));
+            assertThat(deleted).isEqualTo(1);
+            assertThat(shopJpaRepository.existsById(shop.getId())).isFalse();
+            assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shop.getId())).isEmpty();
 
-        final int deletedAgain = tx.execute(status -> shopRepository.deleteByID(shop.getId()));
-        assertThat(deletedAgain).isZero();
-    }
+            final int deletedAgain = tx.execute(status -> shopRepository.deleteByID(shop.getId()));
+            assertThat(deletedAgain).isZero();
+    
+        });
+}
 
     /**
      * 隔离：B 店铺租户上下文加载 A 店铺 → 主表（global）可见，但从表分类
@@ -255,18 +260,24 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("跨店铺加载分类不可见（fail-closed）")
     void loadForeignShop_categoriesInvisible() {
-        final Shop shopA = shopFactory.createShop("店铺A", null, null);
-        final ShopCategory categoryA = shopFactory.createCategory(shopA, "A店分类");
-        shopA.addCategory(categoryA);
-        shopRepository.save(shopA);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shopA = shopFactory.createShop("店铺A", null, null);
+            final ShopCategory categoryA = shopFactory.createCategory(shopA, "A店分类");
+            shopA.addCategory(categoryA);
+            shopRepository.save(shopA);
 
-        threadContext.setTenantID(TENANT_B);
-        final Shop loadedAsB = shopRepository.getByID(shopA.getId());
-        assertThat(loadedAsB).isNotNull();
-        assertThat(loadedAsB.getName()).isEqualTo("店铺A");
-        assertThat(loadedAsB.categoryCount()).isZero();
-        assertThat(loadedAsB.getCategoryById(categoryA.getId())).isEmpty();
-    }
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                final Shop loadedAsB = shopRepository.getByID(shopA.getId());
+                assertThat(loadedAsB).isNotNull();
+                assertThat(loadedAsB.getName()).isEqualTo("店铺A");
+                assertThat(loadedAsB.categoryCount()).isZero();
+                assertThat(loadedAsB.getCategoryById(categoryA.getId())).isEmpty();
+    
+            });
+        });
+}
 
     /**
      * 归属：B 店铺租户上下文新增分类落库为 B 店归属（tenant 列=B），
@@ -275,17 +286,25 @@ class ShopRepositoryIntegrationTest {
     @Test
     @DisplayName("分类归属写入当前店铺租户")
     void addCategoryUnderTenantB_writesTenantB() {
-        final Shop shopB = shopFactory.createShop("店铺B", null, null);
-        threadContext.setTenantID(TENANT_B);
-        final ShopCategory categoryB = shopFactory.createCategory(shopB, "B店分类");
-        shopB.addCategory(categoryB);
-        shopRepository.save(shopB);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Shop shopB = shopFactory.createShop("店铺B", null, null);
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                final ShopCategory categoryB = shopFactory.createCategory(shopB, "B店分类");
+                shopB.addCategory(categoryB);
+                shopRepository.save(shopB);
 
-        final ShopCategoryPO saved = shopCategoryJpaRepository.findById(categoryB.getId()).orElseThrow();
-        assertThat(saved.getTenantID()).isEqualTo(TENANT_B);
+                final ShopCategoryPO saved = shopCategoryJpaRepository.findById(categoryB.getId()).orElseThrow();
+                assertThat(saved.getTenantID()).isEqualTo(TENANT_B);
 
-        threadContext.setTenantID(TENANT_A);
-        assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shopB.getId())).isEmpty();
-        assertThat(shopCategoryJpaRepository.findById(categoryB.getId())).isEmpty();
-    }
+                TrackingContext.withScope(() -> {
+                    TrackingContext.scope().setTenantID(TENANT_A);
+                    assertThat(shopCategoryJpaRepository.findByShopIdOrderByOrderNoAscIdAsc(shopB.getId())).isEmpty();
+                    assertThat(shopCategoryJpaRepository.findById(categoryB.getId())).isEmpty();
+    
+                });
+            });
+        });
+}
 }

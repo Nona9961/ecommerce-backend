@@ -9,7 +9,7 @@ import com.nona.api.seller.ShopInfoRequest;
 import com.nona.application.seller.ShopUseCase;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 商家端店铺 REST 控制器（/seller/shop…，SELLER 角色）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托 {@link ShopUseCase}，不承载业务逻辑；
- * 当前店铺 ID 从 {@link ThreadContext} 租户字段取（认证过滤器已将账号关联的
+ * 当前店铺 ID 从跟踪上下文 租户字段取（认证过滤器已将账号关联的
  * 当前店铺写入请求租户，不来自请求体——商家只能操作自己的店铺）。
  *
  * @author nona9961
@@ -39,7 +39,7 @@ public class ShopController implements ShopApi {
     /**
      * 请求上下文（取当前店铺 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造店铺控制器。
@@ -47,9 +47,9 @@ public class ShopController implements ShopApi {
      * @param shopUseCase    店铺用例
      * @param threadContext  请求上下文
      */
-    public ShopController(ShopUseCase shopUseCase, ThreadContext threadContext) {
+    public ShopController(ShopUseCase shopUseCase, TenantContextAccessor tenantContextAccessor) {
         this.shopUseCase = shopUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -100,12 +100,12 @@ public class ShopController implements ShopApi {
     }
 
     /**
-     * 当前店铺 ID（认证过滤器写入 ThreadContext.tenantID 的租户值=当前店铺 ID）。
+     * 当前店铺 ID（认证过滤器写入跟踪作用域 tenantID 的租户值=当前店铺 ID）。
      *
      * @return 店铺 ID
      */
     private Long currentShopId() {
-        final String tenantId = threadContext.getTenantID();
+        final String tenantId = tenantContextAccessor.getTenantID();
         if (tenantId == null) {
             throw new BusinessException(EcommerceBusinessCode.CATALOG_SHOP_NOT_FOUND.code(),
                     "店铺不存在", 404);

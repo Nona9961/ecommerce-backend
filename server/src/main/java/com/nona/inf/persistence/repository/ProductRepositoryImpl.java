@@ -13,7 +13,6 @@ import com.nona.domain.catalog.entity.ProductShopCategoryRef;
 import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.repo.ProductRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.ProductAttributeConvertor;
 import com.nona.inf.persistence.converters.ProductChildPos;
@@ -148,7 +147,6 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * 构造商品仓储。
      *
      * @param repository             商品主表 JPA 仓储
-     * @param threadContext          请求级上下文（变更追踪器与快照）
      * @param convertor              商品聚合转换器（主表 + 从表行集合）
      * @param changeTrackerProvider  变更追踪器提供者
      * @param imageJpaRepository     图片子表 JPA 仓储
@@ -160,7 +158,6 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      * @param editVersionJpaRepository 编辑版本子表 JPA 仓储（级联清理）
      */
     public ProductRepositoryImpl(ProductJpaRepository repository,
-                                 ThreadContext threadContext,
                                  ProductConvertor convertor,
                                  ChangeTrackerProvider changeTrackerProvider,
                                  ProductImageJpaRepository imageJpaRepository,
@@ -173,7 +170,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
                                  ProductShopCategoryRelConvertor shopCategoryRefConvertor,
                                  ProductEditVersionJpaRepository editVersionJpaRepository,
                                  TenantPrivilege tenantPrivilege) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.productJpaRepository = repository;
         this.imageJpaRepository = imageJpaRepository;
         this.attributeJpaRepository = attributeJpaRepository;

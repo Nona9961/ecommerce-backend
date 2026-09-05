@@ -30,7 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 认证链路集成测试：JWT 过滤器 + Spring Security 路由 + 用户上下文缓存/DB 回填。
  * <p>
  * 无真实 Redis（缓存以 mock 替代）、无真实账号表（DB SPI 以内存实现替代），
- * 覆盖：缓存命中组装 ThreadContext、miss 走 DB 回填、封禁 403、
+ * 覆盖：缓存命中组装跟踪作用域、miss 走 DB 回填、封禁 403、
  * 角色路由 401/403、token 过期/篡改 401、公开路径放行。
  */
 @SpringBootTest(properties = "management.health.redis.enabled=false")
@@ -137,10 +137,10 @@ class AuthChainIntegrationTest {
     }
 
     /**
-     * 缓存命中：直接组装 ThreadContext，不再查询 DB，也不回填缓存。
+     * 缓存命中：直接组装跟踪作用域，不再查询 DB，也不回填缓存。
      */
     @Test
-    void cacheHit_assemblesThreadContext_withoutDbQuery() throws Exception {
+    void cacheHit_assemblesTrackingScope_withoutDbQuery() throws Exception {
         when(authUserCache.get(CACHED_BUYER_UID)).thenReturn(Optional.of(active(List.of("BUYER"))));
         final String token = tokenProvider.issueToken(CACHED_BUYER_UID, Portal.MALL);
 
@@ -155,7 +155,7 @@ class AuthChainIntegrationTest {
     }
 
     /**
-     * 缓存 miss：走 DB（SPI）查询并回填缓存，ThreadContext 正常组装。
+     * 缓存 miss：走 DB（SPI）查询并回填缓存，跟踪作用域正常组装。
      */
     @Test
     void cacheMiss_loadsDbAndBackfillsCache() throws Exception {

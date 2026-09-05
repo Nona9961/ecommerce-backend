@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 商家入驻申请用例：提交 / 查看 / 编辑 / 重提编排（商家端，事务边界所在）。
  * <p>
- * 商家身份由认证上下文提供（controller 从 ThreadContext 取当前账号 ID 传入），
+ * 商家身份由认证上下文提供（controller 从跟踪上下文取当前账号 ID 传入），
  * 本用例不感知 token 机制。写入路径（提交/编辑/重提）统一先取账号写锁
  * （{@link MerchantApplicationRepository#lockAccount}）——串行化同一账号的
  * 申请写事务，one-pending 唯一性在并发窗口下也能收敛；随后加载/创建聚合、

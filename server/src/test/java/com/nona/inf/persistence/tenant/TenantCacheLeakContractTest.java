@@ -1,20 +1,16 @@
 package com.nona.inf.persistence.tenant;
 
-import com.nona.annotation.ScaffoldGenerated;
 import com.nona.EcommerceApplication;
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.inf.context.TenantPrivilege;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.jpa.TestTenantNoteRepository;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 再失效缓存）；过滤恢复后同事务内 {@code findById} 必须重新发 SQL、受 filter 约束 → 异租户 id 必须为空。
  * <p>
  * 三变体分别钉住三条放行读路径：A = 注解 findById、B = 注解 findAll、C = 提权读。
+ * <p>
+ * 上下文制造形态：租户身份经 {@link TrackingContext#withScope} + holder 写入
+ * （单级解析主通路），不再依赖请求作用域 bean。
  *
  * @author nona9961
  */
@@ -40,9 +39,6 @@ class TenantCacheLeakContractTest {
 
     @Autowired
     private TestTenantNoteRepository tenantNoteRepository;
-
-    @Autowired
-    private ThreadContext threadContext;
 
     @Autowired
     private ElevatedTenantTestService elevatedTenantTestService;
@@ -57,15 +53,8 @@ class TenantCacheLeakContractTest {
     private PlatformTransactionManager transactionManager;
 
     @BeforeEach
-    void setUpRequestScope() {
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    void setUp() {
         elevatedTenantTestService.deleteAllNotes();
-    }
-
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -89,24 +78,26 @@ class TenantCacheLeakContractTest {
      */
     @Test
     void bypassAnnotatedFindByIdThenRestoredFindByIdShouldBeEmpty() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 201L, "note-a");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 211L, "note-b");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 201L, "note-a");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 211L, "note-b");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
-            assertThat(tenantNoteRepository.findById(211L)).isEmpty();
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
+                assertThat(tenantNoteRepository.findById(211L)).isEmpty();
 
-            // 放行读：拿到 tenant-B 实体（既定行为）→ 实体进入一级缓存
-            TestTenantNotePO foreign = crossTenantTestService.getNote(211L);
-            assertThat(foreign).isNotNull();
-            assertThat(foreign.getTenantID()).isEqualTo("tenant-B");
+                // 放行读：拿到 tenant-B 实体（既定行为）→ 实体进入一级缓存
+                TestTenantNotePO foreign = crossTenantTestService.getNote(211L);
+                assertThat(foreign).isNotNull();
+                assertThat(foreign.getTenantID()).isEqualTo("tenant-B");
 
-            // 恢复过滤后 findById：契约 = 为空（命中缓存返回异租户实体即违约）
-            Optional<TestTenantNotePO> after = tenantNoteRepository.findById(211L);
-            assertThat(after)
-                    .as("contract(A): level-1 cache must not retain foreign-tenant entity after scope exit")
-                    .isEmpty();
+                // 恢复过滤后 findById：契约 = 为空（命中缓存返回异租户实体即违约）
+                Optional<TestTenantNotePO> after = tenantNoteRepository.findById(211L);
+                assertThat(after)
+                        .as("contract(A): level-1 cache must not retain foreign-tenant entity after scope exit")
+                        .isEmpty();
+            });
         });
     }
 
@@ -116,22 +107,24 @@ class TenantCacheLeakContractTest {
      */
     @Test
     void bypassAnnotatedFindAllThenRestoredFindByIdShouldBeEmpty() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 202L, "note-a2");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 212L, "note-b2");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 202L, "note-a2");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 212L, "note-b2");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            // 放行全量读：全租户可见（既定行为）→ 异租户实体进入一级缓存
-            List<TestTenantNotePO> all = crossTenantTestService.listAllNotes();
-            assertThat(all).hasSize(2);
+                // 放行全量读：全租户可见（既定行为）→ 异租户实体进入一级缓存
+                List<TestTenantNotePO> all = crossTenantTestService.listAllNotes();
+                assertThat(all).hasSize(2);
 
-            // 恢复过滤后 findById 已缓存的异租户 id
-            Optional<TestTenantNotePO> after = tenantNoteRepository.findById(212L);
-            assertThat(after)
-                    .as("contract(B): level-1 cache must not retain foreign-tenant entity after scope exit")
-                    .isEmpty();
+                // 恢复过滤后 findById 已缓存的异租户 id
+                Optional<TestTenantNotePO> after = tenantNoteRepository.findById(212L);
+                assertThat(after)
+                        .as("contract(B): level-1 cache must not retain foreign-tenant entity after scope exit")
+                        .isEmpty();
+            });
         });
     }
 
@@ -141,22 +134,24 @@ class TenantCacheLeakContractTest {
      */
     @Test
     void elevatedReadThenRestoredFindByIdShouldBeEmpty() throws Exception {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 203L, "note-a3");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 213L, "note-b3");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 203L, "note-a3");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 213L, "note-b3");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            // 提权放行读（作用域内直接走 repository，提权模态同样读入异租户实体）
-            List<TestTenantNotePO> all = elevateWrap(
-                    () -> tenantNoteRepository.findAll());
-            assertThat(all).hasSize(2);
+                // 提权放行读（作用域内直接走 repository，提权模态同样读入异租户实体）
+                List<TestTenantNotePO> all = elevateWrap(
+                        () -> tenantNoteRepository.findAll());
+                assertThat(all).hasSize(2);
 
-            Optional<TestTenantNotePO> after = tenantNoteRepository.findById(213L);
-            assertThat(after)
-                    .as("contract(C): level-1 cache must not retain foreign-tenant entity after scope exit")
-                    .isEmpty();
+                Optional<TestTenantNotePO> after = tenantNoteRepository.findById(213L);
+                assertThat(after)
+                        .as("contract(C): level-1 cache must not retain foreign-tenant entity after scope exit")
+                        .isEmpty();
+            });
         });
     }
 }

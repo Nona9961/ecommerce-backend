@@ -6,8 +6,8 @@ import com.nona.domain.inventory.factory.InventoryItemFactory;
 import com.nona.domain.inventory.ports.InventoryEventPublisher;
 import com.nona.domain.inventory.ports.RestockEvent;
 import com.nona.domain.inventory.ports.SelloutEvent;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.InventoryItemRepositoryImpl;
@@ -23,11 +23,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -121,11 +118,6 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -142,17 +134,6 @@ class InventoryUseCaseAdjustIntegrationTest {
             inventoryLogJpaRepository.deleteAll();
             inventoryItemJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -163,35 +144,39 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("增可售成功：三态推进且流水带符号落库")
     void adjustStock_increasesAvailable_keepsHeldAndLogs() {
-        final InventoryItem item = seededItem(10);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItem(10);
 
-        final InventoryItem after = inventoryUseCase.adjustStock(
-                SHOP_A, SKU, 5, "seller-1", "补货入库");
+            final InventoryItem after = inventoryUseCase.adjustStock(
+                    SHOP_A, SKU, 5, "seller-1", "补货入库");
 
-        assertThat(after.getAvailable()).isEqualTo(15);
-        assertThat(after.getHeld()).isZero();
-        assertThat(after.getSold()).isZero();
-        assertThat(after.getVersion()).isEqualTo(2);
+            assertThat(after.getAvailable()).isEqualTo(15);
+            assertThat(after.getHeld()).isZero();
+            assertThat(after.getSold()).isZero();
+            assertThat(after.getVersion()).isEqualTo(2);
 
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isEqualTo(15);
-        assertThat(po.getHeld()).isZero();
-        assertThat(po.getSold()).isZero();
-        assertThat(po.getVersion()).isEqualTo(2);
+            final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+            assertThat(po.getAvailable()).isEqualTo(15);
+            assertThat(po.getHeld()).isZero();
+            assertThat(po.getSold()).isZero();
+            assertThat(po.getVersion()).isEqualTo(2);
 
-        final InventoryLogPO log = latestAdjustLog();
-        assertThat(log.getType()).isEqualTo(InventoryLogType.MANUAL_ADJUST);
-        assertThat(log.getDelta()).isEqualTo(5);
-        assertThat(log.getOrderId()).isNull();
-        assertThat(log.getOperator()).isEqualTo("seller-1");
-        assertThat(log.getReason()).isEqualTo("补货入库");
-        assertThat(log.getBeforeAvailable()).isEqualTo(10);
-        assertThat(log.getBeforeHeld()).isZero();
-        assertThat(log.getBeforeSold()).isZero();
-        assertThat(log.getAfterAvailable()).isEqualTo(15);
-        assertThat(log.getAfterHeld()).isZero();
-        assertThat(log.getAfterSold()).isZero();
-    }
+            final InventoryLogPO log = latestAdjustLog();
+            assertThat(log.getType()).isEqualTo(InventoryLogType.MANUAL_ADJUST);
+            assertThat(log.getDelta()).isEqualTo(5);
+            assertThat(log.getOrderId()).isNull();
+            assertThat(log.getOperator()).isEqualTo("seller-1");
+            assertThat(log.getReason()).isEqualTo("补货入库");
+            assertThat(log.getBeforeAvailable()).isEqualTo(10);
+            assertThat(log.getBeforeHeld()).isZero();
+            assertThat(log.getBeforeSold()).isZero();
+            assertThat(log.getAfterAvailable()).isEqualTo(15);
+            assertThat(log.getAfterHeld()).isZero();
+            assertThat(log.getAfterSold()).isZero();
+    
+        });
+}
 
     /**
      * happy：减可售调整成功——delta 带符号（负）落库，可售减少。
@@ -199,23 +184,27 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("减可售成功：负 delta 落库且流水快照正确")
     void adjustStock_decreasesAvailable_withNegativeDelta() {
-        final InventoryItem item = seededItem(10);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItem(10);
 
-        final InventoryItem after = inventoryUseCase.adjustStock(
-                SHOP_A, SKU, -3, "seller-2", "盘点扣减");
+            final InventoryItem after = inventoryUseCase.adjustStock(
+                    SHOP_A, SKU, -3, "seller-2", "盘点扣减");
 
-        assertThat(after.getAvailable()).isEqualTo(7);
-        assertThat(after.getVersion()).isEqualTo(2);
+            assertThat(after.getAvailable()).isEqualTo(7);
+            assertThat(after.getVersion()).isEqualTo(2);
 
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isEqualTo(7);
+            final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+            assertThat(po.getAvailable()).isEqualTo(7);
 
-        final InventoryLogPO log = latestAdjustLog();
-        assertThat(log.getDelta()).isEqualTo(-3);
-        assertThat(log.getBeforeAvailable()).isEqualTo(10);
-        assertThat(log.getAfterAvailable()).isEqualTo(7);
-        assertThat(log.getOperator()).isEqualTo("seller-2");
-    }
+            final InventoryLogPO log = latestAdjustLog();
+            assertThat(log.getDelta()).isEqualTo(-3);
+            assertThat(log.getBeforeAvailable()).isEqualTo(10);
+            assertThat(log.getAfterAvailable()).isEqualTo(7);
+            assertThat(log.getOperator()).isEqualTo("seller-2");
+    
+        });
+}
 
     /**
      * critical：调整致可售恰归零（available=0 且 held=0）——售罄事件
@@ -224,17 +213,21 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("调整致可售恰归零：售罄事件发布恰好一次")
     void adjustStock_exactZero_publishesSelloutOnce() {
-        seededItem(5);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            seededItem(5);
 
-        inventoryUseCase.adjustStock(SHOP_A, SKU, -5, "seller-1", "清仓");
+            inventoryUseCase.adjustStock(SHOP_A, SKU, -5, "seller-1", "清仓");
 
-        final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
-        verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
-        assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
-        assertThat(sellout.getValue().getType()).isEqualTo(SelloutEvent.TYPE);
-        assertThat(sellout.getValue().timestamp()).isNotNull();
-        verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
-    }
+            final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
+            verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
+            assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
+            assertThat(sellout.getValue().getType()).isEqualTo(SelloutEvent.TYPE);
+            assertThat(sellout.getValue().timestamp()).isNotNull();
+            verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
+    
+        });
+}
 
     /**
      * critical：可售归零但 held>0（在途预占未清）——非售罄态，不发布
@@ -243,28 +236,32 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("held大于零时可售归零不触发售罄且预占不动")
     void adjustStock_zeroAvailableWithHeldPositive_noEvent_heldUntouched() {
-        final InventoryItem item = seededItemWithHeld(2, 4);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItemWithHeld(2, 4);
 
-        final InventoryItem after = inventoryUseCase.adjustStock(
-                SHOP_A, SKU, -2, "seller-1", "减可售至零");
+            final InventoryItem after = inventoryUseCase.adjustStock(
+                    SHOP_A, SKU, -2, "seller-1", "减可售至零");
 
-        assertThat(after.getAvailable()).isZero();
-        assertThat(after.getHeld()).isEqualTo(4);
-        assertThat(after.getSold()).isZero();
-        assertThat(after.getVersion()).isEqualTo(3);
+            assertThat(after.getAvailable()).isZero();
+            assertThat(after.getHeld()).isEqualTo(4);
+            assertThat(after.getSold()).isZero();
+            assertThat(after.getVersion()).isEqualTo(3);
 
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isZero();
-        assertThat(po.getHeld()).isEqualTo(4);
-        assertThat(po.getVersion()).isEqualTo(3);
+            final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+            assertThat(po.getAvailable()).isZero();
+            assertThat(po.getHeld()).isEqualTo(4);
+            assertThat(po.getVersion()).isEqualTo(3);
 
-        final InventoryLogPO log = latestAdjustLog();
-        assertThat(log.getBeforeHeld()).isEqualTo(4);
-        assertThat(log.getAfterHeld()).isEqualTo(4);
-        assertThat(log.getDelta()).isEqualTo(-2);
+            final InventoryLogPO log = latestAdjustLog();
+            assertThat(log.getBeforeHeld()).isEqualTo(4);
+            assertThat(log.getAfterHeld()).isEqualTo(4);
+            assertThat(log.getDelta()).isEqualTo(-2);
 
-        verifyNoInteractions(inventoryEventPublisher);
-    }
+            verifyNoInteractions(inventoryEventPublisher);
+    
+        });
+}
 
     /**
      * critical：可售恢复——此前已售罄（available=0 且 held=0）经调整
@@ -273,17 +270,21 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("售罄后调整恢复可售：发布恢复事件")
     void adjustStock_restoreFromSellout_publishesRestock() {
-        seededItem(3);
-        inventoryUseCase.adjustStock(SHOP_A, SKU, -3, "seller-1", "售罄");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            seededItem(3);
+            inventoryUseCase.adjustStock(SHOP_A, SKU, -3, "seller-1", "售罄");
 
-        inventoryUseCase.adjustStock(SHOP_A, SKU, 5, "seller-1", "补货上架");
+            inventoryUseCase.adjustStock(SHOP_A, SKU, 5, "seller-1", "补货上架");
 
-        final ArgumentCaptor<RestockEvent> restock = ArgumentCaptor.forClass(RestockEvent.class);
-        verify(inventoryEventPublisher, times(1)).publishRestock(restock.capture());
-        assertThat(restock.getValue().getPayload().skuId()).isEqualTo(SKU);
-        assertThat(restock.getValue().getType()).isEqualTo(RestockEvent.TYPE);
-        verify(inventoryEventPublisher, times(1)).publishSellout(org.mockito.ArgumentMatchers.any());
-    }
+            final ArgumentCaptor<RestockEvent> restock = ArgumentCaptor.forClass(RestockEvent.class);
+            verify(inventoryEventPublisher, times(1)).publishRestock(restock.capture());
+            assertThat(restock.getValue().getPayload().skuId()).isEqualTo(SKU);
+            assertThat(restock.getValue().getType()).isEqualTo(RestockEvent.TYPE);
+            verify(inventoryEventPublisher, times(1)).publishSellout(org.mockito.ArgumentMatchers.any());
+    
+        });
+}
 
     /**
      * error：调整致负拒绝——调整后可售为负时业务异常拒绝（库存不足
@@ -293,20 +294,24 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("调整致负被拒绝且不动库存不产流水")
     void adjustStock_negativeRejected_noStateNoLog() {
-        final InventoryItem item = seededItem(3);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItem(3);
 
-        assertThatThrownBy(() -> inventoryUseCase.adjustStock(SHOP_A, SKU, -5, "seller-1", "扣减"))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getBusinessCode())
-                .isEqualTo(EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code());
+            assertThatThrownBy(() -> inventoryUseCase.adjustStock(SHOP_A, SKU, -5, "seller-1", "扣减"))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getBusinessCode())
+                    .isEqualTo(EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code());
 
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isEqualTo(3);
-        assertThat(po.getHeld()).isZero();
-        assertThat(po.getVersion()).isEqualTo(1);
-        assertThat(adjustLogs()).hasSize(0);
-        verifyNoInteractions(inventoryEventPublisher);
-    }
+            final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+            assertThat(po.getAvailable()).isEqualTo(3);
+            assertThat(po.getHeld()).isZero();
+            assertThat(po.getVersion()).isEqualTo(1);
+            assertThat(adjustLogs()).hasSize(0);
+            verifyNoInteractions(inventoryEventPublisher);
+    
+        });
+}
 
     /**
      * error：跨店铺调整不可见——店铺 B 的请求上下文对店铺 A 的 SKU
@@ -315,20 +320,28 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("跨店铺调整按不存在拒绝且行内容不变")
     void adjustStock_crossTenant_notFound() {
-        final InventoryItem item = seededItem(10);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItem(10);
 
-        threadContext.setTenantID(TENANT_B);
-        assertThatThrownBy(() -> inventoryUseCase.adjustStock(9602L, SKU, 1, "seller-2", null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getBusinessCode())
-                .isEqualTo(EcommerceBusinessCode.INVENTORY_NOT_FOUND.code());
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                assertThatThrownBy(() -> inventoryUseCase.adjustStock(9602L, SKU, 1, "seller-2", null))
+                        .isInstanceOf(BusinessException.class)
+                        .extracting(e -> ((BusinessException) e).getBusinessCode())
+                        .isEqualTo(EcommerceBusinessCode.INVENTORY_NOT_FOUND.code());
 
-        threadContext.setTenantID(TENANT_A);
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isEqualTo(10);
-        assertThat(po.getVersion()).isEqualTo(1);
-        assertThat(adjustLogs()).hasSize(0);
-    }
+                TrackingContext.withScope(() -> {
+                    TrackingContext.scope().setTenantID(TENANT_A);
+                    final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+                    assertThat(po.getAvailable()).isEqualTo(10);
+                    assertThat(po.getVersion()).isEqualTo(1);
+                    assertThat(adjustLogs()).hasSize(0);
+    
+                });
+            });
+        });
+}
 
     /**
      * error：缺操作人拒绝——调整是审计追踪语义，认证身份缺失（操作
@@ -337,15 +350,19 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("缺操作人的调整被拒绝")
     void adjustStock_missingOperator_rejected() {
-        seededItem(10);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            seededItem(10);
 
-        assertThatThrownBy(() -> inventoryUseCase.adjustStock(SHOP_A, SKU, 1, null, null))
-                .isInstanceOf(BusinessException.class)
-                .extracting(e -> ((BusinessException) e).getBusinessCode())
-                .isEqualTo(EcommerceBusinessCode.INVENTORY_LOG_INVALID.code());
+            assertThatThrownBy(() -> inventoryUseCase.adjustStock(SHOP_A, SKU, 1, null, null))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getBusinessCode())
+                    .isEqualTo(EcommerceBusinessCode.INVENTORY_LOG_INVALID.code());
 
-        assertThat(adjustLogs()).hasSize(0);
-    }
+            assertThat(adjustLogs()).hasSize(0);
+    
+        });
+}
 
     /**
      * error：并发调整防负——两线程同时对同一库存减可售（初始可售不
@@ -356,58 +373,62 @@ class InventoryUseCaseAdjustIntegrationTest {
     @Test
     @DisplayName("并发减可售恰一笔成功且不出现负值")
     void adjustStock_concurrentDecrease_singleSuccess() throws Exception {
-        final InventoryItem item = seededItem(10);
-        final java.util.concurrent.CountDownLatch startLatch =
-                new java.util.concurrent.CountDownLatch(1);
-        final java.util.concurrent.atomic.AtomicInteger success =
-                new java.util.concurrent.atomic.AtomicInteger();
-        final java.util.concurrent.atomic.AtomicInteger insufficient =
-                new java.util.concurrent.atomic.AtomicInteger();
-        final java.util.concurrent.atomic.AtomicInteger unexpected =
-                new java.util.concurrent.atomic.AtomicInteger();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryItem item = seededItem(10);
+            final java.util.concurrent.CountDownLatch startLatch =
+                    new java.util.concurrent.CountDownLatch(1);
+            final java.util.concurrent.atomic.AtomicInteger success =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            final java.util.concurrent.atomic.AtomicInteger insufficient =
+                    new java.util.concurrent.atomic.AtomicInteger();
+            final java.util.concurrent.atomic.AtomicInteger unexpected =
+                    new java.util.concurrent.atomic.AtomicInteger();
 
-        final List<Thread> workers = new java.util.ArrayList<>(2);
-        for (int i = 0; i < 2; i++) {
-            final Thread worker = Thread.ofVirtual().name("adjust-worker-" + i).start(() -> {
-                try {
-                    startLatch.await();
-                    RequestContextHolder.setRequestAttributes(
-                            new ServletRequestAttributes(new MockHttpServletRequest()));
+            final List<Thread> workers = new java.util.ArrayList<>(2);
+            for (int i = 0; i < 2; i++) {
+                final Thread worker = Thread.ofVirtual().name("adjust-worker-" + i).start(() -> {
                     try {
-                        threadContext.setTenantID(TENANT_A);
-                        inventoryUseCase.adjustStock(SHOP_A, SKU, -6, "seller-1", "并发扣减");
-                        success.incrementAndGet();
-                    } finally {
-                        RequestContextHolder.resetRequestAttributes();
+                        startLatch.await();
+                        TrackingContext.withScope(() -> {
+                            TrackingContext.scope().setTenantID(TENANT_A);
+                            inventoryUseCase.adjustStock(SHOP_A, SKU, -6, "seller-1", "并发扣减");
+                            success.incrementAndGet();
+                        });
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        unexpected.incrementAndGet();
+                    } catch (final BusinessException e) {
+                        if (EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code().equals(e.getBusinessCode())) {
+                            insufficient.incrementAndGet();
+                        } else {
+                            unexpected.incrementAndGet();
+                        }
+                    } catch (final Throwable t) {
+                        unexpected.incrementAndGet();
                     }
+                });
+                workers.add(worker);
+            }
+            startLatch.countDown();
+            for (final Thread worker : workers) {
+                try {
+                    worker.join(60_000);
                 } catch (final InterruptedException e) {
                     Thread.currentThread().interrupt();
                     unexpected.incrementAndGet();
-                } catch (final BusinessException e) {
-                    if (EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code().equals(e.getBusinessCode())) {
-                        insufficient.incrementAndGet();
-                    } else {
-                        unexpected.incrementAndGet();
-                    }
-                } catch (final Throwable t) {
-                    unexpected.incrementAndGet();
                 }
-            });
-            workers.add(worker);
-        }
-        startLatch.countDown();
-        for (final Thread worker : workers) {
-            worker.join(60_000);
-        }
+            }
 
-        assertThat(success).hasValue(1);
-        assertThat(insufficient).hasValue(1);
-        assertThat(unexpected).hasValue(0);
-        final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
-        assertThat(po.getAvailable()).isEqualTo(4);
-        assertThat(po.getHeld()).isZero();
-        assertThat(po.getVersion()).isEqualTo(2);
-        assertThat(adjustLogs()).hasSize(1);
+            assertThat(success).hasValue(1);
+            assertThat(insufficient).hasValue(1);
+            assertThat(unexpected).hasValue(0);
+            final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
+            assertThat(po.getAvailable()).isEqualTo(4);
+            assertThat(po.getHeld()).isZero();
+            assertThat(po.getVersion()).isEqualTo(2);
+            assertThat(adjustLogs()).hasSize(1);
+        });
     }
 
     /**

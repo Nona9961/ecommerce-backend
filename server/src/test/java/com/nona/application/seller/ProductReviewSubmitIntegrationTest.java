@@ -25,8 +25,8 @@ import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.BrandPO;
 import com.nona.inf.persistence.po.catalog.PlatformCategoryPO;
 import com.nona.inf.persistence.repository.jpa.BrandJpaRepository;
@@ -44,10 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -165,11 +162,6 @@ class ProductReviewSubmitIntegrationTest {
     @Autowired
     private BrandJpaRepository brandJpaRepository;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺、身份=操作人）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理）
@@ -200,19 +192,6 @@ class ProductReviewSubmitIntegrationTest {
         brandJpaRepository.deleteAll();
         categoryJpaRepository.save(categoryPo(CATEGORY_ENABLED));
         brandJpaRepository.save(brandPo(BRAND_ENABLED));
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(String.valueOf(SHOP_A));
-        threadContext.setIdentity(OPERATOR_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户/身份上下文。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        threadContext.setIdentity(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     // ---- Happy path ----
@@ -223,14 +202,19 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("完整草稿用例提交转待审核")
     void submit_completeDraft_pendingReview() {
-        final long productId = buildCompleteDraftViaUseCase();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = buildCompleteDraftViaUseCase();
 
-        final ProductDetail detail = productUseCase.submitForReview(productId);
+            final ProductDetail detail = productUseCase.submitForReview(productId);
 
-        assertThat(detail.status()).isEqualTo(ProductStatus.PENDING_REVIEW.name());
-        assertThat(productJpaRepository.findById(productId).orElseThrow().getStatus())
-                .isEqualTo(ProductStatus.PENDING_REVIEW);
-    }
+            assertThat(detail.status()).isEqualTo(ProductStatus.PENDING_REVIEW.name());
+            assertThat(productJpaRepository.findById(productId).orElseThrow().getStatus())
+                    .isEqualTo(ProductStatus.PENDING_REVIEW);
+    
+        });
+}
 
     /**
      * happy：展示字段编辑（自定义属性改值）在售直改——状态不变 + 编辑版本
@@ -239,21 +223,26 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("在售展示字段编辑直改生效且留痕")
     void attributeEdit_onSale_directEffective() {
-        final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
-        final long attributeId = productRepository.getByID(productId)
-                .attributesOrdered().get(0).getId();
-        final long versionCountBefore = editVersionJpaRepository.countByProductId(productId);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
+            final long attributeId = productRepository.getByID(productId)
+                    .attributesOrdered().get(0).getId();
+            final long versionCountBefore = editVersionJpaRepository.countByProductId(productId);
 
-        final ProductAttributeItem item = productUseCase.updateAttribute(
-                productId, attributeId, new ProductAttributeRequest("材质", "新棉"));
+            final ProductAttributeItem item = productUseCase.updateAttribute(
+                    productId, attributeId, new ProductAttributeRequest("材质", "新棉"));
 
-        assertThat(productRepository.getByID(productId).getStatus())
-                .isEqualTo(ProductStatus.ON_SALE);
-        assertThat(productRepository.getByID(productId)
-                .getAttributeById(attributeId).orElseThrow().getValue()).isEqualTo("新棉");
-        assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(versionCountBefore + 1);
-        assertThat(item.id()).isEqualTo(attributeId);
-    }
+            assertThat(productRepository.getByID(productId).getStatus())
+                    .isEqualTo(ProductStatus.ON_SALE);
+            assertThat(productRepository.getByID(productId)
+                    .getAttributeById(attributeId).orElseThrow().getValue()).isEqualTo("新棉");
+            assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(versionCountBefore + 1);
+            assertThat(item.id()).isEqualTo(attributeId);
+    
+        });
+}
 
     // ---- Critical path ----
 
@@ -264,19 +253,24 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("缺类目品牌草稿提交拒绝")
     void submit_incomplete_rejected() {
-        final ProductDetail draft = productUseCase.createDraft(SHOP_A,
-                new ProductDraftRequest("不完整商品", "描述", null, null));
-        final List<SkuItem> skus = productUseCase.configureSpecTemplate(draft.id(),
-                new SpecTemplateRequest(List.of(new SpecDimensionRequest("颜色", List.of("黑")))));
-        productUseCase.updateSkuPrice(draft.id(), skus.get(0).id(), new SkuPriceRequest(1999L));
-        productUseCase.setSkuEnabled(draft.id(), skus.get(0).id(), new SkuEnabledRequest(true));
-        productUseCase.addImage(draft.id(), new ProductImageRequest("/files/a.png", true));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final ProductDetail draft = productUseCase.createDraft(SHOP_A,
+                    new ProductDraftRequest("不完整商品", "描述", null, null));
+            final List<SkuItem> skus = productUseCase.configureSpecTemplate(draft.id(),
+                    new SpecTemplateRequest(List.of(new SpecDimensionRequest("颜色", List.of("黑")))));
+            productUseCase.updateSkuPrice(draft.id(), skus.get(0).id(), new SkuPriceRequest(1999L));
+            productUseCase.setSkuEnabled(draft.id(), skus.get(0).id(), new SkuEnabledRequest(true));
+            productUseCase.addImage(draft.id(), new ProductImageRequest("/files/a.png", true));
 
-        assertThatThrownBy(() -> productUseCase.submitForReview(draft.id()))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
-                        .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_CATEGORY_REQUIRED.code()));
-    }
+            assertThatThrownBy(() -> productUseCase.submitForReview(draft.id()))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_CATEGORY_REQUIRED.code()));
+    
+        });
+}
 
     /**
      * critical：在售商品敏感字段编辑（改价）→ 转待审核且生效内容保持旧价
@@ -285,21 +279,26 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("在售改价转待审且生效内容保持旧价")
     void priceEdit_onSale_sensitiveRouting() {
-        final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
-        final Product before = productRepository.getByID(productId);
-        final Long skuId = before.skusOrdered().get(0).getId();
-        final long oldPrice = before.getSkuById(skuId).orElseThrow().getPrice();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
+            final Product before = productRepository.getByID(productId);
+            final Long skuId = before.skusOrdered().get(0).getId();
+            final long oldPrice = before.getSkuById(skuId).orElseThrow().getPrice();
 
-        productUseCase.updateSkuPrice(productId, skuId, new SkuPriceRequest(999L));
+            productUseCase.updateSkuPrice(productId, skuId, new SkuPriceRequest(999L));
 
-        final Product reloaded = productRepository.getByID(productId);
-        assertThat(reloaded.getStatus()).isEqualTo(ProductStatus.PENDING_REVIEW);
-        assertThat(reloaded.getSkuById(skuId).orElseThrow().getPrice()).isEqualTo(oldPrice);
-        assertThat(editVersionJpaRepository
-                .findByProductIdOrderByVersionNoDesc(productId, PageRequest.of(0, 100))
-                .getContent())
-                .noneMatch(v -> v.getTriggerType() == EditVersionTriggerType.EDIT);
-    }
+            final Product reloaded = productRepository.getByID(productId);
+            assertThat(reloaded.getStatus()).isEqualTo(ProductStatus.PENDING_REVIEW);
+            assertThat(reloaded.getSkuById(skuId).orElseThrow().getPrice()).isEqualTo(oldPrice);
+            assertThat(editVersionJpaRepository
+                    .findByProductIdOrderByVersionNoDesc(productId, PageRequest.of(0, 100))
+                    .getContent())
+                    .noneMatch(v -> v.getTriggerType() == EditVersionTriggerType.EDIT);
+    
+        });
+}
 
     /**
      * critical：待审期内编辑拒绝（提交冻结内容——待审核商品改价报编辑冻结
@@ -308,15 +307,20 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("待审期改价拒绝")
     void pendingReview_priceEdit_forbidden() {
-        final long productId = insertProduct(SHOP_A, ProductStatus.PENDING_REVIEW);
-        final Long skuId = productRepository.getByID(productId)
-                .skusOrdered().get(0).getId();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = insertProduct(SHOP_A, ProductStatus.PENDING_REVIEW);
+            final Long skuId = productRepository.getByID(productId)
+                    .skusOrdered().get(0).getId();
 
-        assertThatThrownBy(() -> productUseCase.updateSkuPrice(productId, skuId, new SkuPriceRequest(999L)))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
-                        .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_EDIT_FORBIDDEN.code()));
-    }
+            assertThatThrownBy(() -> productUseCase.updateSkuPrice(productId, skuId, new SkuPriceRequest(999L)))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_EDIT_FORBIDDEN.code()));
+    
+        });
+}
 
     /**
      * critical：在售商品回滚历史版本（内容重置含敏感要素）→ 转待审核分流
@@ -325,12 +329,17 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("在售回滚转待审分流")
     void rollback_onSale_routedToReview() {
-        final long productId = insertProductWithBaselineVersion(SHOP_A, ProductStatus.ON_SALE);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = insertProductWithBaselineVersion(SHOP_A, ProductStatus.ON_SALE);
 
-        final ProductDetail detail = productVersionUseCase.rollback(productId, 1);
+            final ProductDetail detail = productVersionUseCase.rollback(productId, 1);
 
-        assertThat(detail.status()).isEqualTo(ProductStatus.PENDING_REVIEW.name());
-    }
+            assertThat(detail.status()).isEqualTo(ProductStatus.PENDING_REVIEW.name());
+    
+        });
+}
 
     /**
      * critical：非草稿商品删除拒绝（在售/待审无删除端点——生命周期完整性）。
@@ -338,12 +347,17 @@ class ProductReviewSubmitIntegrationTest {
     @Test
     @DisplayName("在售商品删除拒绝")
     void delete_onSale_rejected() {
-        final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final long productId = insertProduct(SHOP_A, ProductStatus.ON_SALE);
 
-        assertThatThrownBy(() -> productUseCase.delete(productId))
-                .isInstanceOf(BusinessException.class);
-        assertThat(productJpaRepository.existsById(productId)).isTrue();
-    }
+            assertThatThrownBy(() -> productUseCase.delete(productId))
+                    .isInstanceOf(BusinessException.class);
+            assertThat(productJpaRepository.existsById(productId)).isTrue();
+    
+        });
+}
 
     // ---- 构建辅助 ----
 

@@ -3,7 +3,8 @@ package com.nona.inf.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.HttpResponse;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
+import com.nona.inf.context.TrackingScope;
 import com.nona.util.JacksonUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -26,7 +27,7 @@ import java.util.Optional;
 /**
  * JWT 认证过滤器：解析 Bearer token → 取用户上下文（缓存命中直取，
  * miss 走 DB SPI 回填，缓存故障由缓存层降级）→ 封禁拦截 → 组装
- * SecurityContext 与 {@link ThreadContext}（含商家店铺上下文写入租户）。
+ * SecurityContext 与跟踪作用域持有者（含商家店铺上下文写入租户）。
  * <p>
  * 本过滤器只做「认定」与「组装」：token 非法/过期、用户不存在一律不设置认证
  * （沿用链式 401 语义）；封禁（BANNED）属于已认定但被拒的账号，按设计统一 403
@@ -64,11 +65,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final AccountStatusProvider accountStatusProvider;
 
     /**
-     * 请求上下文（request 作用域代理）
-     */
-    private final ThreadContext threadContext;
-
-    /**
      * JSON 序列化器（项目统一静态实例）
      */
     private static final ObjectMapper OBJECT_MAPPER = JacksonUtil.DEFAULT_MAPPER;
@@ -79,16 +75,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * @param tokenProvider         JWT 解析器
      * @param userCache             用户上下文缓存
      * @param accountStatusProvider 账号状态 DB SPI（身份域 JPA 实现）
-     * @param threadContext         请求上下文
      */
     public JwtAuthenticationFilter(JwtTokenProvider tokenProvider,
                                    AuthUserCache userCache,
-                                   AccountStatusProvider accountStatusProvider,
-                                   ThreadContext threadContext) {
+                                   AccountStatusProvider accountStatusProvider) {
         this.tokenProvider = tokenProvider;
         this.userCache = userCache;
         this.accountStatusProvider = accountStatusProvider;
-        this.threadContext = threadContext;
     }
 
     /**
@@ -145,9 +138,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 组装 Spring Security 认证与请求上下文：角色写入 SecurityContext 与
-     * ThreadContext；商家账号（shopIds 非空）取当前店铺（一期恒 1 个）写入
-     * ThreadContext.tenantID（归属已在登录路径校验，运行期不再校验）。
+     * 组装 Spring Security 认证与跟踪作用域：角色写入 SecurityContext 与
+     * 当前跟踪作用域持有者（{@link TrackingContext#scope()}，TrackingFilter
+     * 已先行绑定）；商家账号（shopIds 非空）取当前店铺（一期恒 1 个）写入
+     * 持有者 tenantID（归属已在登录路径校验，运行期不再校验）。
      *
      * @param uid     用户 ID
      * @param context 用户上下文（角色/店铺列表）
@@ -159,10 +153,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         final SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(new UsernamePasswordAuthenticationToken(uid, null, authorities));
         SecurityContextHolder.setContext(securityContext);
-        threadContext.setIdentity(uid.toString());
-        threadContext.setRole(List.copyOf(context.roles()));
-        if (!context.shopIds().isEmpty()) {
-            threadContext.setTenantID(context.shopIds().get(0).toString());
+        final TrackingScope scope = TrackingContext.scope();
+        if (scope != null) {
+            scope.setIdentity(uid.toString());
+            scope.setRole(List.copyOf(context.roles()));
+            if (!context.shopIds().isEmpty()) {
+                scope.setTenantID(context.shopIds().get(0).toString());
+            }
         }
     }
 

@@ -8,8 +8,8 @@ import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
@@ -24,10 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -119,11 +116,6 @@ class ProductVersionUseCaseIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺、身份=操作人）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -143,19 +135,6 @@ class ProductVersionUseCaseIntegrationTest {
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-        threadContext.setIdentity(OPERATOR_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户/身份上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        threadContext.setIdentity(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     // ---- Happy path ----
@@ -168,24 +147,29 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("保存留痕后历史查询新版本在前")
     void recordEdit_thenHistory_pagedNewestFirst() {
-        final Product product = saveProduct("无线耳机");
-        productVersionUseCase.recordEdit(product);
-        final Product loaded = productRepository.getByID(product.getId());
-        loaded.updateInfo("无线耳机Pro", "升级款", null, null);
-        productRepository.save(loaded);
-        productVersionUseCase.recordEdit(loaded);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("无线耳机");
+            productVersionUseCase.recordEdit(product);
+            final Product loaded = productRepository.getByID(product.getId());
+            loaded.updateInfo("无线耳机Pro", "升级款", null, null);
+            productRepository.save(loaded);
+            productVersionUseCase.recordEdit(loaded);
 
-        final PageResult<ProductVersionItem> page =
-                productVersionUseCase.history(product.getId(), new PageQuery(1, 10));
+            final PageResult<ProductVersionItem> page =
+                    productVersionUseCase.history(product.getId(), new PageQuery(1, 10));
 
-        assertThat(page.total()).isEqualTo(2);
-        assertThat(page.records()).extracting(ProductVersionItem::versionNo)
-                .containsExactly(2, 1);
-        assertThat(page.records().get(0).triggerType()).isEqualTo("EDIT");
-        assertThat(page.records().get(0).operator()).isEqualTo(OPERATOR_A);
-        assertThat(page.records().get(0).createdAt()).isNotBlank();
-        assertThat(page.records().get(0).summary()).contains("无线耳机Pro");
-    }
+            assertThat(page.total()).isEqualTo(2);
+            assertThat(page.records()).extracting(ProductVersionItem::versionNo)
+                    .containsExactly(2, 1);
+            assertThat(page.records().get(0).triggerType()).isEqualTo("EDIT");
+            assertThat(page.records().get(0).operator()).isEqualTo(OPERATOR_A);
+            assertThat(page.records().get(0).createdAt()).isNotBlank();
+            assertThat(page.records().get(0).summary()).contains("无线耳机Pro");
+    
+        });
+}
 
     /**
      * happy：回滚生成新版本——回滚到版本 1，聚合内容重置为版本 1 内容，
@@ -194,21 +178,26 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("回滚生成ROLLBACK新版本且内容重置")
     void rollback_restoresContentAndAppendsVersion() {
-        final Product product = saveProduct("初版");
-        productVersionUseCase.recordEdit(product);
-        final Product edited = productRepository.getByID(product.getId());
-        edited.updateInfo("改后名", "改后描述", null, null);
-        productRepository.save(edited);
-        productVersionUseCase.recordEdit(edited);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("初版");
+            productVersionUseCase.recordEdit(product);
+            final Product edited = productRepository.getByID(product.getId());
+            edited.updateInfo("改后名", "改后描述", null, null);
+            productRepository.save(edited);
+            productVersionUseCase.recordEdit(edited);
 
-        final var detail = productVersionUseCase.rollback(product.getId(), 1);
+            final var detail = productVersionUseCase.rollback(product.getId(), 1);
 
-        assertThat(detail.name()).isEqualTo("初版");
-        final ProductEditVersionPO rollbackRow = editVersionJpaRepository
-                .findByProductIdAndVersionNo(product.getId(), 3).orElseThrow();
-        assertThat(rollbackRow.getTriggerType().name()).isEqualTo("ROLLBACK");
-        assertThat(rollbackRow.getSnapshotJson()).contains("\"初版\"");
-    }
+            assertThat(detail.name()).isEqualTo("初版");
+            final ProductEditVersionPO rollbackRow = editVersionJpaRepository
+                    .findByProductIdAndVersionNo(product.getId(), 3).orElseThrow();
+            assertThat(rollbackRow.getTriggerType().name()).isEqualTo("ROLLBACK");
+            assertThat(rollbackRow.getSnapshotJson()).contains("\"初版\"");
+    
+        });
+}
 
     // ---- Critical path ----
 
@@ -218,19 +207,24 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("连续保存版本号连续递增")
     void consecutiveSaves_versionNoStrictlyIncreasing() {
-        final Product product = saveProduct("版本一");
-        productVersionUseCase.recordEdit(product);
-        for (int round = 2; round <= 3; round++) {
-            final Product loaded = productRepository.getByID(product.getId());
-            loaded.updateInfo("版本" + round, null, null, null);
-            productRepository.save(loaded);
-            productVersionUseCase.recordEdit(loaded);
-        }
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("版本一");
+            productVersionUseCase.recordEdit(product);
+            for (int round = 2; round <= 3; round++) {
+                final Product loaded = productRepository.getByID(product.getId());
+                loaded.updateInfo("版本" + round, null, null, null);
+                productRepository.save(loaded);
+                productVersionUseCase.recordEdit(loaded);
+            }
 
-        assertThat(productVersionUseCase.history(product.getId(), new PageQuery(1, 10)).records())
-                .extracting(ProductVersionItem::versionNo)
-                .containsExactly(3, 2, 1);
-    }
+            assertThat(productVersionUseCase.history(product.getId(), new PageQuery(1, 10)).records())
+                    .extracting(ProductVersionItem::versionNo)
+                    .containsExactly(3, 2, 1);
+    
+        });
+}
 
     /**
      * critical：回滚后再次保存——新保存基于回滚内容生成后续版本（版本号
@@ -239,26 +233,31 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("回滚后再次保存基于回滚内容生成新版本")
     void saveAfterRollback_basedOnRollbackContent() {
-        final Product product = saveProduct("初版");
-        productVersionUseCase.recordEdit(product);
-        final Product edited = productRepository.getByID(product.getId());
-        edited.updateInfo("改后名", null, null, null);
-        productRepository.save(edited);
-        productVersionUseCase.recordEdit(edited);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("初版");
+            productVersionUseCase.recordEdit(product);
+            final Product edited = productRepository.getByID(product.getId());
+            edited.updateInfo("改后名", null, null, null);
+            productRepository.save(edited);
+            productVersionUseCase.recordEdit(edited);
 
-        productVersionUseCase.rollback(product.getId(), 1);
-        final Product reloaded = productRepository.getByID(product.getId());
-        reloaded.updateInfo("回滚后微调", null, null, null);
-        productRepository.save(reloaded);
-        productVersionUseCase.recordEdit(reloaded);
+            productVersionUseCase.rollback(product.getId(), 1);
+            final Product reloaded = productRepository.getByID(product.getId());
+            reloaded.updateInfo("回滚后微调", null, null, null);
+            productRepository.save(reloaded);
+            productVersionUseCase.recordEdit(reloaded);
 
-        final PageResult<ProductVersionItem> page =
-                productVersionUseCase.history(product.getId(), new PageQuery(1, 10));
-        assertThat(page.records()).extracting(ProductVersionItem::versionNo)
-                .containsExactly(4, 3, 2, 1);
-        assertThat(page.records().get(0).triggerType()).isEqualTo("EDIT");
-        assertThat(page.records().get(0).summary()).contains("回滚后微调");
-    }
+            final PageResult<ProductVersionItem> page =
+                    productVersionUseCase.history(product.getId(), new PageQuery(1, 10));
+            assertThat(page.records()).extracting(ProductVersionItem::versionNo)
+                    .containsExactly(4, 3, 2, 1);
+            assertThat(page.records().get(0).triggerType()).isEqualTo("EDIT");
+            assertThat(page.records().get(0).summary()).contains("回滚后微调");
+    
+        });
+}
 
     /**
      * critical：空聚合（草稿只有名称）快照——快照内容与聚合当前内容一致
@@ -267,18 +266,23 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("空聚合快照内容与聚合一致且读回验证")
     void emptyDraft_snapshotMatchesAggregate() {
-        final Product product = saveProduct("只有名字");
-        productVersionUseCase.recordEdit(product);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("只有名字");
+            productVersionUseCase.recordEdit(product);
 
-        final ProductEditVersionPO row = editVersionJpaRepository
-                .findByProductIdAndVersionNo(product.getId(), 1).orElseThrow();
-        final ObjectNode snapshot = JacksonUtil.jsonToObjNode(row.getSnapshotJson());
-        assertThat(snapshot.path("name").asText()).isEqualTo("只有名字");
-        assertThat(snapshot.path("images").size()).isZero();
-        assertThat(snapshot.path("attributes").size()).isZero();
-        assertThat(snapshot.path("skus").size()).isZero();
-        assertThat(snapshot.path("specTemplate").isNull()).isTrue();
-    }
+            final ProductEditVersionPO row = editVersionJpaRepository
+                    .findByProductIdAndVersionNo(product.getId(), 1).orElseThrow();
+            final ObjectNode snapshot = JacksonUtil.jsonToObjNode(row.getSnapshotJson());
+            assertThat(snapshot.path("name").asText()).isEqualTo("只有名字");
+            assertThat(snapshot.path("images").size()).isZero();
+            assertThat(snapshot.path("attributes").size()).isZero();
+            assertThat(snapshot.path("skus").size()).isZero();
+            assertThat(snapshot.path("specTemplate").isNull()).isTrue();
+    
+        });
+}
 
     // ---- Error path ----
 
@@ -288,14 +292,19 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("回滚不存在版本号拒绝")
     void rollback_missingVersionNotFound() {
-        final Product product = saveProduct("商品");
-        productVersionUseCase.recordEdit(product);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("商品");
+            productVersionUseCase.recordEdit(product);
 
-        assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 999))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
-                        .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_NOT_FOUND.code()));
-    }
+            assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 999))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_NOT_FOUND.code()));
+    
+        });
+}
 
     /**
      * error：非法版本号（非正数）拒绝（400 语义业务码）。
@@ -303,14 +312,19 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("非法版本号回滚拒绝")
     void rollback_invalidVersionNoRejected() {
-        final Product product = saveProduct("商品");
-        productVersionUseCase.recordEdit(product);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("商品");
+            productVersionUseCase.recordEdit(product);
 
-        assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 0))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
-                        .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code()));
-    }
+            assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 0))
+                    .isInstanceOf(BusinessException.class)
+                    .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_VERSION_INVALID.code()));
+    
+        });
+}
 
     /**
      * error：跨店铺访问版本（历史/回滚）按不存在呈现——fail-closed，
@@ -319,17 +333,25 @@ class ProductVersionUseCaseIntegrationTest {
     @Test
     @DisplayName("跨店铺版本访问按不存在呈现")
     void crossShopVersionAccess_failClosed() {
-        final Product product = saveProduct("A店商品");
-        productVersionUseCase.recordEdit(product);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final Product product = saveProduct("A店商品");
+            productVersionUseCase.recordEdit(product);
 
-        threadContext.setTenantID(TENANT_B);
-        assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 1))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
-                        .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_NOT_FOUND.code()));
-        assertThat(productVersionUseCase.history(product.getId(), new PageQuery(1, 10)).total())
-                .isZero();
-    }
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                TrackingContext.scope().setIdentity(OPERATOR_A);
+                assertThatThrownBy(() -> productVersionUseCase.rollback(product.getId(), 1))
+                        .isInstanceOf(BusinessException.class)
+                        .satisfies(e -> assertThat(((BusinessException) e).getBusinessCode())
+                                .isEqualTo(EcommerceBusinessCode.CATALOG_PRODUCT_NOT_FOUND.code()));
+                assertThat(productVersionUseCase.history(product.getId(), new PageQuery(1, 10)).total())
+                        .isZero();
+    
+            });
+        });
+}
 
     /**
      * 通过仓储保存商品草稿（事务内，模拟用例写路径落库）。

@@ -12,8 +12,8 @@ import com.nona.api.seller.SkuPriceRequest;
 import com.nona.api.seller.SpecDimensionRequest;
 import com.nona.api.seller.SpecTemplateRequest;
 import com.nona.domain.catalog.entity.EditVersionTriggerType;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
@@ -26,9 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -100,11 +97,6 @@ class ProductUseCaseVersionTraceIntegrationTest {
     @Autowired
     private SkuJpaRepository skuJpaRepository;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺、身份=操作人）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -124,19 +116,6 @@ class ProductUseCaseVersionTraceIntegrationTest {
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(String.valueOf(SHOP_A));
-        threadContext.setIdentity(OPERATOR_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户/身份上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        threadContext.setIdentity(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     // ---- Happy path ----
@@ -148,16 +127,21 @@ class ProductUseCaseVersionTraceIntegrationTest {
     @Test
     @DisplayName("创建商品自动写基线版本")
     void createDraft_writesBaselineVersion() {
-        final ProductDetail detail =
-                productUseCase.createDraft(SHOP_A, new ProductDraftRequest("基线商品", null, null, null));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final ProductDetail detail =
+                    productUseCase.createDraft(SHOP_A, new ProductDraftRequest("基线商品", null, null, null));
 
-        final ProductEditVersionPO row = editVersionJpaRepository
-                .findByProductIdAndVersionNo(detail.id(), 1).orElseThrow();
-        assertThat(row.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
-        assertThat(row.getOperator()).isEqualTo(OPERATOR_A);
-        assertThat(row.getSnapshotJson()).contains("基线商品");
-        assertThat(editVersionJpaRepository.countByProductId(detail.id())).isEqualTo(1);
-    }
+            final ProductEditVersionPO row = editVersionJpaRepository
+                    .findByProductIdAndVersionNo(detail.id(), 1).orElseThrow();
+            assertThat(row.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
+            assertThat(row.getOperator()).isEqualTo(OPERATOR_A);
+            assertThat(row.getSnapshotJson()).contains("基线商品");
+            assertThat(editVersionJpaRepository.countByProductId(detail.id())).isEqualTo(1);
+    
+        });
+}
 
     /**
      * critical：全部写面逐次留痕——update/图片增删与主图转移/属性增删改/
@@ -167,51 +151,56 @@ class ProductUseCaseVersionTraceIntegrationTest {
     @Test
     @DisplayName("全部写面逐次留痕版本号递增")
     void everyWritePath_tracesEachSave() {
-        final ProductDetail draft =
-                productUseCase.createDraft(SHOP_A, new ProductDraftRequest("留痕商品", null, null, null));
-        final long productId = draft.id();
-        assertVersionNo(productId, 1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final ProductDetail draft =
+                    productUseCase.createDraft(SHOP_A, new ProductDraftRequest("留痕商品", null, null, null));
+            final long productId = draft.id();
+            assertVersionNo(productId, 1);
 
-        productUseCase.update(productId, new ProductDraftRequest("留痕商品2", "升级", null, null));
-        assertVersionNo(productId, 2);
+            productUseCase.update(productId, new ProductDraftRequest("留痕商品2", "升级", null, null));
+            assertVersionNo(productId, 2);
 
-        final ProductImageItem imageA = productUseCase.addImage(productId,
-                new ProductImageRequest("/files/a.png", true));
-        assertVersionNo(productId, 3);
-        final ProductImageItem imageB = productUseCase.addImage(productId,
-                new ProductImageRequest("/files/b.png", false));
-        assertVersionNo(productId, 4);
-        productUseCase.setPrimaryImage(productId, imageB.id());
-        assertVersionNo(productId, 5);
-        productUseCase.removeImage(productId, imageB.id());
-        assertVersionNo(productId, 6);
+            final ProductImageItem imageA = productUseCase.addImage(productId,
+                    new ProductImageRequest("/files/a.png", true));
+            assertVersionNo(productId, 3);
+            final ProductImageItem imageB = productUseCase.addImage(productId,
+                    new ProductImageRequest("/files/b.png", false));
+            assertVersionNo(productId, 4);
+            productUseCase.setPrimaryImage(productId, imageB.id());
+            assertVersionNo(productId, 5);
+            productUseCase.removeImage(productId, imageB.id());
+            assertVersionNo(productId, 6);
 
-        final ProductAttributeItem attribute = productUseCase.addAttribute(productId,
-                new ProductAttributeRequest("材质", "纯棉"));
-        assertVersionNo(productId, 7);
-        productUseCase.updateAttribute(productId, attribute.id(),
-                new ProductAttributeRequest("材质", "棉"));
-        assertVersionNo(productId, 8);
-        assertThat(editVersionJpaRepository.findByProductIdAndVersionNo(productId, 8).orElseThrow()
-                .getSnapshotJson()).contains("\"材质\"");
-        productUseCase.removeAttribute(productId, attribute.id());
-        assertVersionNo(productId, 9);
+            final ProductAttributeItem attribute = productUseCase.addAttribute(productId,
+                    new ProductAttributeRequest("材质", "纯棉"));
+            assertVersionNo(productId, 7);
+            productUseCase.updateAttribute(productId, attribute.id(),
+                    new ProductAttributeRequest("材质", "棉"));
+            assertVersionNo(productId, 8);
+            assertThat(editVersionJpaRepository.findByProductIdAndVersionNo(productId, 8).orElseThrow()
+                    .getSnapshotJson()).contains("\"材质\"");
+            productUseCase.removeAttribute(productId, attribute.id());
+            assertVersionNo(productId, 9);
 
-        final List<SkuItem> skus = productUseCase.configureSpecTemplate(productId,
-                new SpecTemplateRequest(List.of(new SpecDimensionRequest("颜色", List.of("黑", "白")))));
-        assertVersionNo(productId, 10);
-        final SkuItem black = skus.get(0);
-        productUseCase.updateSkuPrice(productId, black.id(), new SkuPriceRequest(1999L));
-        assertVersionNo(productId, 11);
-        productUseCase.setSkuEnabled(productId, black.id(), new SkuEnabledRequest(true));
-        assertVersionNo(productId, 12);
+            final List<SkuItem> skus = productUseCase.configureSpecTemplate(productId,
+                    new SpecTemplateRequest(List.of(new SpecDimensionRequest("颜色", List.of("黑", "白")))));
+            assertVersionNo(productId, 10);
+            final SkuItem black = skus.get(0);
+            productUseCase.updateSkuPrice(productId, black.id(), new SkuPriceRequest(1999L));
+            assertVersionNo(productId, 11);
+            productUseCase.setSkuEnabled(productId, black.id(), new SkuEnabledRequest(true));
+            assertVersionNo(productId, 12);
 
-        final ProductEditVersionPO latest = editVersionJpaRepository
-                .findByProductIdAndVersionNo(productId, 12).orElseThrow();
-        assertThat(latest.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
-        assertThat(latest.getSnapshotJson()).contains("留痕商品2");
-        assertThat(latest.getSnapshotJson()).contains("1999");
-    }
+            final ProductEditVersionPO latest = editVersionJpaRepository
+                    .findByProductIdAndVersionNo(productId, 12).orElseThrow();
+            assertThat(latest.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
+            assertThat(latest.getSnapshotJson()).contains("留痕商品2");
+            assertThat(latest.getSnapshotJson()).contains("1999");
+    
+        });
+}
 
     /**
      * critical：无实际变更的保存不插版本行——相同内容再次 update（变更集
@@ -221,15 +210,20 @@ class ProductUseCaseVersionTraceIntegrationTest {
     @Test
     @DisplayName("无变更保存不插版本行")
     void unchangedSave_skipsVersionRow() {
-        final ProductDetail draft =
-                productUseCase.createDraft(SHOP_A, new ProductDraftRequest("不变商品", null, null, null));
-        final long productId = draft.id();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final ProductDetail draft =
+                    productUseCase.createDraft(SHOP_A, new ProductDraftRequest("不变商品", null, null, null));
+            final long productId = draft.id();
 
-        productUseCase.update(productId, new ProductDraftRequest("不变商品", null, null, null));
+            productUseCase.update(productId, new ProductDraftRequest("不变商品", null, null, null));
 
-        assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(1);
-        assertThat(editVersionJpaRepository.maxVersionNo(productId)).isEqualTo(1);
-    }
+            assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(1);
+            assertThat(editVersionJpaRepository.maxVersionNo(productId)).isEqualTo(1);
+    
+        });
+}
 
     /**
      * error：删除商品级联清理版本行（写路径 deleteByID 的真实删除语义
@@ -238,17 +232,22 @@ class ProductUseCaseVersionTraceIntegrationTest {
     @Test
     @DisplayName("删除商品级联清理版本行")
     void deleteProduct_cascadesVersionRows() {
-        final ProductDetail draft =
-                productUseCase.createDraft(SHOP_A, new ProductDraftRequest("待删商品", null, null, null));
-        final long productId = draft.id();
-        productUseCase.update(productId, new ProductDraftRequest("待删商品2", null, null, null));
-        assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(String.valueOf(SHOP_A));
+            TrackingContext.scope().setIdentity(OPERATOR_A);
+            final ProductDetail draft =
+                    productUseCase.createDraft(SHOP_A, new ProductDraftRequest("待删商品", null, null, null));
+            final long productId = draft.id();
+            productUseCase.update(productId, new ProductDraftRequest("待删商品2", null, null, null));
+            assertThat(editVersionJpaRepository.countByProductId(productId)).isEqualTo(2);
 
-        productUseCase.delete(productId);
+            productUseCase.delete(productId);
 
-        assertThat(editVersionJpaRepository.countByProductId(productId)).isZero();
-        assertThat(productJpaRepository.existsById(productId)).isFalse();
-    }
+            assertThat(editVersionJpaRepository.countByProductId(productId)).isZero();
+            assertThat(productJpaRepository.existsById(productId)).isFalse();
+    
+        });
+}
 
     /**
      * 断言同商品当前最新版本号（版本链递增进度）。

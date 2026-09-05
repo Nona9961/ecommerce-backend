@@ -3,6 +3,7 @@ package com.nona.inf.persistence.integration;
 import com.nona.changeTracking.domain.model.changeset.*;
 import com.nona.changeTracking.domain.model.tracking.ChangeTracker;
 import com.nona.changeTracking.internal.capability.DefaultTrackingCapabilityProvider;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.converters.CompositePoConverter;
 import com.nona.inf.persistence.converters.ConverterRegistry;
 import com.nona.inf.persistence.converters.PoConverter;
@@ -167,7 +168,6 @@ class FullIntegrationTest {
         trackingProvider.withValueType(ContactInfo.class);
 
         // 初始化 OrderRepository
-        com.nona.inf.context.ThreadContext threadContext = new com.nona.inf.context.ThreadContext();
         com.nona.inf.persistence.tracking.ChangeTrackerProvider changeTrackerProvider =
                 com.nona.inf.persistence.tracking.ChangeTrackerProvider.builder()
                         .withIdentifier(OrderItem.class, OrderItem::getId)
@@ -183,7 +183,7 @@ class FullIntegrationTest {
         org.springframework.data.repository.ListCrudRepository<OrderPO, Long> crudRepo =
                 new InMemoryOrderPORepository(jdbc, orderConverter);
 
-        orderRepository = new OrderRepository(crudRepo, threadContext, orderConverter,
+        orderRepository = new OrderRepository(crudRepo, orderConverter,
                 changeTrackerProvider, jdbc, registry);
     }
 
@@ -1391,173 +1391,185 @@ class FullIntegrationTest {
         @Test
         @DisplayName("B01: 无变更时不执行 SQL")
         void shouldNotExecuteSqlWhenNoChanges() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            insertOrder(orderConverter.toMainPO(order));
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                insertOrder(orderConverter.toMainPO(order));
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded).isNotNull();
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded).isNotNull();
 
-            // 不做任何修改，直接保存
-            boolean saved = orderRepository.save(loaded);
+                // 不做任何修改，直接保存
+                boolean saved = orderRepository.save(loaded);
 
-            assertThat(saved).isFalse();  // 无变更，返回 false
+                assertThat(saved).isFalse();  // 无变更，返回 false
+            });
         }
 
         @Test
         @DisplayName("B02: 主表单字段变更")
         void shouldUpdateMainTableValueChange() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            insertOrder(orderConverter.toMainPO(order));
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                insertOrder(orderConverter.toMainPO(order));
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getStatus()).isEqualTo("PENDING");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getStatus()).isEqualTo("PENDING");
 
-            // 修改状态
-            loaded.setStatus("PAID");
+                // 修改状态
+                loaded.setStatus("PAID");
 
-            // 保存（自动生成 UPDATE SQL）
-            boolean saved = orderRepository.save(loaded);
-            assertThat(saved).isTrue();
+                // 保存（自动生成 UPDATE SQL）
+                boolean saved = orderRepository.save(loaded);
+                assertThat(saved).isTrue();
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getStatus()).isEqualTo("PAID");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getStatus()).isEqualTo("PAID");
+            });
         }
 
         @Test
         @DisplayName("C01: 集合项新增")
         void shouldInsertNewCollectionItem() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            order.getItems().add(item1);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                order.getItems().add(item1);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item1, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item1, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems()).hasSize(1);
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems()).hasSize(1);
 
-            // 新增订单项
-            OrderItem newItem = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("50.00")));
-            loaded.getItems().add(newItem);
+                // 新增订单项
+                OrderItem newItem = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("50.00")));
+                loaded.getItems().add(newItem);
 
-            // 保存（自动生成 INSERT SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 INSERT SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems()).hasSize(2);
-            assertThat(reloaded.getItems().stream()
-                    .anyMatch(i -> i.getSku().equals("SKU-002"))).isTrue();
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems()).hasSize(2);
+                assertThat(reloaded.getItems().stream()
+                        .anyMatch(i -> i.getSku().equals("SKU-002"))).isTrue();
+            });
         }
 
         @Test
         @DisplayName("C02: 集合项删除")
         void shouldDeleteCollectionItem() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            OrderItem item2 = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("50.00")));
-            order.getItems().add(item1);
-            order.getItems().add(item2);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                OrderItem item2 = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("50.00")));
+                order.getItems().add(item1);
+                order.getItems().add(item2);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item1, order.getId());
-            insertOrderItem(item2, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item1, order.getId());
+                insertOrderItem(item2, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems()).hasSize(2);
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems()).hasSize(2);
 
-            // 删除订单项
-            OrderItem toRemove = loaded.getItems().stream()
-                    .filter(i -> i.getId().equals(101L))
-                    .findFirst().orElseThrow();
-            loaded.getItems().remove(toRemove);
+                // 删除订单项
+                OrderItem toRemove = loaded.getItems().stream()
+                        .filter(i -> i.getId().equals(101L))
+                        .findFirst().orElseThrow();
+                loaded.getItems().remove(toRemove);
 
-            // 保存（自动生成 DELETE SQL + 级联删除）
-            orderRepository.save(loaded);
+                // 保存（自动生成 DELETE SQL + 级联删除）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems()).hasSize(1);
-            assertThat(reloaded.getItems().get(0).getSku()).isEqualTo("SKU-002");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems()).hasSize(1);
+                assertThat(reloaded.getItems().get(0).getSku()).isEqualTo("SKU-002");
+            });
         }
 
         @Test
         @DisplayName("C03: 集合项字段变更")
         void shouldUpdateCollectionItemField() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getQuantity()).isEqualTo(2);
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getQuantity()).isEqualTo(2);
 
-            // 修改订单项数量
-            loaded.getItems().get(0).setQuantity(5);
+                // 修改订单项数量
+                loaded.getItems().get(0).setQuantity(5);
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getQuantity()).isEqualTo(5);
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getQuantity()).isEqualTo(5);
+            });
         }
 
         @Test
         @DisplayName("X01: 综合场景-主表+子表同时变更")
         void shouldHandleComplexChanges() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            order.setTotalAmount(Money.of(new BigDecimal("100.00")));
-            OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            OrderItem item2 = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("40.00")));
-            order.getItems().add(item1);
-            order.getItems().add(item2);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                order.setTotalAmount(Money.of(new BigDecimal("100.00")));
+                OrderItem item1 = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                OrderItem item2 = new OrderItem(102L, "SKU-002", "商品B", 1, Money.of(new BigDecimal("40.00")));
+                order.getItems().add(item1);
+                order.getItems().add(item2);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item1, order.getId());
-            insertOrderItem(item2, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item1, order.getId());
+                insertOrderItem(item2, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
 
-            // 执行多种变更
-            loaded.setStatus("CONFIRMED");                                      // 主表字段变更
-            loaded.getItems().get(0).setQuantity(5);                            // 子项字段变更
-            OrderItem toRemove = loaded.getItems().get(1);
-            loaded.getItems().remove(toRemove);                                  // 删除子项
-            OrderItem newItem = new OrderItem(103L, "SKU-003", "商品C", 3, Money.of(new BigDecimal("60.00")));
-            loaded.getItems().add(newItem);                                      // 新增子项
+                // 执行多种变更
+                loaded.setStatus("CONFIRMED");                                      // 主表字段变更
+                loaded.getItems().get(0).setQuantity(5);                            // 子项字段变更
+                OrderItem toRemove = loaded.getItems().get(1);
+                loaded.getItems().remove(toRemove);                                  // 删除子项
+                OrderItem newItem = new OrderItem(103L, "SKU-003", "商品C", 3, Money.of(new BigDecimal("60.00")));
+                loaded.getItems().add(newItem);                                      // 新增子项
 
-            // 保存（自动生成混合 SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成混合 SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
-            assertThat(reloaded.getItems()).hasSize(2);
-            assertThat(reloaded.getItems().get(0).getQuantity()).isEqualTo(5);
-            assertThat(reloaded.getItems().stream()
-                    .anyMatch(i -> i.getSku().equals("SKU-003"))).isTrue();
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getStatus()).isEqualTo("CONFIRMED");
+                assertThat(reloaded.getItems()).hasSize(2);
+                assertThat(reloaded.getItems().get(0).getQuantity()).isEqualTo(5);
+                assertThat(reloaded.getItems().stream()
+                        .anyMatch(i -> i.getSku().equals("SKU-003"))).isTrue();
+            });
         }
 
         // ==================== 单实体（一对一）端到端场景 ====================
@@ -1565,114 +1577,122 @@ class FullIntegrationTest {
         @Test
         @DisplayName("E01: 单实体字段变更")
         void shouldUpdateSingleEntityField_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            Customer customer = new Customer(10L, "张三");
-            order.setCustomer(customer);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                Customer customer = new Customer(10L, "张三");
+                order.setCustomer(customer);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertCustomer(customer, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertCustomer(customer, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getCustomer()).isNotNull();
-            assertThat(loaded.getCustomer().getName()).isEqualTo("张三");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getCustomer()).isNotNull();
+                assertThat(loaded.getCustomer().getName()).isEqualTo("张三");
 
-            // 修改单实体字段
-            loaded.getCustomer().setName("李四");
+                // 修改单实体字段
+                loaded.getCustomer().setName("李四");
 
-            // 保存（自动生成 UPDATE SQL）
-            boolean saved = orderRepository.save(loaded);
-            assertThat(saved).isTrue();
+                // 保存（自动生成 UPDATE SQL）
+                boolean saved = orderRepository.save(loaded);
+                assertThat(saved).isTrue();
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getCustomer().getName()).isEqualTo("李四");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getCustomer().getName()).isEqualTo("李四");
+            });
         }
 
         @Test
         @DisplayName("E02: 单实体嵌套值对象变更")
         void shouldUpdateNestedValueObjectInSingleEntity_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            Customer customer = new Customer(10L, "张三");
-            customer.setContact(new ContactInfo("13800138000", "test@example.com"));
-            order.setCustomer(customer);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                Customer customer = new Customer(10L, "张三");
+                customer.setContact(new ContactInfo("13800138000", "test@example.com"));
+                order.setCustomer(customer);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertCustomer(customer, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertCustomer(customer, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getCustomer().getContact().phone()).isEqualTo("13800138000");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getCustomer().getContact().phone()).isEqualTo("13800138000");
 
-            // 修改嵌套值对象
-            loaded.getCustomer().setContact(new ContactInfo("13900139000", "new@example.com"));
+                // 修改嵌套值对象
+                loaded.getCustomer().setContact(new ContactInfo("13900139000", "new@example.com"));
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getCustomer().getContact().phone()).isEqualTo("13900139000");
-            assertThat(reloaded.getCustomer().getContact().email()).isEqualTo("new@example.com");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getCustomer().getContact().phone()).isEqualTo("13900139000");
+                assertThat(reloaded.getCustomer().getContact().email()).isEqualTo("new@example.com");
+            });
         }
 
         @Test
         @DisplayName("E03: 单实体内集合新增")
         void shouldAddItemToSingleEntityCollection_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            Customer customer = new Customer(10L, "张三");
-            customer.getAddresses().add(new Address(1L, "HOME", "北京"));
-            order.setCustomer(customer);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                Customer customer = new Customer(10L, "张三");
+                customer.getAddresses().add(new Address(1L, "HOME", "北京"));
+                order.setCustomer(customer);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertCustomer(customer, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertCustomer(customer, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getCustomer().getAddresses()).hasSize(1);
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getCustomer().getAddresses()).hasSize(1);
 
-            // 新增地址
-            loaded.getCustomer().getAddresses().add(new Address(2L, "WORK", "上海"));
+                // 新增地址
+                loaded.getCustomer().getAddresses().add(new Address(2L, "WORK", "上海"));
 
-            // 保存（自动生成 INSERT SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 INSERT SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getCustomer().getAddresses()).hasSize(2);
-            assertThat(reloaded.getCustomer().getAddresses().stream()
-                    .anyMatch(a -> a.getCity().equals("上海"))).isTrue();
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getCustomer().getAddresses()).hasSize(2);
+                assertThat(reloaded.getCustomer().getAddresses().stream()
+                        .anyMatch(a -> a.getCity().equals("上海"))).isTrue();
+            });
         }
 
         @Test
         @DisplayName("E04: 单实体内集合项字段变更")
         void shouldUpdateFieldInSingleEntityCollectionItem_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            Customer customer = new Customer(10L, "张三");
-            customer.getAddresses().add(new Address(1L, "HOME", "北京"));
-            order.setCustomer(customer);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                Customer customer = new Customer(10L, "张三");
+                customer.getAddresses().add(new Address(1L, "HOME", "北京"));
+                order.setCustomer(customer);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertCustomer(customer, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertCustomer(customer, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getCustomer().getAddresses().get(0).getCity()).isEqualTo("北京");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getCustomer().getAddresses().get(0).getCity()).isEqualTo("北京");
 
-            // 修改地址城市
-            loaded.getCustomer().getAddresses().get(0).setCity("深圳");
+                // 修改地址城市
+                loaded.getCustomer().getAddresses().get(0).setCity("深圳");
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getCustomer().getAddresses().get(0).getCity()).isEqualTo("深圳");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getCustomer().getAddresses().get(0).getCity()).isEqualTo("深圳");
+            });
         }
 
         // ==================== 深层嵌套端到端场景 ====================
@@ -1680,140 +1700,150 @@ class FullIntegrationTest {
         @Test
         @DisplayName("N02: 三层嵌套字段变更")
         void shouldUpdateThirdLevelNestedField_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            SubItem subItem = new SubItem(1001L, "子项1");
-            item.getSubItems().add(subItem);
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                SubItem subItem = new SubItem(1001L, "子项1");
+                item.getSubItems().add(subItem);
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("子项1");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("子项1");
 
-            // 修改三层嵌套字段
-            loaded.getItems().get(0).getSubItems().get(0).setName("子项1改");
+                // 修改三层嵌套字段
+                loaded.getItems().get(0).getSubItems().get(0).setName("子项1改");
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("子项1改");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("子项1改");
+            });
         }
 
         @Test
         @DisplayName("N03: 四层嵌套字段变更")
         void shouldUpdateFourthLevelNestedField_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            SubItem subItem = new SubItem(1001L, "子项1");
-            subItem.getSpecs().add(new Spec("颜色", "红色"));
-            item.getSubItems().add(subItem);
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                SubItem subItem = new SubItem(1001L, "子项1");
+                subItem.getSpecs().add(new Spec("颜色", "红色"));
+                item.getSubItems().add(subItem);
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("红色");
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("红色");
 
-            // 修改四层嵌套字段
-            loaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).setValue("蓝色");
+                // 修改四层嵌套字段
+                loaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).setValue("蓝色");
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("蓝色");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("蓝色");
+            });
         }
 
         @Test
         @DisplayName("N04: 三层集合新增")
         void shouldAddThirdLevelCollectionItem_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getSubItems()).isEmpty();
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getSubItems()).isEmpty();
 
-            // 新增三层子项
-            loaded.getItems().get(0).getSubItems().add(new SubItem(1001L, "新子项"));
+                // 新增三层子项
+                loaded.getItems().get(0).getSubItems().add(new SubItem(1001L, "新子项"));
 
-            // 保存（自动生成 INSERT SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 INSERT SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getSubItems()).hasSize(1);
-            assertThat(reloaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("新子项");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getSubItems()).hasSize(1);
+                assertThat(reloaded.getItems().get(0).getSubItems().get(0).getName()).isEqualTo("新子项");
+            });
         }
 
         @Test
         @DisplayName("N05: 四层集合新增")
         void shouldAddFourthLevelCollectionItem_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            SubItem subItem = new SubItem(1001L, "子项1");
-            item.getSubItems().add(subItem);
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                SubItem subItem = new SubItem(1001L, "子项1");
+                item.getSubItems().add(subItem);
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getSubItems().get(0).getSpecs()).isEmpty();
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getSubItems().get(0).getSpecs()).isEmpty();
 
-            // 新增四层规格
-            loaded.getItems().get(0).getSubItems().get(0).getSpecs().add(new Spec("尺寸", "XL"));
+                // 新增四层规格
+                loaded.getItems().get(0).getSubItems().get(0).getSpecs().add(new Spec("尺寸", "XL"));
 
-            // 保存（自动生成 INSERT SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 INSERT SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs()).hasSize(1);
-            assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("XL");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs()).hasSize(1);
+                assertThat(reloaded.getItems().get(0).getSubItems().get(0).getSpecs().get(0).getValue()).isEqualTo("XL");
+            });
         }
 
         @Test
         @DisplayName("N07: 嵌套值对象替换")
         void shouldReplaceNestedValueObject_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getItems().get(0).getUnitPrice().amount()).isEqualByComparingTo(new BigDecimal("30.00"));
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getItems().get(0).getUnitPrice().amount()).isEqualByComparingTo(new BigDecimal("30.00"));
 
-            // 替换嵌套值对象
-            loaded.getItems().get(0).setUnitPrice(Money.of(new BigDecimal("50.00")));
+                // 替换嵌套值对象
+                loaded.getItems().get(0).setUnitPrice(Money.of(new BigDecimal("50.00")));
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getItems().get(0).getUnitPrice().amount()).isEqualByComparingTo(new BigDecimal("50.00"));
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getItems().get(0).getUnitPrice().amount()).isEqualByComparingTo(new BigDecimal("50.00"));
+            });
         }
 
         // ==================== Map 端到端场景 ====================
@@ -1823,77 +1853,83 @@ class FullIntegrationTest {
         @Disabled("Map 持久化需要 JSON 序列化，当前框架未实现")
         @DisplayName("M01: Map 新增键值对")
         void shouldAddMapEntry_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.setStatus("PENDING");
-            insertOrder(orderConverter.toMainPO(order));
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.setStatus("PENDING");
+                insertOrder(orderConverter.toMainPO(order));
 
-            // 通过 Repository 加载
-            Order loaded = orderRepository.getByID(1L);
-            assertThat(loaded.getExtensions()).isEmpty();
+                // 通过 Repository 加载
+                Order loaded = orderRepository.getByID(1L);
+                assertThat(loaded.getExtensions()).isEmpty();
 
-            // 新增 Map 键值对
-            loaded.getExtensions().put("key1", "value1");
-            loaded.getExtensions().put("key2", "value2");
+                // 新增 Map 键值对
+                loaded.getExtensions().put("key1", "value1");
+                loaded.getExtensions().put("key2", "value2");
 
-            // 保存（自动生成 INSERT SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 INSERT SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证
-            Order reloaded = orderRepository.getByID(1L);
-            assertThat(reloaded.getExtensions()).hasSize(2);
-            assertThat(reloaded.getExtensions().get("key1")).isEqualTo("value1");
+                // 重新加载验证
+                Order reloaded = orderRepository.getByID(1L);
+                assertThat(reloaded.getExtensions()).hasSize(2);
+                assertThat(reloaded.getExtensions().get("key1")).isEqualTo("value1");
+            });
         }
 
         @Test
         @Disabled("Map 持久化需要 JSON 序列化，当前框架未实现")
         @DisplayName("M03: Map 值变更")
         void shouldUpdateMapValue_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            order.getExtensions().put("key1", "value1");
-            insertOrder(orderConverter.toMainPO(order));
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                order.getExtensions().put("key1", "value1");
+                insertOrder(orderConverter.toMainPO(order));
 
-            // 通过 Repository 加载（需要手动初始化 extensions，因为 loadOrder 不加载 Map）
-            Order loaded = orderRepository.getByID(1L);
-            loaded.getExtensions().put("key1", "value1");  // 模拟从 JSON 加载
+                // 通过 Repository 加载（需要手动初始化 extensions，因为 loadOrder 不加载 Map）
+                Order loaded = orderRepository.getByID(1L);
+                loaded.getExtensions().put("key1", "value1");  // 模拟从 JSON 加载
 
-            // 修改 Map 值
-            loaded.getExtensions().put("key1", "value2");
+                // 修改 Map 值
+                loaded.getExtensions().put("key1", "value2");
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 重新加载验证（同样需要手动验证，因为 loadOrder 不加载 Map）
-            Order reloaded = orderRepository.getByID(1L);
-            // 注意：实际项目中 extensions 应存储为 JSON，这里简化测试
+                // 重新加载验证（同样需要手动验证，因为 loadOrder 不加载 Map）
+                Order reloaded = orderRepository.getByID(1L);
+                // 注意：实际项目中 extensions 应存储为 JSON，这里简化测试
+            });
         }
 
         @Test
         @Disabled("Map 持久化需要 JSON 序列化，当前框架未实现")
         @DisplayName("M04: 嵌套 Map 变更")
         void shouldUpdateNestedMap_E2E() {
-            // 准备初始数据
-            Order order = new Order(1L, "ORD-001");
-            OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
-            item.getAttributes().put("color", "red");
-            order.getItems().add(item);
+            TrackingContext.withScope(() -> {
+                // 准备初始数据
+                Order order = new Order(1L, "ORD-001");
+                OrderItem item = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
+                item.getAttributes().put("color", "red");
+                order.getItems().add(item);
 
-            insertOrder(orderConverter.toMainPO(order));
-            insertOrderItem(item, order.getId());
+                insertOrder(orderConverter.toMainPO(order));
+                insertOrderItem(item, order.getId());
 
-            // 通过 Repository 加载（需要手动初始化 attributes）
-            Order loaded = orderRepository.getByID(1L);
-            loaded.getItems().get(0).getAttributes().put("color", "red");  // 模拟从 JSON 加载
+                // 通过 Repository 加载（需要手动初始化 attributes）
+                Order loaded = orderRepository.getByID(1L);
+                loaded.getItems().get(0).getAttributes().put("color", "red");  // 模拟从 JSON 加载
 
-            // 修改嵌套 Map
-            loaded.getItems().get(0).getAttributes().put("color", "blue");
+                // 修改嵌套 Map
+                loaded.getItems().get(0).getAttributes().put("color", "blue");
 
-            // 保存（自动生成 UPDATE SQL）
-            orderRepository.save(loaded);
+                // 保存（自动生成 UPDATE SQL）
+                orderRepository.save(loaded);
 
-            // 验证 ChangeSet 生成
-            // 注意：实际项目中 attributes 应存储为 JSON
+                // 验证 ChangeSet 生成
+                // 注意：实际项目中 attributes 应存储为 JSON
+            });
         }
     }
 

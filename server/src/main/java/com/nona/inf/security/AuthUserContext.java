@@ -3,7 +3,7 @@ package com.nona.inf.security;
 import java.util.List;
 
 /**
- * 用户上下文：认证过滤器组装 ThreadContext 与授权裁决所需的最小信息集。
+ * 用户上下文：认证过滤器组装跟踪作用域持有者与授权裁决所需的最小信息集。
  * <p>
  * 该值对象同时是 Redis 缓存（JSON）与 DB SPI 的返回形态；roles 为角色名列表
  * （与 {@link AuthRole#name()} 对齐），shopIds 为账号关联的店铺 ID 列表

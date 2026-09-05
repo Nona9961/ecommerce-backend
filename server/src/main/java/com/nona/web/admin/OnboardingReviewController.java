@@ -8,7 +8,7 @@ import com.nona.api.common.OnboardingStatus;
 import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 import com.nona.application.admin.OnboardingReviewUseCase;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 平台入驻审核 REST 控制器（/admin/onboarding，ADMIN 角色）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380 / 查询参数显式解析）+ 委托
- * {@link OnboardingReviewUseCase}；当前审核人 ID 从 {@link ThreadContext}
+ * {@link OnboardingReviewUseCase}；当前审核人 ID 从跟踪上下文
  * 取（认证过滤器已写入 JWT 主体）。列表状态参数为可选过滤（缺省全部），
  * 非法值显式解析拒绝（400 generic.validation_failed，与请求体校验语义一致）。
  * 审核通过时用例在事务内发布 ApplicationApproved 领域事件（开店编排在后续
@@ -40,7 +40,7 @@ public class OnboardingReviewController implements OnboardingReviewApi {
     /**
      * 请求上下文（取当前登录平台运营 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造平台审核控制器。
@@ -48,9 +48,9 @@ public class OnboardingReviewController implements OnboardingReviewApi {
      * @param reviewUseCase 平台审核用例
      * @param threadContext 请求上下文
      */
-    public OnboardingReviewController(OnboardingReviewUseCase reviewUseCase, ThreadContext threadContext) {
+    public OnboardingReviewController(OnboardingReviewUseCase reviewUseCase, TenantContextAccessor tenantContextAccessor) {
         this.reviewUseCase = reviewUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -90,11 +90,11 @@ public class OnboardingReviewController implements OnboardingReviewApi {
     }
 
     /**
-     * 当前登录平台运营 ID（认证过滤器写入 ThreadContext 的身份）。
+     * 当前登录平台运营 ID（认证过滤器写入跟踪作用域的身份）。
      *
      * @return 平台运营账号 ID
      */
     private Long currentAccountId() {
-        return Long.valueOf(threadContext.getIdentity());
+        return Long.valueOf(tenantContextAccessor.getIdentity());
     }
 }

@@ -30,7 +30,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>
  * 依赖延迟：{@link EntityManagerFactory} 经 {@link ObjectProvider} 注入，构造期不解析
  * （仅在 {@link #onScopeExited()} 首次调用时解析）——打破初始化期循环依赖：
- * {@code EntityManagerFactory → HibernateMultiTenancyConfig → ThreadContextTenantIdentifierResolver
+ * {@code EntityManagerFactory → HibernateMultiTenancyConfig → TrackingContextTenantIdentifierResolver
  * → TenantPrivilege → JpaTenantScopeExitHandler → EntityManagerFactory}。
  * {@code onScopeExited} 仅在运行时作用域退出时触发，彼时 EMF 必然已就绪。
  *

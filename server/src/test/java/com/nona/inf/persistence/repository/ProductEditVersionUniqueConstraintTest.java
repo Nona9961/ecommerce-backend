@@ -1,8 +1,8 @@
 package com.nona.inf.persistence.repository;
 
 import com.nona.domain.catalog.entity.EditVersionTriggerType;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
@@ -16,9 +16,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -73,11 +70,6 @@ class ProductEditVersionUniqueConstraintTest {
     @Autowired
     private SkuJpaRepository skuJpaRepository;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -97,17 +89,6 @@ class ProductEditVersionUniqueConstraintTest {
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -117,15 +98,19 @@ class ProductEditVersionUniqueConstraintTest {
     @Test
     @DisplayName("重复版本号直插被唯一约束拒绝")
     void duplicateVersionNo_rejectedByUniqueConstraint() {
-        editVersionJpaRepository.save(newVersionPo(81001L, 91001L, 1, "v1"));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            editVersionJpaRepository.save(newVersionPo(81001L, 91001L, 1, "v1"));
 
-        assertThatThrownBy(() ->
-                editVersionJpaRepository.save(newVersionPo(81002L, 91001L, 1, "v2")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+            assertThatThrownBy(() ->
+                    editVersionJpaRepository.save(newVersionPo(81002L, 91001L, 1, "v2")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
 
-        assertThat(editVersionJpaRepository.findById(81001L)).isPresent();
-        assertThat(editVersionJpaRepository.findById(81002L)).isEmpty();
-    }
+            assertThat(editVersionJpaRepository.findById(81001L)).isPresent();
+            assertThat(editVersionJpaRepository.findById(81002L)).isEmpty();
+    
+        });
+}
 
     /**
      * critical：不同商品的相同版本号互不冲突（唯一约束按商品维度，各
@@ -134,12 +119,16 @@ class ProductEditVersionUniqueConstraintTest {
     @Test
     @DisplayName("不同商品的相同版本号合法共存")
     void sameVersionNoAcrossProducts_allowed() {
-        editVersionJpaRepository.save(newVersionPo(81011L, 91001L, 1, "v1"));
-        editVersionJpaRepository.save(newVersionPo(81012L, 91002L, 1, "v1"));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            editVersionJpaRepository.save(newVersionPo(81011L, 91001L, 1, "v1"));
+            editVersionJpaRepository.save(newVersionPo(81012L, 91002L, 1, "v1"));
 
-        assertThat(editVersionJpaRepository.findById(81011L)).isPresent();
-        assertThat(editVersionJpaRepository.findById(81012L)).isPresent();
-    }
+            assertThat(editVersionJpaRepository.findById(81011L)).isPresent();
+            assertThat(editVersionJpaRepository.findById(81012L)).isPresent();
+    
+        });
+}
 
     /**
      * 构造版本行（直插绕过分配路径，验证 DB 兜底）。

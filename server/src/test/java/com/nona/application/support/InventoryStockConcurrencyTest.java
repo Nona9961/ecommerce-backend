@@ -4,8 +4,8 @@ import com.nona.application.support.InventoryReservationUseCase;
 import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.domain.inventory.factory.InventoryItemFactory;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.InventoryItemRepositoryImpl;
@@ -13,17 +13,13 @@ import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.RepeatedTest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -133,11 +129,6 @@ class InventoryStockConcurrencyTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺；工作线程各自作用域）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -151,7 +142,7 @@ class InventoryStockConcurrencyTest {
     private long itemId;
 
     /**
-     * 每轮前：提权清空两表 + 建立请求作用域 + 店铺租户上下文 + 装配
+     * 每轮前：提权清空两表 + 店铺租户作用域（withScope 内事务装配）
      * M 份可售库存。
      */
     @BeforeEach
@@ -160,8 +151,8 @@ class InventoryStockConcurrencyTest {
             inventoryLogJpaRepository.deleteAll();
             inventoryItemJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
         tx.execute(status -> {
             final InventoryItem created = inventoryItemFactory.createInitial(SHOP, SKU);
             inventoryItemRepository.save(created);
@@ -171,15 +162,7 @@ class InventoryStockConcurrencyTest {
             itemId = loaded.getId();
             return null;
         });
-    }
-
-    /**
-     * 每轮后：清理请求作用域与租户上下文，避免跨轮污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
+        });
     }
 
     /**
@@ -189,7 +172,9 @@ class InventoryStockConcurrencyTest {
      */
     @RepeatedTest(ROUNDS)
     @DisplayName("N线程竞争M份库存恰好M成功")
-    void concurrentPreoccupy_exactlyMStockSucceed() throws Exception {
+    void concurrentPreoccupy_exactlyMStockSucceed() {
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
         final CountDownLatch startLatch = new CountDownLatch(1);
         final AtomicInteger success = new AtomicInteger();
         final AtomicInteger insufficient = new AtomicInteger();
@@ -202,15 +187,11 @@ class InventoryStockConcurrencyTest {
             IntStream.range(0, THREADS).forEach(i -> futures.add(executor.submit((Runnable) () -> {
                         try {
                             startLatch.await();
-                            RequestContextHolder.setRequestAttributes(
-                                    new ServletRequestAttributes(new MockHttpServletRequest()));
-                            try {
-                                threadContext.setTenantID(TENANT);
+                            TrackingContext.withScope(() -> {
+                                TrackingContext.scope().setTenantID(TENANT);
                                 reservationUseCase.preoccupy(BASE_ORDER + i, SKU, 1);
                                 success.incrementAndGet();
-                            } finally {
-                                RequestContextHolder.resetRequestAttributes();
-                            }
+                            });
                         } catch (final InterruptedException e) {
                             Thread.currentThread().interrupt();
                             unexpected.incrementAndGet();
@@ -227,7 +208,14 @@ class InventoryStockConcurrencyTest {
 
             startLatch.countDown();
             for (final Future<?> future : futures) {
-                future.get(60, TimeUnit.SECONDS);
+                try {
+                    future.get(60, TimeUnit.SECONDS);
+                } catch (final InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    unexpected.incrementAndGet();
+                } catch (final java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+                    unexpected.incrementAndGet();
+                }
             }
         }
 
@@ -247,5 +235,6 @@ class InventoryStockConcurrencyTest {
                 .filter(log -> log.getType() == InventoryLogType.PREOCCUPY)
                 .toList();
         assertThat(preoccupyLogs).hasSize(STOCK);
+        });
     }
 }

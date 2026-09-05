@@ -5,6 +5,7 @@ import com.nona.domain.catalog.entity.CategoryStatus;
 import com.nona.domain.catalog.entity.BrandStatus;
 import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.BrandPO;
 import com.nona.inf.persistence.po.catalog.PlatformCategoryPO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
@@ -31,12 +32,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 import java.util.Optional;
@@ -147,17 +145,9 @@ class ProductAutoDelistIntegrationTest {
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("SELLER"), List.of(SHOP_A_ID))));
         when(authUserCache.get(ADMIN_UID)).thenReturn(Optional.of(
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("ADMIN"), List.of())));
-        // 事件消费编排（autoDelistOnSellout 直接调用）在测试线程执行：模拟
-        // 发布线程的请求上下文（@RequestScope ThreadContext 解析前提，与
-        // InventoryReservationSelloutTriggerTest 同形制）——编排内部自管
-        // 提权事务与放行，不依赖请求租户。
-        RequestContextHolder.setRequestAttributes(
-                new ServletRequestAttributes(new MockHttpServletRequest()));
-    }
-
-    @AfterEach
-    void tearDown() {
-        RequestContextHolder.resetRequestAttributes();
+        // 事件消费编排（autoDelistOnSellout 直接调用）在测试线程执行：
+        // 调用点以 TrackingContext.withScope 绑定跟踪作用域（编排内部自管
+        // 提权事务与放行，不依赖请求租户）。
     }
 
     // ---- Happy path ----
@@ -173,7 +163,7 @@ class ProductAutoDelistIntegrationTest {
         final long skuId = firstSkuIdOf(productId);
         stockRowAs(skuId, 0, 0);
 
-        listener.autoDelistOnSellout(skuId);
+        TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuId));
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.DELISTED);
     }
@@ -192,7 +182,7 @@ class ProductAutoDelistIntegrationTest {
         stockRowAs(skuIds.get(0), 0, 0);
         stockRowAs(skuIds.get(1), 5, 0);
 
-        listener.autoDelistOnSellout(skuIds.get(0));
+        TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuIds.get(0)));
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.ON_SALE);
     }
@@ -209,7 +199,7 @@ class ProductAutoDelistIntegrationTest {
         stockRowAs(skuIds.get(0), 0, 0);
         stockRowAs(skuIds.get(1), 0, 0);
 
-        listener.autoDelistOnSellout(skuIds.get(0));
+        TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuIds.get(0)));
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.DELISTED);
     }
@@ -225,7 +215,7 @@ class ProductAutoDelistIntegrationTest {
         final long skuId = firstSkuIdOf(productId);
         stockRowAs(skuId, 8, 0);
 
-        listener.autoDelistOnSellout(skuId);
+        TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuId));
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.ON_SALE);
     }
@@ -242,10 +232,10 @@ class ProductAutoDelistIntegrationTest {
         final long productId = onSaleProductAs("幂等商品");
         final long skuId = firstSkuIdOf(productId);
         stockRowAs(skuId, 0, 0);
-        listener.autoDelistOnSellout(skuId);
+        TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuId));
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.DELISTED);
 
-        assertThatCode(() -> listener.autoDelistOnSellout(skuId)).doesNotThrowAnyException();
+        assertThatCode(() -> TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuId))).doesNotThrowAnyException();
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.DELISTED);
     }
@@ -256,7 +246,7 @@ class ProductAutoDelistIntegrationTest {
     @Test
     @DisplayName("SKU不存在静默跳过")
     void sellout_missingSku_silent() {
-        assertThatCode(() -> listener.autoDelistOnSellout(999999L)).doesNotThrowAnyException();
+        assertThatCode(() -> TrackingContext.withScope(() -> listener.autoDelistOnSellout(999999L))).doesNotThrowAnyException();
     }
 
     /**
@@ -270,7 +260,7 @@ class ProductAutoDelistIntegrationTest {
         final long skuId = firstSkuIdOf(productId);
         stockRowAs(skuId, 0, 0);
 
-        assertThatCode(() -> listener.autoDelistOnSellout(skuId)).doesNotThrowAnyException();
+        assertThatCode(() -> TrackingContext.withScope(() -> listener.autoDelistOnSellout(skuId))).doesNotThrowAnyException();
 
         assertThat(statusOf(productId)).isEqualTo(ProductStatus.PENDING_REVIEW);
     }

@@ -7,8 +7,8 @@ import com.nona.domain.catalog.factory.ProductEditVersionFactory;
 import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductEditVersionPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductEditVersionJpaRepository;
@@ -21,10 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -127,11 +124,6 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -151,17 +143,6 @@ class ProductEditVersionRepositoryIntegrationTest {
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -171,22 +152,26 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("append落库后版本行字段完整读回")
     void append_insertsVersionRow() {
-        final long productId = 81001L;
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final long productId = 81001L;
 
-        final ProductEditVersion appended = tx.execute(status ->
-                editVersionRepository.append(editVersionFactory.createEdit(
-                        productId, 1, SNAPSHOT, "72001")));
+            final ProductEditVersion appended = tx.execute(status ->
+                    editVersionRepository.append(editVersionFactory.createEdit(
+                            productId, 1, SNAPSHOT, "72001")));
 
-        assertThat(appended).isNotNull();
-        assertThat(appended.getCreatedAt()).isNotNull();
-        final ProductEditVersionPO row = editVersionJpaRepository.findById(appended.getId()).orElseThrow();
-        assertThat(row.getTenantID()).isEqualTo(TENANT_A);
-        assertThat(row.getProductId()).isEqualTo(productId);
-        assertThat(row.getVersionNo()).isEqualTo(1);
-        assertThat(row.getSnapshotJson()).isEqualTo(SNAPSHOT);
-        assertThat(row.getOperator()).isEqualTo("72001");
-        assertThat(row.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
-    }
+            assertThat(appended).isNotNull();
+            assertThat(appended.getCreatedAt()).isNotNull();
+            final ProductEditVersionPO row = editVersionJpaRepository.findById(appended.getId()).orElseThrow();
+            assertThat(row.getTenantID()).isEqualTo(TENANT_A);
+            assertThat(row.getProductId()).isEqualTo(productId);
+            assertThat(row.getVersionNo()).isEqualTo(1);
+            assertThat(row.getSnapshotJson()).isEqualTo(SNAPSHOT);
+            assertThat(row.getOperator()).isEqualTo("72001");
+            assertThat(row.getTriggerType()).isEqualTo(EditVersionTriggerType.EDIT);
+    
+        });
+}
 
     /**
      * happy：按商品分页列出版本——新版本在前（version_no 倒序）、计数
@@ -195,24 +180,28 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("分页列表新版本在前且计数与最大版本号准确")
     void listByProductPaged_newestFirstWithCountAndMax() {
-        final long productId = 81002L;
-        for (int versionNo = 1; versionNo <= 3; versionNo++) {
-            final int no = versionNo;
-            tx.execute(status -> editVersionRepository.append(
-                    editVersionFactory.createEdit(productId, no, SNAPSHOT, "72001")));
-        }
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final long productId = 81002L;
+            for (int versionNo = 1; versionNo <= 3; versionNo++) {
+                final int no = versionNo;
+                tx.execute(status -> editVersionRepository.append(
+                        editVersionFactory.createEdit(productId, no, SNAPSHOT, "72001")));
+            }
 
-        assertThat(editVersionRepository.maxVersionNo(productId)).isEqualTo(3);
-        assertThat(editVersionRepository.maxVersionNo(99999L)).isZero();
-        assertThat(editVersionRepository.countByProduct(productId)).isEqualTo(3);
-        final List<ProductEditVersion> page =
-                editVersionRepository.listByProductPaged(productId, 0, 10);
-        assertThat(page).extracting(ProductEditVersion::getVersionNo)
-                .containsExactly(3, 2, 1);
-        assertThat(editVersionRepository.listByProductPaged(productId, 2, 2))
-                .extracting(ProductEditVersion::getVersionNo)
-                .containsExactly(1);
-    }
+            assertThat(editVersionRepository.maxVersionNo(productId)).isEqualTo(3);
+            assertThat(editVersionRepository.maxVersionNo(99999L)).isZero();
+            assertThat(editVersionRepository.countByProduct(productId)).isEqualTo(3);
+            final List<ProductEditVersion> page =
+                    editVersionRepository.listByProductPaged(productId, 0, 10);
+            assertThat(page).extracting(ProductEditVersion::getVersionNo)
+                    .containsExactly(3, 2, 1);
+            assertThat(editVersionRepository.listByProductPaged(productId, 2, 2))
+                    .extracting(ProductEditVersion::getVersionNo)
+                    .containsExactly(1);
+    
+        });
+}
 
     /**
      * happy：getByProductAndVersion 按商品 + 版本号取行（回滚素材读取）。
@@ -220,20 +209,24 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("按商品与版本号取版本行")
     void getByProductAndVersion_locatesRow() {
-        final long productId = 81003L;
-        tx.executeWithoutResult(status -> {
-            editVersionRepository.append(
-                    editVersionFactory.createEdit(productId, 1, SNAPSHOT, "72001"));
-            editVersionRepository.append(
-                    editVersionFactory.createRollback(productId, 2, SNAPSHOT, "72001"));
-        });
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final long productId = 81003L;
+            tx.executeWithoutResult(status -> {
+                editVersionRepository.append(
+                        editVersionFactory.createEdit(productId, 1, SNAPSHOT, "72001"));
+                editVersionRepository.append(
+                        editVersionFactory.createRollback(productId, 2, SNAPSHOT, "72001"));
+            });
 
-        final ProductEditVersion version =
-                editVersionRepository.getByProductAndVersion(productId, 2);
-        assertThat(version).isNotNull();
-        assertThat(version.getTriggerType()).isEqualTo(EditVersionTriggerType.ROLLBACK);
-        assertThat(editVersionRepository.getByProductAndVersion(productId, 9)).isNull();
-    }
+            final ProductEditVersion version =
+                    editVersionRepository.getByProductAndVersion(productId, 2);
+            assertThat(version).isNotNull();
+            assertThat(version.getTriggerType()).isEqualTo(EditVersionTriggerType.ROLLBACK);
+            assertThat(editVersionRepository.getByProductAndVersion(productId, 9)).isNull();
+    
+        });
+}
 
     /**
      * critical：save 为插行语义（append-only，无更新路径——重复 save 同一
@@ -242,16 +235,20 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("行级删除拒绝且save为插行语义")
     void rowDelete_rejected() {
-        final ProductEditVersion version = editVersionFactory.createEdit(
-                81004L, 1, SNAPSHOT, "72001");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final ProductEditVersion version = editVersionFactory.createEdit(
+                    81004L, 1, SNAPSHOT, "72001");
 
-        assertThatThrownBy(() -> editVersionRepository.delete(version))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> editVersionRepository.deleteByID(1L))
-                .isInstanceOf(UnsupportedOperationException.class);
-        tx.execute(status -> editVersionRepository.save(version));
-        assertThat(editVersionJpaRepository.countByProductId(81004L)).isEqualTo(1);
-    }
+            assertThatThrownBy(() -> editVersionRepository.delete(version))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            assertThatThrownBy(() -> editVersionRepository.deleteByID(1L))
+                    .isInstanceOf(UnsupportedOperationException.class);
+            tx.execute(status -> editVersionRepository.save(version));
+            assertThat(editVersionJpaRepository.countByProductId(81004L)).isEqualTo(1);
+    
+        });
+}
 
     /**
      * error：删除商品级联清理版本行（deleteByID 真实删除语义：删四个
@@ -260,22 +257,26 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("删除商品级联清理版本行")
     void deleteProduct_cascadesVersionRows() {
-        final Product product = tx.execute(status -> {
-            final Product created = productFactory.createDraft(9101L, "待删商品", null, null, null);
-            productRepository.save(created);
-            editVersionRepository.append(editVersionFactory.createEdit(
-                    created.getId(), 1, SNAPSHOT, "72001"));
-            editVersionRepository.append(editVersionFactory.createEdit(
-                    created.getId(), 2, SNAPSHOT, "72001"));
-            return created;
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Product product = tx.execute(status -> {
+                final Product created = productFactory.createDraft(9101L, "待删商品", null, null, null);
+                productRepository.save(created);
+                editVersionRepository.append(editVersionFactory.createEdit(
+                        created.getId(), 1, SNAPSHOT, "72001"));
+                editVersionRepository.append(editVersionFactory.createEdit(
+                        created.getId(), 2, SNAPSHOT, "72001"));
+                return created;
+            });
+
+            final int deleted = tx.execute(status -> productRepository.deleteByID(product.getId()));
+
+            assertThat(deleted).isEqualTo(1);
+            assertThat(editVersionJpaRepository.countByProductId(product.getId())).isZero();
+            assertThat(productJpaRepository.existsById(product.getId())).isFalse();
+    
         });
-
-        final int deleted = tx.execute(status -> productRepository.deleteByID(product.getId()));
-
-        assertThat(deleted).isEqualTo(1);
-        assertThat(editVersionJpaRepository.countByProductId(product.getId())).isZero();
-        assertThat(productJpaRepository.existsById(product.getId())).isFalse();
-    }
+}
 
     /**
      * error：跨店铺版本行访问按不存在呈现——fail-closed（租户过滤拦截，
@@ -284,14 +285,20 @@ class ProductEditVersionRepositoryIntegrationTest {
     @Test
     @DisplayName("跨店铺版本访问按不存在呈现")
     void crossTenantVersionAccess_failClosed() {
-        final long productId = 81005L;
-        tx.execute(status -> editVersionRepository.append(
-                editVersionFactory.createEdit(productId, 1, SNAPSHOT, "72001")));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final long productId = 81005L;
+            tx.execute(status -> editVersionRepository.append(
+                    editVersionFactory.createEdit(productId, 1, SNAPSHOT, "72001")));
 
-        threadContext.setTenantID(TENANT_B);
-        assertThat(editVersionRepository.getByProductAndVersion(productId, 1)).isNull();
-        assertThat(editVersionRepository.listByProductPaged(productId, 0, 10)).isEmpty();
-        assertThat(editVersionRepository.countByProduct(productId)).isZero();
-        assertThat(editVersionRepository.maxVersionNo(productId)).isZero();
-    }
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                assertThat(editVersionRepository.getByProductAndVersion(productId, 1)).isNull();
+                assertThat(editVersionRepository.listByProductPaged(productId, 0, 10)).isEmpty();
+                assertThat(editVersionRepository.countByProduct(productId)).isZero();
+                assertThat(editVersionRepository.maxVersionNo(productId)).isZero();
+    
+            });
+        });
+}
 }

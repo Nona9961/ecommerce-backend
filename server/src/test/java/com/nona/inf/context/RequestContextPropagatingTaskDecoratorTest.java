@@ -5,15 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.nona.EcommerceApplication;
 import com.nona.annotation.ScaffoldGenerated;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.task.TaskDecorator;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -26,9 +22,11 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 验证 {@link RequestContextPropagatingTaskDecorator} 跨线程传播
- * 与 {@link TenantContextAccessor} 两级回退优先级（ScopedValue 载体）。
+ * 与 {@link TenantContextAccessor} 单级解析顺序（holder → boundSnapshot 回退，ScopedValue
+ * 载体）：提交线程经 {@link TrackingContext#withScope} 写入 holder，装饰器捕获快照，
+ * worker 线程以双槽嵌套绑定（withSnapshot 外、withScope 内）还原。
  *
- * @author nona
+ * @author nona9961
  */
 @SpringBootTest(classes = EcommerceApplication.class)
 @ScaffoldGenerated
@@ -37,162 +35,177 @@ class RequestContextPropagatingTaskDecoratorTest {
     @Autowired
     private TenantContextAccessor tenantContextAccessor;
 
-    @Autowired
-    private ThreadContext threadContext;
-
     private TaskDecorator taskDecorator;
 
     @BeforeEach
     void setUp() {
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
         taskDecorator = new RequestContextPropagatingTaskDecorator(tenantContextAccessor);
     }
 
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        threadContext.setRole(null);
-        threadContext.setIdentity(null);
-        RequestContextHolder.resetRequestAttributes();
-    }
-
     /**
-     * 验证装饰器从提交线程的 {@link ThreadContext} 捕获 tenantID / role / identity，
-     * 并经 {@link TenantContextAccessor} 的 ScopedValue 回退在 worker 线程可见。
+     * 验证装饰器从提交线程的 holder（{@link TrackingContext#scope()}）捕获
+     * tenantID / role / identity，并经 {@link TenantContextAccessor} 的 ScopedValue 快照回退
+     * 在 worker 线程可见。
      */
     @Test
     void shouldPropagateContextSnapshotToWorkerThread() throws Exception {
-        threadContext.setTenantID("tenant-a");
-        threadContext.setRole(List.of("admin", "editor"));
-        threadContext.setIdentity("user-42");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-a");
+            TrackingContext.scope().setRole(List.of("admin", "editor"));
+            TrackingContext.scope().setIdentity("user-42");
 
-        final CountDownLatch latch = new CountDownLatch(1);
-        final AtomicReference<String> capturedTenant = new AtomicReference<>();
-        final AtomicReference<List<String>> capturedRole = new AtomicReference<>();
-        final AtomicReference<String> capturedIdentity = new AtomicReference<>();
+            final CountDownLatch latch = new CountDownLatch(1);
+            final AtomicReference<String> capturedTenant = new AtomicReference<>();
+            final AtomicReference<List<String>> capturedRole = new AtomicReference<>();
+            final AtomicReference<String> capturedIdentity = new AtomicReference<>();
 
-        final Runnable task = () -> {
-            capturedTenant.set(tenantContextAccessor.getTenantID());
-            capturedRole.set(tenantContextAccessor.getRole());
-            capturedIdentity.set(tenantContextAccessor.getIdentity());
-            latch.countDown();
-        };
+            final Runnable task = () -> {
+                capturedTenant.set(tenantContextAccessor.getTenantID());
+                capturedRole.set(tenantContextAccessor.getRole());
+                capturedIdentity.set(tenantContextAccessor.getIdentity());
+                latch.countDown();
+            };
 
-        final Runnable decorated = taskDecorator.decorate(task);
-        final Thread worker = new Thread(decorated);
-        worker.start();
-        final boolean completed = latch.await(5, TimeUnit.SECONDS);
-        worker.join();
+            final Runnable decorated = taskDecorator.decorate(task);
+            final Thread worker = new Thread(decorated);
+            worker.start();
+            final boolean completed;
+            try {
+                completed = latch.await(5, TimeUnit.SECONDS);
+                worker.join();
+            }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted while awaiting worker", e);
+            }
 
-        assertThat(completed).isTrue();
-        assertThat(capturedTenant.get()).isEqualTo("tenant-a");
-        assertThat(capturedRole.get()).containsExactly("admin", "editor");
-        assertThat(capturedIdentity.get()).isEqualTo("user-42");
+            assertThat(completed).isTrue();
+            assertThat(capturedTenant.get()).isEqualTo("tenant-a");
+            assertThat(capturedRole.get()).containsExactly("admin", "editor");
+            assertThat(capturedIdentity.get()).isEqualTo("user-42");
+        });
     }
 
     /**
-     * 验证请求作用域优先于 ScopedValue 回退：两者同时存在时，读取与捕获均取请求作用域值。
+     * 验证 holder 优先于 boundSnapshot 回退：两者同时存在时，读取与捕获均取 holder 值
+     * （单级解析第一顺位；worker 自身写入永不与外层快照冲突）。
      */
     @Test
-    void shouldPreferRequestScopeOverScopedValueFallback() {
-        threadContext.setTenantID("from-request");
-        threadContext.setRole(List.of("admin"));
-        threadContext.setIdentity("req-user");
-
+    void shouldPreferHolderOverBoundSnapshotFallback() {
         final TenantContextAccessor.ContextSnapshot staleSnapshot = new TenantContextAccessor.ContextSnapshot(
                 "from-fallback", List.of("visitor"), "fb-user");
-        TenantContextAccessor.withSnapshot(staleSnapshot, () -> {
+        TenantContextAccessor.withSnapshot(staleSnapshot, () -> TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("from-request");
+            TrackingContext.scope().setRole(List.of("admin"));
+            TrackingContext.scope().setIdentity("req-user");
+
             assertThat(tenantContextAccessor.getTenantID()).isEqualTo("from-request");
 
             final TenantContextAccessor.ContextSnapshot captured = tenantContextAccessor.captureSnapshot();
             assertThat(captured.tenantID()).isEqualTo("from-request");
             assertThat(captured.role()).containsExactly("admin");
             assertThat(captured.identity()).isEqualTo("req-user");
-        });
+        }));
     }
 
     /**
-     * 验证请求作用域缺失时，ScopedValue 回退生效：绑定快照后读取到回退值。
+     * 验证 holder 缺失时 boundSnapshot 回退生效：无 withScope（纯 boundSnapshot 路径）
+     * 绑定快照后读取到回退值。
      */
     @Test
-    void shouldUseScopedValueFallbackWhenNoRequestScope() {
-        RequestContextHolder.resetRequestAttributes();
-        try {
-            final TenantContextAccessor.ContextSnapshot snapshot = new TenantContextAccessor.ContextSnapshot(
-                    "fallback-tenant", List.of("visitor"), "fb-user-99");
-            TenantContextAccessor.withSnapshot(snapshot, () -> {
-                assertThat(tenantContextAccessor.getTenantID()).isEqualTo("fallback-tenant");
-            });
-        } finally {
-            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        }
+    void shouldUseBoundSnapshotFallbackWhenHolderEmpty() {
+        final TenantContextAccessor.ContextSnapshot snapshot = new TenantContextAccessor.ContextSnapshot(
+                "fallback-tenant", List.of("visitor"), "fb-user-99");
+        TenantContextAccessor.withSnapshot(snapshot, () -> {
+            assertThat(tenantContextAccessor.getTenantID()).isEqualTo("fallback-tenant");
+        });
     }
 
     /**
      * 验证空快照视为无身份（fail-closed）：未绑定 / 绑定 {@link TenantContextAccessor.ContextSnapshot#EMPTY} /
-     * 绑定空白 tenantID 快照，读取均返回 null。
+     * 绑定空白 tenantID 快照 / withScope 空 holder（未写入），读取均返回 null。
      */
     @Test
     void emptySnapshotShouldYieldNullTenantID() {
-        RequestContextHolder.resetRequestAttributes();
-        try {
+        assertThat(tenantContextAccessor.getTenantID()).isNull();
+
+        TenantContextAccessor.withSnapshot(TenantContextAccessor.ContextSnapshot.EMPTY, () -> {
             assertThat(tenantContextAccessor.getTenantID()).isNull();
+        });
 
-            TenantContextAccessor.withSnapshot(TenantContextAccessor.ContextSnapshot.EMPTY, () -> {
-                assertThat(tenantContextAccessor.getTenantID()).isNull();
-            });
+        TenantContextAccessor.withSnapshot(
+                new TenantContextAccessor.ContextSnapshot("  ", null, null), () -> {
+            assertThat(tenantContextAccessor.getTenantID()).isNull();
+        });
 
-            TenantContextAccessor.withSnapshot(
-                    new TenantContextAccessor.ContextSnapshot("  ", null, null), () -> {
-                assertThat(tenantContextAccessor.getTenantID()).isNull();
-            });
-        } finally {
-            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        }
+        TrackingContext.withScope(() -> {
+            assertThat(tenantContextAccessor.getTenantID()).isNull();
+        });
     }
 
     /**
-     * 验证结构化作用域语义：任务执行期间快照可见，作用域退出（同步执行返回后）
-     * 自动恢复 unbound——无需手动清理，线程上无残留。
+     * 验证结构化作用域语义：withScope 内 holder 写入在任务执行期间可见
+     * （decorate 捕获快照），作用域退出（含空 holder 场景）自动恢复
+     * fail-closed——无需手动清理，线程上无残留。
      */
     @Test
     void shouldAutoRestoreSnapshotAfterScopeExit() {
-        threadContext.setTenantID("tenant-x");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-x");
 
-        final Runnable task = taskDecorator.decorate(() -> {
+            final Runnable task = taskDecorator.decorate(() -> {
+                assertThat(tenantContextAccessor.getTenantID()).isEqualTo("tenant-x");
+            });
+
             assertThat(tenantContextAccessor.getTenantID()).isEqualTo("tenant-x");
+
+            task.run();
         });
 
-        assertThat(tenantContextAccessor.getTenantID()).isEqualTo("tenant-x");
-
-        task.run();
-
-        RequestContextHolder.resetRequestAttributes();
-        try {
+        TrackingContext.withScope(() -> {
             assertThat(tenantContextAccessor.getTenantID()).isNull();
-        } finally {
-            RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        }
+        });
     }
 
     /**
-     * 验证池化线程复用无残留：单线程池先后执行带快照与无快照任务，
+     * 验证池化线程复用无残留：单线程池先后执行带快照与空 holder 作用域任务，
      * 第二个任务读不到第一个任务的租户（绑定随作用域退出自动消失）。
      */
     @Test
     void pooledThreadReuseShouldNotLeakSnapshot() throws Exception {
         final ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
-            threadContext.setTenantID("tenant-a");
-            pool.submit(taskDecorator.decorate(() -> {
-                assertThat(tenantContextAccessor.getTenantID()).isEqualTo("tenant-a");
-            })).get();
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID("tenant-a");
+                try {
+                    pool.submit(taskDecorator.decorate(() -> {
+                        assertThat(tenantContextAccessor.getTenantID()).isEqualTo("tenant-a");
+                    })).get();
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while awaiting task", e);
+                }
+                catch (ExecutionException e) {
+                    throw new IllegalStateException("task failed", e);
+                }
+            });
 
-            threadContext.setTenantID(null);
-            final AtomicReference<String> captured = new AtomicReference<>();
-            pool.submit(taskDecorator.decorate(() -> captured.set(tenantContextAccessor.getTenantID()))).get();
+            TrackingContext.withScope(() -> {
+                final AtomicReference<String> captured = new AtomicReference<>();
+                try {
+                    pool.submit(taskDecorator.decorate(() -> captured.set(tenantContextAccessor.getTenantID()))).get();
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while awaiting task", e);
+                }
+                catch (ExecutionException e) {
+                    throw new IllegalStateException("task failed", e);
+                }
 
-            assertThat(captured.get()).isNull();
+                assertThat(captured.get()).isNull();
+            });
         } finally {
             pool.shutdownNow();
         }
@@ -205,17 +218,29 @@ class RequestContextPropagatingTaskDecoratorTest {
     void exceptionPathShouldAutoRestoreBinding() throws Exception {
         final ExecutorService pool = Executors.newSingleThreadExecutor();
         try {
-            threadContext.setTenantID("tenant-a");
-            final Future<?> failing = pool.submit(taskDecorator.decorate(() -> {
-                throw new IllegalStateException("boom");
-            }));
-            assertThatThrownBy(failing::get).isInstanceOf(ExecutionException.class);
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID("tenant-a");
+                final Future<?> failing = pool.submit(taskDecorator.decorate(() -> {
+                    throw new IllegalStateException("boom");
+                }));
+                assertThatThrownBy(failing::get).isInstanceOf(ExecutionException.class);
+            });
 
-            threadContext.setTenantID(null);
-            final AtomicReference<String> captured = new AtomicReference<>();
-            pool.submit(taskDecorator.decorate(() -> captured.set(tenantContextAccessor.getTenantID()))).get();
+            TrackingContext.withScope(() -> {
+                final AtomicReference<String> captured = new AtomicReference<>();
+                try {
+                    pool.submit(taskDecorator.decorate(() -> captured.set(tenantContextAccessor.getTenantID()))).get();
+                }
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while awaiting task", e);
+                }
+                catch (ExecutionException e) {
+                    throw new IllegalStateException("task failed", e);
+                }
 
-            assertThat(captured.get()).isNull();
+                assertThat(captured.get()).isNull();
+            });
         } finally {
             pool.shutdownNow();
         }
@@ -230,24 +255,35 @@ class RequestContextPropagatingTaskDecoratorTest {
         final ExecutorService outer = Executors.newSingleThreadExecutor();
         final ExecutorService inner = Executors.newSingleThreadExecutor();
         try {
-            threadContext.setTenantID("tenant-a");
-            final AtomicReference<String> nestedCaptured = new AtomicReference<>();
-            final AtomicReference<String> innerCaptured = new AtomicReference<>();
-            outer.submit(taskDecorator.decorate(() -> {
-                nestedCaptured.set(tenantContextAccessor.captureSnapshot().tenantID());
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID("tenant-a");
+                final AtomicReference<String> nestedCaptured = new AtomicReference<>();
+                final AtomicReference<String> innerCaptured = new AtomicReference<>();
                 try {
-                    inner.submit(taskDecorator.decorate(
-                            () -> innerCaptured.set(tenantContextAccessor.getTenantID()))).get();
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    throw new IllegalStateException("nested dispatch interrupted", e);
-                } catch (ExecutionException e) {
-                    throw new IllegalStateException("nested dispatch failed", e);
+                    outer.submit(taskDecorator.decorate(() -> {
+                        nestedCaptured.set(tenantContextAccessor.captureSnapshot().tenantID());
+                        try {
+                            inner.submit(taskDecorator.decorate(
+                                    () -> innerCaptured.set(tenantContextAccessor.getTenantID()))).get();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            throw new IllegalStateException("nested dispatch interrupted", e);
+                        } catch (ExecutionException e) {
+                            throw new IllegalStateException("nested dispatch failed", e);
+                        }
+                    })).get();
                 }
-            })).get();
+                catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("outer dispatch interrupted", e);
+                }
+                catch (ExecutionException e) {
+                    throw new IllegalStateException("outer dispatch failed", e);
+                }
 
-            assertThat(nestedCaptured.get()).isEqualTo("tenant-a");
-            assertThat(innerCaptured.get()).isEqualTo("tenant-a");
+                assertThat(nestedCaptured.get()).isEqualTo("tenant-a");
+                assertThat(innerCaptured.get()).isEqualTo("tenant-a");
+            });
         } finally {
             outer.shutdownNow();
             inner.shutdownNow();

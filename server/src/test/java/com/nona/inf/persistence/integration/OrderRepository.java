@@ -1,9 +1,9 @@
 package com.nona.inf.persistence.integration;
 
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.changeTracking.domain.model.changeset.*;
 import com.nona.changeTracking.domain.model.snapshot.NullNode;
 import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.ConverterRegistry;
 import com.nona.inf.persistence.converters.PoConverter;
 import com.nona.inf.persistence.converters.RdbGeneralConvertor;
@@ -13,7 +13,6 @@ import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
-import com.nona.annotation.ScaffoldGenerated;
 
 /**
  * Order 聚合根的仓储实现
@@ -28,12 +27,11 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
 
     public OrderRepository(
             ListCrudRepository<FullIntegrationTest.OrderPO, Long> repository,
-            ThreadContext threadContext,
             RdbGeneralConvertor<FullIntegrationTest.Order, FullIntegrationTest.OrderPO, Map<String, Object>> convertor,
             ChangeTrackerProvider changeTrackerProvider,
             JdbcTemplate jdbc,
             ConverterRegistry converterRegistry) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jdbc = jdbc;
         this.converterRegistry = converterRegistry;
     }

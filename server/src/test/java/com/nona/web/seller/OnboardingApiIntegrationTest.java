@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.nona.inf.context.TrackingContext;
 
 /**
  * 商家入驻申请 REST 端点集成测试：提交 / 查看 / 编辑 / 重提（真实 Security 链 + H2 表）。
@@ -451,9 +452,11 @@ class OnboardingApiIntegrationTest {
      * @param reason        驳回原因
      */
     private void rejectForTesting(long applicationId, String reason) {
-        final MerchantApplication application = merchantApplicationRepository.getByID(applicationId);
-        application.reject(9001L, reason);
-        merchantApplicationRepository.save(application);
+        TrackingContext.withScope(() -> {
+            final MerchantApplication application = merchantApplicationRepository.getByID(applicationId);
+            application.reject(9001L, reason);
+            merchantApplicationRepository.save(application);
+        });
     }
 
     /**
@@ -462,9 +465,11 @@ class OnboardingApiIntegrationTest {
      * @param applicationId 申请 ID
      */
     private void approveForTesting(long applicationId) {
-        final MerchantApplication application = merchantApplicationRepository.getByID(applicationId);
-        application.approve(9001L);
-        merchantApplicationRepository.save(application);
+        TrackingContext.withScope(() -> {
+            final MerchantApplication application = merchantApplicationRepository.getByID(applicationId);
+            application.approve(9001L);
+            merchantApplicationRepository.save(application);
+        });
     }
 
     /**

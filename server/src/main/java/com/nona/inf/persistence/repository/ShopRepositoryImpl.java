@@ -8,7 +8,6 @@ import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
 import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.entity.ShopCategory;
 import com.nona.domain.catalog.repo.ShopRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.ShopCategoryConvertor;
 import com.nona.inf.persistence.converters.ShopConvertor;
 import com.nona.inf.persistence.po.catalog.ShopCategoryPO;
@@ -56,19 +55,17 @@ public class ShopRepositoryImpl extends DifferRepository<Shop, ShopPO, List<Shop
      * 构造店铺仓储。
      *
      * @param repository               店铺主表 JPA 仓储
-     * @param threadContext            请求级上下文（变更追踪器与快照）
      * @param convertor                店铺聚合转换器（主表 + 从表行集合）
      * @param changeTrackerProvider    变更追踪器提供者
      * @param shopCategoryJpaRepository 店铺分类子表 JPA 仓储
      * @param shopCategoryConvertor    店铺分类行转换器
      */
     public ShopRepositoryImpl(ShopJpaRepository repository,
-                              ThreadContext threadContext,
                               ShopConvertor convertor,
                               ChangeTrackerProvider changeTrackerProvider,
                               ShopCategoryJpaRepository shopCategoryJpaRepository,
                               ShopCategoryConvertor shopCategoryConvertor) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.shopCategoryJpaRepository = shopCategoryJpaRepository;
         this.shopCategoryConvertor = shopCategoryConvertor;
     }

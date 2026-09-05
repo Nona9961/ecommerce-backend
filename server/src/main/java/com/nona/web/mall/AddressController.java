@@ -5,7 +5,7 @@ import com.nona.api.mall.AddressApi;
 import com.nona.api.mall.AddressRequest;
 import com.nona.api.mall.AddressResponse;
 import com.nona.application.mall.AddressBookUseCase;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ import java.util.List;
  * 买家地址簿 REST 控制器（路由前缀 /mall/addresses，仅买家角色可访问）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托 {@link AddressBookUseCase}，不承载业务逻辑；
- * 当前买家账号 ID 从 {@link ThreadContext} 取（认证过滤器已填充，买家维度由此锚定）。
+ * 当前买家账号 ID 从跟踪上下文 取（认证过滤器已填充，买家维度由此锚定）。
  *
  * @author nona9961
  */
@@ -36,7 +36,7 @@ public class AddressController implements AddressApi {
     /**
      * 请求上下文（取当前登录买家 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造地址簿控制器。
@@ -44,9 +44,9 @@ public class AddressController implements AddressApi {
      * @param addressBookUseCase 地址簿用例
      * @param threadContext      请求上下文
      */
-    public AddressController(AddressBookUseCase addressBookUseCase, ThreadContext threadContext) {
+    public AddressController(AddressBookUseCase addressBookUseCase, TenantContextAccessor tenantContextAccessor) {
         this.addressBookUseCase = addressBookUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -102,6 +102,6 @@ public class AddressController implements AddressApi {
      * @return 买家账号 ID
      */
     private Long currentAccountId() {
-        return Long.valueOf(threadContext.getIdentity());
+        return Long.valueOf(tenantContextAccessor.getIdentity());
     }
 }

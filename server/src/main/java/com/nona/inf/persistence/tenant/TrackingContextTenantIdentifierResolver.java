@@ -2,8 +2,8 @@ package com.nona.inf.persistence.tenant;
 
 import com.nona.annotation.ScaffoldGenerated;
 import com.nona.inf.context.TenantContextAccessor;
-import com.nona.tenant.TenantWriteGate;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.tenant.TenantWriteGate;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.context.spi.CurrentTenantIdentifierResolver;
 import org.springframework.stereotype.Component;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * Hibernate tenant identifier resolver（discriminator multi-tenancy）
  * <p>
- * - 默认：使用当前 ThreadContext 的 tenantID
+ * - 默认：使用当前跟踪作用域 holder（{@code TrackingScope}）的 tenantID
  * - tenant 缺失：返回 {@link TenantContextAccessor#MISSING_TENANT_ID} 实现 fail-closed
  * - 任一读放行作用域（提权或 {@code @CrossTenant}）：返回 root tenant，绕过 Hibernate 内置的 _tenantId filter
  *
@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 @ScaffoldGenerated
-public class ThreadContextTenantIdentifierResolver implements CurrentTenantIdentifierResolver<String> {
+public class TrackingContextTenantIdentifierResolver implements CurrentTenantIdentifierResolver<String> {
 
     /**
      * 根租户 ID：提权作用域下返回该值以绕过 discriminator 过滤。
@@ -30,7 +30,7 @@ public class ThreadContextTenantIdentifierResolver implements CurrentTenantIdent
     public static final String ROOT_TENANT_ID = TenantWriteGate.ROOT_TENANT_ID;
 
     /**
-     * 租户上下文访问器（两级优先级：请求作用域 → 线程回退）
+     * 租户上下文访问器（单级解析：跟踪作用域持有者优先 → 嵌套异步快照回退）
      */
     private final TenantContextAccessor tenantContextAccessor;
 

@@ -8,7 +8,7 @@ import com.nona.changeTracking.domain.model.snapshot.ObjectNode;
 import com.nona.domain.identity.entity.Address;
 import com.nona.domain.identity.entity.AddressBook;
 import com.nona.domain.identity.repo.AddressBookRepository;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.converters.AddressBookConvertor;
 import com.nona.inf.persistence.converters.AddressConvertor;
 import com.nona.inf.persistence.po.identity.AddressBookPO;
@@ -59,7 +59,6 @@ public class AddressBookRepositoryImpl extends DifferRepository<AddressBook, Add
      * 构造地址簿仓储。
      *
      * @param repository             地址簿主表 JPA 仓储
-     * @param threadContext          请求级上下文（变更追踪器与快照）
      * @param convertor              地址簿聚合转换器（主表 + 从表行集合）
      * @param changeTrackerProvider  变更追踪器提供者
      * @param addressJpaRepository   地址子表 JPA 仓储
@@ -67,13 +66,12 @@ public class AddressBookRepositoryImpl extends DifferRepository<AddressBook, Add
      * @param addressConvertor       地址行转换器
      */
     public AddressBookRepositoryImpl(AddressBookJpaRepository repository,
-                                     ThreadContext threadContext,
                                      AddressBookConvertor convertor,
                                      ChangeTrackerProvider changeTrackerProvider,
                                      AddressJpaRepository addressJpaRepository,
                                      AddressBookJpaRepository addressBookJpaRepository,
                                      AddressConvertor addressConvertor) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.addressJpaRepository = addressJpaRepository;
         this.addressBookJpaRepository = addressBookJpaRepository;
         this.addressConvertor = addressConvertor;
@@ -182,7 +180,7 @@ public class AddressBookRepositoryImpl extends DifferRepository<AddressBook, Add
         }
         final AddressBook empty = new AddressBook(com.nona.util.IDUtils.generateID(), accountId);
         getOrCreateChangeTracker().track(empty);
-        threadContext.saveSnapshot(empty.getId(), empty);
+        TrackingContext.scope().getSnapshots().put(empty.getId(), empty);
         return empty;
     }
 

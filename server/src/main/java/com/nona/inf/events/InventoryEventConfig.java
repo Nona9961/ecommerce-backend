@@ -12,8 +12,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * 线程。
  * <p>
  * 上下文传播：执行器显式绑定 {@link RequestContextPropagatingTaskDecorator}
- * （提交线程捕获请求上下文快照 → worker 结构化作用域绑定执行）——异步
- * 消费链路保持租户视角（fail-closed 语义下无视角的消费无法落租户列）。
+ * （提交线程捕获上下文快照：三元组 + 追踪基线；worker 以
+ * {@code withSnapshot + withScope} 双槽嵌套绑定还原执行）——异步消费链路
+ * 保持租户视角与追踪基线重建（fail-closed 语义下无视角的消费无法落租户列）。
  * 装饰器不提供自动配置（脚手架约定：每个异步执行器必须显式接入）。
  *
  * @author nona9961

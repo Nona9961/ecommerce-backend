@@ -4,8 +4,8 @@ import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.domain.inventory.factory.InventoryItemFactory;
 import com.nona.domain.inventory.ports.InventoryEventPublisher;
 import com.nona.domain.inventory.ports.SelloutEvent;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.InventoryItemRepositoryImpl;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
@@ -16,11 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
@@ -103,11 +100,6 @@ class InventoryReservationSelloutTriggerTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -124,17 +116,6 @@ class InventoryReservationSelloutTriggerTest {
             inventoryLogJpaRepository.deleteAll();
             inventoryItemJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -145,14 +126,18 @@ class InventoryReservationSelloutTriggerTest {
     @Test
     @DisplayName("预占耗尽可售归零但held非零不发布事件")
     void preoccupy_exhaustsAvailable_heldPositive_noEvent() {
-        seededItem(5);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
+            seededItem(5);
 
-        final InventoryItem after = reservationUseCase.preoccupy(ORDER, SKU, 5);
+            final InventoryItem after = reservationUseCase.preoccupy(ORDER, SKU, 5);
 
-        assertThat(after.getAvailable()).isZero();
-        assertThat(after.getHeld()).isEqualTo(5);
-        verifyNoInteractions(inventoryEventPublisher);
-    }
+            assertThat(after.getAvailable()).isZero();
+            assertThat(after.getHeld()).isEqualTo(5);
+            verifyNoInteractions(inventoryEventPublisher);
+    
+        });
+}
 
     /**
      * happy：确认扣减耗尽——预占清零且可售已为零（available=0 且
@@ -161,21 +146,25 @@ class InventoryReservationSelloutTriggerTest {
     @Test
     @DisplayName("扣减耗尽预占清零：售罄事件发布恰好一次")
     void confirmDeduct_exhaustsHeld_publishesSelloutOnce() {
-        seededItem(5);
-        reservationUseCase.preoccupy(ORDER, SKU, 5);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
+            seededItem(5);
+            reservationUseCase.preoccupy(ORDER, SKU, 5);
 
-        final InventoryItem after = reservationUseCase.confirmDeduct(ORDER, SKU, 5);
+            final InventoryItem after = reservationUseCase.confirmDeduct(ORDER, SKU, 5);
 
-        assertThat(after.getAvailable()).isZero();
-        assertThat(after.getHeld()).isZero();
-        assertThat(after.getSold()).isEqualTo(5);
+            assertThat(after.getAvailable()).isZero();
+            assertThat(after.getHeld()).isZero();
+            assertThat(after.getSold()).isEqualTo(5);
 
-        final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
-        verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
-        assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
-        assertThat(sellout.getValue().getType()).isEqualTo(SelloutEvent.TYPE);
-        verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
-    }
+            final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
+            verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
+            assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
+            assertThat(sellout.getValue().getType()).isEqualTo(SelloutEvent.TYPE);
+            verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
+    
+        });
+}
 
     /**
      * critical：预占+扣减恰好用尽二阶序列——预占不触发，预占后经扣减
@@ -185,21 +174,25 @@ class InventoryReservationSelloutTriggerTest {
     @Test
     @DisplayName("预占后扣减打空预占：售罄事件恰好一次")
     void preoccupyThenConfirmDeduct_exhausts_publishesSelloutOnce() {
-        seededItem(3);
-        reservationUseCase.preoccupy(ORDER, SKU, 3);
-        verifyNoInteractions(inventoryEventPublisher);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
+            seededItem(3);
+            reservationUseCase.preoccupy(ORDER, SKU, 3);
+            verifyNoInteractions(inventoryEventPublisher);
 
-        final InventoryItem after = reservationUseCase.confirmDeduct(ORDER, SKU, 3);
+            final InventoryItem after = reservationUseCase.confirmDeduct(ORDER, SKU, 3);
 
-        assertThat(after.getAvailable()).isZero();
-        assertThat(after.getHeld()).isZero();
-        assertThat(after.getSold()).isEqualTo(3);
+            assertThat(after.getAvailable()).isZero();
+            assertThat(after.getHeld()).isZero();
+            assertThat(after.getSold()).isEqualTo(3);
 
-        final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
-        verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
-        assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
-        verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
-    }
+            final ArgumentCaptor<SelloutEvent> sellout = ArgumentCaptor.forClass(SelloutEvent.class);
+            verify(inventoryEventPublisher, times(1)).publishSellout(sellout.capture());
+            assertThat(sellout.getValue().getPayload().skuId()).isEqualTo(SKU);
+            verify(inventoryEventPublisher, never()).publishRestock(org.mockito.ArgumentMatchers.any());
+    
+        });
+}
 
     /**
      * error：部分预占不发布——未达售罄态的任何变更都不触发事件。
@@ -207,12 +200,16 @@ class InventoryReservationSelloutTriggerTest {
     @Test
     @DisplayName("部分预占未售罄不发布事件")
     void preoccupy_partial_noEvent() {
-        seededItem(5);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
+            seededItem(5);
 
-        reservationUseCase.preoccupy(ORDER, SKU, 2);
+            reservationUseCase.preoccupy(ORDER, SKU, 2);
 
-        verifyNoInteractions(inventoryEventPublisher);
-    }
+            verifyNoInteractions(inventoryEventPublisher);
+    
+        });
+}
 
     /**
      * error：回滚释放不发布——预占回滚使可售恢复（available 增、held
@@ -222,17 +219,21 @@ class InventoryReservationSelloutTriggerTest {
     @Test
     @DisplayName("回滚释放可售不发布任何事件")
     void rollback_releasesHeld_noEvent() {
-        seededItem(5);
-        reservationUseCase.preoccupy(ORDER, SKU, 5);
-        verifyNoInteractions(inventoryEventPublisher);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
+            seededItem(5);
+            reservationUseCase.preoccupy(ORDER, SKU, 5);
+            verifyNoInteractions(inventoryEventPublisher);
 
-        final InventoryItem after = reservationUseCase.rollback(ORDER, SKU, 5);
+            final InventoryItem after = reservationUseCase.rollback(ORDER, SKU, 5);
 
-        assertThat(after.getAvailable()).isEqualTo(5);
-        assertThat(after.getHeld()).isZero();
+            assertThat(after.getAvailable()).isEqualTo(5);
+            assertThat(after.getHeld()).isZero();
 
-        verifyNoInteractions(inventoryEventPublisher);
-    }
+            verifyNoInteractions(inventoryEventPublisher);
+    
+        });
+}
 
     /**
      * 装配初始库存：工厂建行（三态清零）→ 聚合调整补货到目标可售

@@ -8,7 +8,7 @@ import com.nona.api.mall.FavoriteItem;
 import com.nona.api.mall.FavoriteRequest;
 import com.nona.api.mall.FavoriteType;
 import com.nona.application.mall.FavoriteUseCase;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 买家收藏 REST 控制器（/mall/favorites，BUYER 角色）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380 / 查询参数显式解析）+ 委托
- * {@link FavoriteUseCase}；当前买家 ID 从 {@link ThreadContext} 取
+ * {@link FavoriteUseCase}；当前买家 ID 从跟踪上下文 取
  * （认证过滤器已写入 JWT 主体，不来自请求体）。收藏与取消收藏共用
  * 请求体形态（目标类型 + 目标 ID），保持契约对称；三个操作均幂等。
  *
@@ -38,7 +38,7 @@ public class FavoriteController implements FavoriteApi {
     /**
      * 请求上下文（取当前登录买家 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造收藏控制器。
@@ -46,9 +46,9 @@ public class FavoriteController implements FavoriteApi {
      * @param favoriteUseCase 收藏用例
      * @param threadContext   请求上下文
      */
-    public FavoriteController(FavoriteUseCase favoriteUseCase, ThreadContext threadContext) {
+    public FavoriteController(FavoriteUseCase favoriteUseCase, TenantContextAccessor tenantContextAccessor) {
         this.favoriteUseCase = favoriteUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -88,11 +88,11 @@ public class FavoriteController implements FavoriteApi {
     }
 
     /**
-     * 当前登录买家 ID（认证过滤器写入 ThreadContext 的身份）。
+     * 当前登录买家 ID（认证过滤器写入跟踪作用域的身份）。
      *
      * @return 买家账号 ID
      */
     private Long currentAccountId() {
-        return Long.valueOf(threadContext.getIdentity());
+        return Long.valueOf(tenantContextAccessor.getIdentity());
     }
 }

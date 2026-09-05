@@ -3,7 +3,6 @@ package com.nona.inf.persistence.repository;
 import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.catalog.entity.FreightTemplate;
 import com.nona.domain.catalog.repo.FreightTemplateRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.FreightTemplateConvertor;
 import com.nona.inf.persistence.po.catalog.FreightTemplatePO;
 import com.nona.inf.persistence.repository.jpa.FreightTemplateJpaRepository;
@@ -39,15 +38,13 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
      * 构造运费模板仓储。
      *
      * @param repository            模板主表 JPA 仓储
-     * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             模板聚合转换器
      * @param changeTrackerProvider 变更追踪器提供者
      */
     public FreightTemplateRepositoryImpl(FreightTemplateJpaRepository repository,
-                                         ThreadContext threadContext,
                                          FreightTemplateConvertor convertor,
                                          ChangeTrackerProvider changeTrackerProvider) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
     }
 

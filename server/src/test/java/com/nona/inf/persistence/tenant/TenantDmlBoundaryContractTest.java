@@ -1,23 +1,19 @@
 package com.nona.inf.persistence.tenant;
 
-import com.nona.annotation.ScaffoldGenerated;
 import com.nona.EcommerceApplication;
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.exceptions.BusinessException;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.jpa.TestTenantNoteRepository;
 import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,6 +32,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *       访问点外操作，R5 文档定责（prd），代码保留作证据，勿启用</li>
  * </ul>
  * 两类防线：PO 形态 → 门禁判定；ID/无参形态 → filter 兜底。
+ * <p>
+ * 上下文制造形态：租户身份经 {@link TrackingContext#withScope} + holder 写入
+ * （单级解析主通路），不再依赖请求作用域 bean。
  *
  * @author nona9961
  */
@@ -45,9 +44,6 @@ class TenantDmlBoundaryContractTest {
 
     @Autowired
     private TestTenantNoteRepository tenantNoteRepository;
-
-    @Autowired
-    private ThreadContext threadContext;
 
     @Autowired
     private ElevatedTenantTestService elevatedTenantTestService;
@@ -65,15 +61,8 @@ class TenantDmlBoundaryContractTest {
     private EntityManager entityManager;
 
     @BeforeEach
-    void setUpRequestScope() {
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    void setUp() {
         elevatedTenantTestService.deleteAllNotes();
-    }
-
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -105,22 +94,24 @@ class TenantDmlBoundaryContractTest {
     /**
      * 契约 D1（PO 形态 → 门禁先拒）：非提权 {@code deleteAllInBatch(集合)} 传异租户 PO → 参数判定先行拒绝
      * （写操作形态分类：PO 形态受两条件判定），bulk DML 不可达。
-     * 原始实验 D 输入即此形态——WU-A 参数判定上线后由门禁拦截，filter 兜底不被此形态触达。
+     * 原始实验 D 输入即此形态——参数判定先行拦截，filter 兜底不被此形态触达。
      */
     @Test
     void contractD1_poFormDeleteAllInBatchWithForeignTenantShouldBeRejectedByGate() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 401L, "note-a");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 411L, "note-b");
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 401L, "note-a");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 411L, "note-b");
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
 
-        // 非提权，构造 tenant-B 的 PO 传 deleteAllInBatch（集合形态）→ 门禁先拒
-        assertThatThrownBy(() ->
-                tenantNoteRepository.deleteAllInBatch(List.of(newNote(411L, "tenant-B", "note-b"))))
-                .isInstanceOf(BusinessException.class);
+            // 非提权，构造 tenant-B 的 PO 传 deleteAllInBatch（集合形态）→ 门禁先拒
+            assertThatThrownBy(() ->
+                    tenantNoteRepository.deleteAllInBatch(List.of(newNote(411L, "tenant-B", "note-b"))))
+                    .isInstanceOf(BusinessException.class);
 
-        // 门禁先拒：两行数据均未受影响
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
+            // 门禁先拒：两行数据均未受影响
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
+        });
     }
 
     /**
@@ -130,16 +121,18 @@ class TenantDmlBoundaryContractTest {
      */
     @Test
     void contractD2_noArgDeleteAllInBatchShouldBeFilteredToCurrentTenant() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 602L, "note-a");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 612L, "note-b");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 602L, "note-a");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 612L, "note-b");
 
-        tenantNoteRepository.deleteAllInBatch();
+            tenantNoteRepository.deleteAllInBatch();
 
-        // tenant-A 行被删、tenant-B 行仍在（filter 兜底契约）
-        assertThat(elevatedTenantTestService.listAllNotes())
-                .extracting(TestTenantNotePO::getId)
-                .containsExactly(612L);
+            // tenant-A 行被删、tenant-B 行仍在（filter 兜底契约）
+            assertThat(elevatedTenantTestService.listAllNotes())
+                    .extracting(TestTenantNotePO::getId)
+                    .containsExactly(612L);
+        });
     }
 
     /**
@@ -148,27 +141,29 @@ class TenantDmlBoundaryContractTest {
      */
     @Test
     void contractE_mutateTenantIdOnManagedEntityShouldNotChangeOwnership() throws Exception {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 421L, "note-b");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 421L, "note-b");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            // 找到 421 的真实归属：非提权 findById 应被 filter 挡（应为空），提权内可加载
-            assertThat(tenantNoteRepository.findById(421L)).isEmpty();
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                // 找到 421 的真实归属：非提权 findById 应被 filter 挡（应为空），提权内可加载
+                assertThat(tenantNoteRepository.findById(421L)).isEmpty();
 
-            tenantPrivilege.elevated(() -> {
-                TestTenantNotePO foreign = tenantNoteRepository.findById(421L).orElseThrow();
-                foreign.setTenantID("tenant-A");   // 尝试改写归属（同事务内按需修改）
-                entityManager.flush();             // flush 落下 UPDATE
+                tenantPrivilege.elevated(() -> {
+                    TestTenantNotePO foreign = tenantNoteRepository.findById(421L).orElseThrow();
+                    foreign.setTenantID("tenant-A");   // 尝试改写归属（同事务内按需修改）
+                    entityManager.flush();             // flush 落下 UPDATE
+                });
             });
-        });
 
-        // 用提权视角验证 421 行的真实租户归属：库中必须仍为 tenant-B（归属不可变）
-        TestTenantNotePO reloaded = elevate(() ->
-                tenantNoteRepository.findById(421L).orElse(null));
-        assertThat(reloaded).isNotNull();
-        assertThat(reloaded.getTenantID())
-                .as("TENANT-MUTATION UNPROTECTED: flush updated tenant_id column of foreign-tenant row")
-                .isEqualTo("tenant-B");
+            // 用提权视角验证 421 行的真实租户归属：库中必须仍为 tenant-B（归属不可变）
+            TestTenantNotePO reloaded = elevate(() ->
+                    tenantNoteRepository.findById(421L).orElse(null));
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.getTenantID())
+                    .as("TENANT-MUTATION UNPROTECTED: flush updated tenant_id column of foreign-tenant row")
+                    .isEqualTo("tenant-B");
+        });
     }
 
     /**
@@ -180,25 +175,27 @@ class TenantDmlBoundaryContractTest {
     @Test
     @Disabled("红线实证（评测期复现）：作用域退出 auto-flush 会落库挂起写，R5 文档定责（prd）、勿启用")
     void contractF_annotatedReadThenMutateBusinessFieldThenFlush() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 431L, "original-b");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 431L, "original-b");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            // 注解内 load tenant-B 实体（托管状态）——注解放行读
-            TestTenantNotePO foreign = crossTenantTestService.getNote(431L);
-            assertThat(foreign).isNotNull();
-            assertThat(foreign.getTenantID()).isEqualTo("tenant-B");
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                // 注解内 load tenant-B 实体（托管状态）——注解放行读
+                TestTenantNotePO foreign = crossTenantTestService.getNote(431L);
+                assertThat(foreign).isNotNull();
+                assertThat(foreign.getTenantID()).isEqualTo("tenant-B");
 
-            // 修改业务字段（托管实体脏检查）——注解只授权读，修改是越权写
-            foreign.setContent("HACKED-BY-ANNOTATED-READ");
-            entityManager.flush();   // 模拟作用域退出 auto-flush 时点
+                // 修改业务字段（托管实体脏检查）——注解只授权读，修改是越权写
+                foreign.setContent("HACKED-BY-ANNOTATED-READ");
+                entityManager.flush();   // 模拟作用域退出 auto-flush 时点
+            });
+
+            // 提权视角读回 431 行真实内容（红线实证：内容已被越权改写）
+            TestTenantNotePO reloaded = elevate(() -> tenantNoteRepository.findById(431L).orElse(null));
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.getContent())
+                    .as("ANNOTATED-READ-MUTATE-FLUSH UNPROTECTED: business field of foreign-tenant row updated")
+                    .isEqualTo("original-b");
         });
-
-        // 提权视角读回 431 行真实内容（红线实证：内容已被越权改写）
-        TestTenantNotePO reloaded = elevate(() -> tenantNoteRepository.findById(431L).orElse(null));
-        assertThat(reloaded).isNotNull();
-        assertThat(reloaded.getContent())
-                .as("ANNOTATED-READ-MUTATE-FLUSH UNPROTECTED: business field of foreign-tenant row updated")
-                .isEqualTo("original-b");
     }
 }

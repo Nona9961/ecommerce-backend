@@ -33,7 +33,7 @@ public final class TenantWriteGate {
     /**
      * 全量视角（root）：读放行/提权作用域下 Hibernate resolver 返回该值以绕过 discriminator 过滤。
      * <p>
-     * 权威定义处：server 侧 {@code ThreadContextTenantIdentifierResolver.ROOT_TENANT_ID} 为转发常量。
+     * 权威定义处：server 侧 {@code TrackingContextTenantIdentifierResolver.ROOT_TENANT_ID} 为转发常量。
      */
     public static final String ROOT_TENANT_ID = "__ROOT_TENANT__";
 

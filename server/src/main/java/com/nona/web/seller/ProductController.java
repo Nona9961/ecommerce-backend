@@ -23,7 +23,7 @@ import com.nona.application.seller.ProductUseCase;
 import com.nona.application.seller.ProductVersionUseCase;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,7 +39,7 @@ import java.util.List;
  * 商家端商品草稿 REST 控制器（/seller/products…，SELLER 角色）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托 {@link ProductUseCase}，不承载
- * 业务逻辑；当前店铺 ID 从 {@link ThreadContext} 租户字段取（认证过滤器已
+ * 业务逻辑；当前店铺 ID 从跟踪上下文 租户字段取（认证过滤器已
  * 将账号关联的当前店铺写入请求租户，不来自请求体——商家只能操作自己的
  * 商品）。商品归属校验由用例层经租户过滤完成（跨店铺按不存在呈现）。
  *
@@ -61,7 +61,7 @@ public class ProductController implements ProductApi {
     /**
      * 请求上下文（取当前店铺 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造商品草稿控制器。
@@ -72,10 +72,10 @@ public class ProductController implements ProductApi {
      */
     public ProductController(ProductUseCase productUseCase,
                              ProductVersionUseCase productVersionUseCase,
-                             ThreadContext threadContext) {
+                             TenantContextAccessor tenantContextAccessor) {
         this.productUseCase = productUseCase;
         this.productVersionUseCase = productVersionUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -314,12 +314,12 @@ public class ProductController implements ProductApi {
     }
 
     /**
-     * 当前店铺 ID（认证过滤器写入 ThreadContext.tenantID 的租户值=当前店铺 ID）。
+     * 当前店铺 ID（认证过滤器写入跟踪作用域 tenantID 的租户值=当前店铺 ID）。
      *
      * @return 店铺 ID
      */
     private Long currentShopId() {
-        final String tenantId = threadContext.getTenantID();
+        final String tenantId = tenantContextAccessor.getTenantID();
         if (tenantId == null) {
             throw new BusinessException(EcommerceBusinessCode.CATALOG_SHOP_NOT_FOUND.code(),
                     "店铺不存在", 404);

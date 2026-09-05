@@ -1,9 +1,9 @@
 package com.nona.inf.persistence.repository;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.changeTracking.domain.model.tracking.ChangeTracker;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.converters.RdbGeneralConvertor;
 import com.nona.inf.persistence.po.BasePO;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
@@ -14,7 +14,6 @@ import org.springframework.data.repository.ListCrudRepository;
 
 import java.util.Objects;
 import java.util.Optional;
-import com.nona.annotation.ScaffoldGenerated;
 
 /**
  * 支持基于diff的仓储，集成 ChangeTracker 实现变更追踪
@@ -29,19 +28,9 @@ import com.nona.annotation.ScaffoldGenerated;
 public abstract class DifferRepository<Root, PO extends BasePO, Other> implements BaseRepository<Long, Root> {
 
     /**
-     * ThreadContext 属性中 ChangeTracker 的键名
-     */
-    private static final String TRACKER_KEY = "CHANGE_TRACKER";
-
-    /**
      * JPA 仓储（Spring Data）
      */
     protected final ListCrudRepository<PO, Long> repository;
-
-    /**
-     * 请求级上下文（持有追踪器与根对象快照）
-     */
-    protected final ThreadContext threadContext;
 
     /**
      * DO ↔ PO 转换器
@@ -49,19 +38,15 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
     protected final RdbGeneralConvertor<Root, PO, Other> convertor;
 
     /**
-     * ChangeTracker 提供者（创建请求级追踪器）
+     * ChangeTracker 提供者（创建跟踪作用域持有者内的懒创建追踪器）
      */
     protected final ChangeTrackerProvider changeTrackerProvider;
 
     /**
-     * 根对象类型引用（快照存取用）
-     */
-    private final TypeReference<Root> rootType = new TypeReference<>() {};
-
-    /**
      * {@inheritDoc}
      * <p>
-     * 读取成功后登记到 ChangeTracker 建立快照基线，并将根对象存入请求上下文。
+     * 读取成功后登记到 ChangeTracker 建立快照基线，并将根对象快照登记入当前跟踪作用域持有者
+     * （{@code TrackingContext.scope().getSnapshots()}）。
      */
     @Override
     public Root getByID(Long id) {
@@ -76,7 +61,7 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
         }
 
         getOrCreateChangeTracker().track(root);
-        threadContext.saveSnapshot(id, root);
+        TrackingContext.scope().getSnapshots().put(id, root);
         return root;
     }
 
@@ -138,7 +123,7 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
         if (!isTracked(id)) {
             doInsert(root);
             changeTracker.track(root);
-            threadContext.saveSnapshot(id, root);
+            TrackingContext.scope().getSnapshots().put(id, root);
             return true;
         }
 
@@ -150,7 +135,7 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
         doUpdate(root, changeSet);
 
         changeTracker.track(root);
-        threadContext.saveSnapshot(id, root);
+        TrackingContext.scope().getSnapshots().put(id, root);
         return true;
     }
 
@@ -176,24 +161,22 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
 
     /**
      * 检查该 ID 的根对象是否已被追踪（快照是否已建立）。
+     * <p>
+     * 读取当前跟踪作用域持有者的快照注册表；未绑定作用域时由 {@link #getOrCreateChangeTracker()}
+     * 先行抛出 {@link IllegalStateException}（fail-closed），故到达此处时作用域必已绑定。
      *
      * @param id 主键 ID
      * @return 已追踪返回 true
      */
     private boolean isTracked(Long id) {
-        return threadContext.getSnapshot(id, rootType) != null;
+        return TrackingContext.scope().getSnapshots().containsKey(id);
     }
 
     /**
-     * 获取或创建 ChangeTracker（请求级别单例）
+     * 获取或创建 ChangeTracker（跟踪作用域内懒创建单例；未绑定作用域时抛
+     * {@link IllegalStateException}——fail-closed）。
      */
     protected ChangeTracker getOrCreateChangeTracker() {
-        ChangeTracker changeTracker = threadContext.getAttribute(TRACKER_KEY);
-        if (changeTracker == null) {
-            final ChangeTracker newTracker = changeTrackerProvider.create();
-            changeTracker = newTracker;
-            threadContext.setAttribute(TRACKER_KEY, newTracker);
-        }
-        return changeTracker;
+        return TrackingContext.tracker(changeTrackerProvider);
     }
 }

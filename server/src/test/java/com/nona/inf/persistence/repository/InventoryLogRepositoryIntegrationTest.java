@@ -2,8 +2,8 @@ package com.nona.inf.persistence.repository;
 
 import com.nona.domain.inventory.entity.InventoryLog;
 import com.nona.domain.inventory.entity.InventoryLogType;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
@@ -15,10 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.List;
 
@@ -85,11 +82,6 @@ class InventoryLogRepositoryIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -106,17 +98,6 @@ class InventoryLogRepositoryIntegrationTest {
             inventoryLogJpaRepository.deleteAll();
             inventoryItemJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -126,37 +107,41 @@ class InventoryLogRepositoryIntegrationTest {
     @Test
     @DisplayName("追加落库读回与聚合一致")
     void append_persistsRowReadable() {
-        final InventoryLog log = tx.execute(status -> {
-            final InventoryLog produced = new InventoryLog(
-                    IDUtils.generateID(), 9201L, SKU_A, InventoryLogType.PREOCCUPY, 3, ORDER_ID,
-                    10, 0, 0, 7, 3, 0, null, null);
-            return inventoryLogRepository.append(produced);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryLog log = tx.execute(status -> {
+                final InventoryLog produced = new InventoryLog(
+                        IDUtils.generateID(), 9201L, SKU_A, InventoryLogType.PREOCCUPY, 3, ORDER_ID,
+                        10, 0, 0, 7, 3, 0, null, null);
+                return inventoryLogRepository.append(produced);
+            });
+            assertThat(log).isNotNull();
+
+            final InventoryLogPO po = inventoryLogJpaRepository.findById(log.getId()).orElseThrow();
+            assertThat(po.getTenantID()).isEqualTo(TENANT_A);
+            assertThat(po.getSkuId()).isEqualTo(SKU_A);
+            assertThat(po.getType()).isEqualTo(InventoryLogType.PREOCCUPY);
+            assertThat(po.getDelta()).isEqualTo(3);
+            assertThat(po.getOrderId()).isEqualTo(ORDER_ID);
+            assertThat(po.getBeforeAvailable()).isEqualTo(10);
+            assertThat(po.getBeforeHeld()).isZero();
+            assertThat(po.getBeforeSold()).isZero();
+            assertThat(po.getAfterAvailable()).isEqualTo(7);
+            assertThat(po.getAfterHeld()).isEqualTo(3);
+            assertThat(po.getAfterSold()).isZero();
+            assertThat(po.getOperator()).isNull();
+            assertThat(po.getCreateTime()).isNotNull();
+
+            final InventoryLog reloaded = inventoryLogRepository.getByID(log.getId());
+            assertThat(reloaded).isNotNull();
+            assertThat(reloaded.getShopId()).isEqualTo(9201L);
+            assertThat(reloaded.getType()).isEqualTo(InventoryLogType.PREOCCUPY);
+            assertThat(reloaded.getBeforeAvailable()).isEqualTo(10);
+            assertThat(reloaded.getAfterHeld()).isEqualTo(3);
+            assertThat(reloaded.getCreatedAt()).isNotNull();
+    
         });
-        assertThat(log).isNotNull();
-
-        final InventoryLogPO po = inventoryLogJpaRepository.findById(log.getId()).orElseThrow();
-        assertThat(po.getTenantID()).isEqualTo(TENANT_A);
-        assertThat(po.getSkuId()).isEqualTo(SKU_A);
-        assertThat(po.getType()).isEqualTo(InventoryLogType.PREOCCUPY);
-        assertThat(po.getDelta()).isEqualTo(3);
-        assertThat(po.getOrderId()).isEqualTo(ORDER_ID);
-        assertThat(po.getBeforeAvailable()).isEqualTo(10);
-        assertThat(po.getBeforeHeld()).isZero();
-        assertThat(po.getBeforeSold()).isZero();
-        assertThat(po.getAfterAvailable()).isEqualTo(7);
-        assertThat(po.getAfterHeld()).isEqualTo(3);
-        assertThat(po.getAfterSold()).isZero();
-        assertThat(po.getOperator()).isNull();
-        assertThat(po.getCreateTime()).isNotNull();
-
-        final InventoryLog reloaded = inventoryLogRepository.getByID(log.getId());
-        assertThat(reloaded).isNotNull();
-        assertThat(reloaded.getShopId()).isEqualTo(9201L);
-        assertThat(reloaded.getType()).isEqualTo(InventoryLogType.PREOCCUPY);
-        assertThat(reloaded.getBeforeAvailable()).isEqualTo(10);
-        assertThat(reloaded.getAfterHeld()).isEqualTo(3);
-        assertThat(reloaded.getCreatedAt()).isNotNull();
-    }
+}
 
     /**
      * 追加：手动调整型流水（orderId 空、operator 必填）读回一致。
@@ -164,21 +149,25 @@ class InventoryLogRepositoryIntegrationTest {
     @Test
     @DisplayName("手动调整流水落库读回")
     void append_manualAdjustRowReadable() {
-        final InventoryLog log = tx.execute(status -> {
-            final InventoryLog produced = new InventoryLog(
-                    IDUtils.generateID(), 9201L, SKU_A, InventoryLogType.MANUAL_ADJUST, -4, null,
-                    10, 0, 0, 6, 0, 0, "72001", "压货清理");
-            return inventoryLogRepository.append(produced);
-        });
-        assertThat(log).isNotNull();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryLog log = tx.execute(status -> {
+                final InventoryLog produced = new InventoryLog(
+                        IDUtils.generateID(), 9201L, SKU_A, InventoryLogType.MANUAL_ADJUST, -4, null,
+                        10, 0, 0, 6, 0, 0, "72001", "压货清理");
+                return inventoryLogRepository.append(produced);
+            });
+            assertThat(log).isNotNull();
 
-        final InventoryLogPO po = inventoryLogJpaRepository.findById(log.getId()).orElseThrow();
-        assertThat(po.getOrderId()).isNull();
-        assertThat(po.getOperator()).isEqualTo("72001");
-        assertThat(po.getReason()).isEqualTo("压货清理");
-        assertThat(po.getBeforeAvailable()).isEqualTo(10);
-        assertThat(po.getAfterAvailable()).isEqualTo(6);
-    }
+            final InventoryLogPO po = inventoryLogJpaRepository.findById(log.getId()).orElseThrow();
+            assertThat(po.getOrderId()).isNull();
+            assertThat(po.getOperator()).isEqualTo("72001");
+            assertThat(po.getReason()).isEqualTo("压货清理");
+            assertThat(po.getBeforeAvailable()).isEqualTo(10);
+            assertThat(po.getAfterAvailable()).isEqualTo(6);
+    
+        });
+}
 
     /**
      * 查询：listBySkuPaged 按 ID 倒序返回本店流水（新行在前），
@@ -187,21 +176,25 @@ class InventoryLogRepositoryIntegrationTest {
     @Test
     @DisplayName("按SKU分页新行在前")
     void listBySkuPaged_newestFirst() {
-        final InventoryLog first = appendOccupy("72001", 1, 660301L);
-        final InventoryLog second = appendOccupy("72001", 2, 660302L);
-        final InventoryLog third = appendOccupy("72001", 3, 660303L);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryLog first = appendOccupy("72001", 1, 660301L);
+            final InventoryLog second = appendOccupy("72001", 2, 660302L);
+            final InventoryLog third = appendOccupy("72001", 3, 660303L);
 
-        final List<InventoryLog> page = inventoryLogRepository.listBySkuPaged(SKU_A, 0, 2);
-        assertThat(page).hasSize(2);
-        assertThat(page.get(0).getId()).isEqualTo(third.getId());
-        assertThat(page.get(1).getId()).isEqualTo(second.getId());
+            final List<InventoryLog> page = inventoryLogRepository.listBySkuPaged(SKU_A, 0, 2);
+            assertThat(page).hasSize(2);
+            assertThat(page.get(0).getId()).isEqualTo(third.getId());
+            assertThat(page.get(1).getId()).isEqualTo(second.getId());
 
-        final List<InventoryLog> secondPage = inventoryLogRepository.listBySkuPaged(SKU_A, 2, 2);
-        assertThat(secondPage).hasSize(1);
-        assertThat(secondPage.get(0).getId()).isEqualTo(first.getId());
+            final List<InventoryLog> secondPage = inventoryLogRepository.listBySkuPaged(SKU_A, 2, 2);
+            assertThat(secondPage).hasSize(1);
+            assertThat(secondPage.get(0).getId()).isEqualTo(first.getId());
 
-        assertThat(inventoryLogRepository.countBySku(SKU_A)).isEqualTo(3);
-    }
+            assertThat(inventoryLogRepository.countBySku(SKU_A)).isEqualTo(3);
+    
+        });
+}
 
     /**
      * 隔离：B 店铺租户上下文按 SKU 查询 A 店铺流水 → 空列表（租户过滤
@@ -210,13 +203,19 @@ class InventoryLogRepositoryIntegrationTest {
     @Test
     @DisplayName("跨店铺流水不可见（fail-closed）")
     void foreignLogs_notVisible() {
-        final InventoryLog log = appendOccupy("72001", 1, 660301L);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryLog log = appendOccupy("72001", 1, 660301L);
 
-        threadContext.setTenantID(TENANT_B);
-        assertThat(inventoryLogRepository.listBySkuPaged(SKU_A, 0, 10)).isEmpty();
-        assertThat(inventoryLogRepository.countBySku(SKU_A)).isZero();
-        assertThat(inventoryLogRepository.getByID(log.getId())).isNull();
-    }
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+                assertThat(inventoryLogRepository.listBySkuPaged(SKU_A, 0, 10)).isEmpty();
+                assertThat(inventoryLogRepository.countBySku(SKU_A)).isZero();
+                assertThat(inventoryLogRepository.getByID(log.getId())).isNull();
+    
+            });
+        });
+}
 
     /**
      * 行级删除拒绝：delete 与 deleteByID 均抛 UnsupportedOperationException
@@ -225,16 +224,20 @@ class InventoryLogRepositoryIntegrationTest {
     @Test
     @DisplayName("行级删除一律拒绝")
     void rowDelete_rejected() {
-        final InventoryLog log = appendOccupy("72001", 1, 660301L);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final InventoryLog log = appendOccupy("72001", 1, 660301L);
 
-        assertThatThrownBy(() -> inventoryLogRepository.delete(log))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("禁止行级删除");
-        assertThatThrownBy(() -> inventoryLogRepository.deleteByID(log.getId()))
-                .isInstanceOf(UnsupportedOperationException.class)
-                .hasMessageContaining("禁止行级删除");
-        assertThat(inventoryLogJpaRepository.findById(log.getId())).isPresent();
-    }
+            assertThatThrownBy(() -> inventoryLogRepository.delete(log))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("禁止行级删除");
+            assertThatThrownBy(() -> inventoryLogRepository.deleteByID(log.getId()))
+                    .isInstanceOf(UnsupportedOperationException.class)
+                    .hasMessageContaining("禁止行级删除");
+            assertThat(inventoryLogJpaRepository.findById(log.getId())).isPresent();
+    
+        });
+}
 
     /**
      * 追加一行预占流水（本店 SKU，事务内）。

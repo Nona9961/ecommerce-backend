@@ -6,7 +6,6 @@ import com.nona.domain.inventory.repo.InventoryItemRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.TenantContextAccessor;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.InventoryItemConvertor;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
@@ -50,17 +49,15 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
      * 构造库存仓储。
      *
      * @param repository            库存主表 JPA 仓储
-     * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             库存聚合转换器
      * @param changeTrackerProvider 变更追踪器提供者
      * @param tenantContextAccessor 租户上下文读取器（CAS 租户条件注入）
      */
     public InventoryItemRepositoryImpl(InventoryItemJpaRepository repository,
-                                       ThreadContext threadContext,
                                        InventoryItemConvertor convertor,
                                        ChangeTrackerProvider changeTrackerProvider,
                                        TenantContextAccessor tenantContextAccessor) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
         this.tenantContextAccessor = tenantContextAccessor;
     }

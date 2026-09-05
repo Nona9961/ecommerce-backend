@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * 买家地址簿用例：地址 CRUD 与默认地址设置的编排（买家维度，事务边界所在）。
  * <p>
- * 买家身份由认证上下文提供（controller 从 ThreadContext 取当前账号 ID 传入），
+ * 买家身份由认证上下文提供（controller 从跟踪上下文取当前账号 ID 传入），
  * 本用例不感知 token 机制。写入路径（新增/编辑/删除/设置默认）统一先取买家维度
  * 写锁（{@link AddressBookRepository#lockBuyer}）——串行化同一买家的地址写事务，
  * 默认地址唯一性在并发窗口下也能收敛；随后加载聚合、执行领域操作、落库，全在

@@ -6,8 +6,8 @@ import com.nona.api.auth.Portal;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.ProductRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ShopCategoryPO;
 import com.nona.inf.persistence.repository.jpa.PlatformCategoryJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
@@ -120,11 +120,6 @@ class PlatformCategoryApiIntegrationTest {
     @Autowired
     private ProductRepository productRepository;
 
-    /**
-     * 请求级上下文（商品创建需模拟商家租户）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 商品引用守卫测试用的商家店铺租户
@@ -630,17 +625,16 @@ class PlatformCategoryApiIntegrationTest {
     @DisplayName("有商品引用时禁用拒绝且解除引用后可禁用")
     void disable_rejectedWhileProductReferencesRemain() throws Exception {
         final long categoryId = createAs("数码", 0);
-        threadContext.setTenantID(GUARD_TENANT);
-        Product product;
-        try {
-            product = tx.execute(status -> {
+        final Product[] productHolder = new Product[1];
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(GUARD_TENANT);
+            productHolder[0] = tx.execute(status -> {
                 final Product created = productFactory.createDraft(91501L, "挂类目商品", null, categoryId, null);
                 productRepository.save(created);
                 return created;
             });
-        } finally {
-            threadContext.setTenantID(null);
-        }
+        });
+        final Product product = productHolder[0];
         assertThat(product).isNotNull();
 
         mockMvc.perform(post("/admin/categories/" + categoryId + "/disable")
@@ -650,15 +644,13 @@ class PlatformCategoryApiIntegrationTest {
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isConflict());
 
-        threadContext.setTenantID(GUARD_TENANT);
-        try {
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(GUARD_TENANT);
             tx.execute(status -> {
                 productRepository.deleteByID(product.getId());
                 return null;
             });
-        } finally {
-            threadContext.setTenantID(null);
-        }
+        });
         mockMvc.perform(post("/admin/categories/" + categoryId + "/disable")
                         .header("Authorization", "Bearer " + adminToken()))
                 .andExpect(status().isOk());

@@ -4,7 +4,6 @@ import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.identity.entity.AccountShopRel;
 import com.nona.domain.identity.factory.AccountFactory;
 import com.nona.domain.identity.repo.AccountShopRelRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.RdbGeneralConvertor;
 import com.nona.inf.persistence.po.identity.AccountShopRelPO;
 import com.nona.inf.persistence.repository.jpa.AccountShopRelJpaRepository;
@@ -47,17 +46,15 @@ public class AccountShopRelRepositoryImpl
      * 构造账号-店铺关联仓储。
      *
      * @param repository            账号-店铺关联 JPA 仓储
-     * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             DO ↔ PO 转换器
      * @param changeTrackerProvider 变更追踪器提供者
      * @param accountFactory        账号工厂（创建关联实体）
      */
     public AccountShopRelRepositoryImpl(AccountShopRelJpaRepository repository,
-                                        ThreadContext threadContext,
                                         RdbGeneralConvertor<AccountShopRel, AccountShopRelPO, Void> convertor,
                                         ChangeTrackerProvider changeTrackerProvider,
                                         AccountFactory accountFactory) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
         this.accountFactory = accountFactory;
     }

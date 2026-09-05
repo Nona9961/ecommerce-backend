@@ -1,7 +1,7 @@
 package com.nona.inf.persistence.repository;
 
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductShopCategoryRelPO;
 import com.nona.inf.persistence.repository.jpa.ProductShopCategoryRelJpaRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -11,9 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -43,11 +40,6 @@ class ProductShopCategoryRelUniqueConstraintRepositoryTest {
     @Autowired
     private ProductShopCategoryRelJpaRepository relJpaRepository;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -61,17 +53,6 @@ class ProductShopCategoryRelUniqueConstraintRepositoryTest {
     @BeforeEach
     void setUp() {
         tenantPrivilege.elevated(() -> relJpaRepository.deleteAll());
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -81,15 +62,19 @@ class ProductShopCategoryRelUniqueConstraintRepositoryTest {
     @Test
     @DisplayName("重复 (product_id, shop_category_id) 直插被唯一约束拒绝")
     void duplicateBind_rejectedByUniqueConstraint() {
-        relJpaRepository.save(newRelPo(82001L, 91001L, 92001L));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            relJpaRepository.save(newRelPo(82001L, 91001L, 92001L));
 
-        assertThatThrownBy(() ->
-                relJpaRepository.save(newRelPo(82002L, 91001L, 92001L)))
-                .isInstanceOf(DataIntegrityViolationException.class);
+            assertThatThrownBy(() ->
+                    relJpaRepository.save(newRelPo(82002L, 91001L, 92001L)))
+                    .isInstanceOf(DataIntegrityViolationException.class);
 
-        assertThat(relJpaRepository.findById(82001L)).isPresent();
-        assertThat(relJpaRepository.findById(82002L)).isEmpty();
-    }
+            assertThat(relJpaRepository.findById(82001L)).isPresent();
+            assertThat(relJpaRepository.findById(82002L)).isEmpty();
+    
+        });
+}
 
     /**
      * critical：不同商品的同品类绑定互不冲突；同商品绑不同分类合法共存
@@ -99,12 +84,16 @@ class ProductShopCategoryRelUniqueConstraintRepositoryTest {
     @Test
     @DisplayName("不同商品绑同分类/同商品绑不同分类均合法")
     void distinctCombinations_allowed() {
-        relJpaRepository.save(newRelPo(82011L, 91001L, 92001L));
-        relJpaRepository.save(newRelPo(82012L, 91002L, 92001L));
-        relJpaRepository.save(newRelPo(82013L, 91001L, 92002L));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            relJpaRepository.save(newRelPo(82011L, 91001L, 92001L));
+            relJpaRepository.save(newRelPo(82012L, 91002L, 92001L));
+            relJpaRepository.save(newRelPo(82013L, 91001L, 92002L));
 
-        assertThat(relJpaRepository.count()).isEqualTo(3);
-    }
+            assertThat(relJpaRepository.count()).isEqualTo(3);
+    
+        });
+}
 
     /**
      * 构造绑定行 PO（行主键/归属商品/绑定分类/租户齐备）。

@@ -5,7 +5,7 @@ import com.nona.api.seller.OnboardingApi;
 import com.nona.api.seller.OnboardingApplicationRequest;
 import com.nona.api.seller.OnboardingApplicationResponse;
 import com.nona.application.seller.OnboardingUseCase;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 商家入驻申请 REST 控制器（/seller/onboarding，SELLER 角色）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托 {@link OnboardingUseCase}；
- * 当前商家 ID 从 {@link ThreadContext} 取（认证过滤器已写入 JWT 主体，
+ * 当前商家 ID 从跟踪上下文 取（认证过滤器已写入 JWT 主体，
  * 不来自请求体）。提交/查看/编辑/重提四个端点与商家入驻验收场景
  * （提交进入待审、状态可见、驳回原因可见可修改重提）一一对应。
  *
@@ -35,7 +35,7 @@ public class OnboardingController implements OnboardingApi {
     /**
      * 请求上下文（取当前登录商家 ID）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造入驻申请控制器。
@@ -43,9 +43,9 @@ public class OnboardingController implements OnboardingApi {
      * @param onboardingUseCase 入驻申请用例
      * @param threadContext     请求上下文
      */
-    public OnboardingController(OnboardingUseCase onboardingUseCase, ThreadContext threadContext) {
+    public OnboardingController(OnboardingUseCase onboardingUseCase, TenantContextAccessor tenantContextAccessor) {
         this.onboardingUseCase = onboardingUseCase;
-        this.threadContext = threadContext;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -89,11 +89,11 @@ public class OnboardingController implements OnboardingApi {
     }
 
     /**
-     * 当前登录商家 ID（认证过滤器写入 ThreadContext 的身份）。
+     * 当前登录商家 ID（认证过滤器写入跟踪作用域的身份）。
      *
      * @return 商家账号 ID
      */
     private Long currentAccountId() {
-        return Long.valueOf(threadContext.getIdentity());
+        return Long.valueOf(tenantContextAccessor.getIdentity());
     }
 }

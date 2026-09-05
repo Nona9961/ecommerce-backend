@@ -3,7 +3,6 @@ package com.nona.inf.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nona.api.HttpResponse;
 import com.nona.exceptions.EcommerceBusinessCode;
-import com.nona.inf.context.ThreadContext;
 import com.nona.util.JacksonUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -61,11 +60,6 @@ public class SecurityConfig {
     private final AccountStatusProvider accountStatusProvider;
 
     /**
-     * 请求上下文（request 作用域代理）
-     */
-    private final ThreadContext threadContext;
-
-    /**
      * 构建安全过滤器链：无状态、关闭 CSRF、公开路径放行、门户角色路由、
      * 401/403 统一响应、JWT 过滤器前置注册。
      *
@@ -95,8 +89,7 @@ public class SecurityConfig {
                         .accessDeniedHandler((request, response, ex) ->
                                 writeError(response, HttpServletResponse.SC_FORBIDDEN,
                                         EcommerceBusinessCode.AUTH_FORBIDDEN, "forbidden")))
-                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userCache,
-                                accountStatusProvider, threadContext),
+                .addFilterBefore(new JwtAuthenticationFilter(tokenProvider, userCache, accountStatusProvider),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

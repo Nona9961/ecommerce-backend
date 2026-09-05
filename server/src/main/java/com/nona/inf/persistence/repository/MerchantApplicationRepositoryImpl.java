@@ -4,7 +4,6 @@ import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.identity.entity.ApplicationStatus;
 import com.nona.domain.identity.entity.MerchantApplication;
 import com.nona.domain.identity.repo.MerchantApplicationRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.persistence.converters.MerchantApplicationConvertor;
 import com.nona.inf.persistence.po.identity.MerchantApplicationPO;
 import com.nona.inf.persistence.repository.jpa.MerchantApplicationJpaRepository;
@@ -43,15 +42,13 @@ public class MerchantApplicationRepositoryImpl
      * 构造仓储实现。
      *
      * @param repository            申请 JPA 仓储
-     * @param threadContext         请求级上下文（变更追踪器与快照）
      * @param convertor             DO ↔ PO 转换器
      * @param changeTrackerProvider 变更追踪器提供者
      */
     public MerchantApplicationRepositoryImpl(MerchantApplicationJpaRepository repository,
-                                             ThreadContext threadContext,
                                              MerchantApplicationConvertor convertor,
                                              ChangeTrackerProvider changeTrackerProvider) {
-        super(repository, threadContext, convertor, changeTrackerProvider);
+        super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
     }
 

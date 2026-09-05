@@ -111,7 +111,7 @@ class AuthChainJpaIntegrationTest {
     }
 
     /**
-     * DB 回填（买家真实数据）：miss → JPA 查单表 account → 组装 ThreadContext 并回填缓存。
+     * DB 回填（买家真实数据）：miss → JPA 查单表 account → 组装跟踪作用域并回填缓存。
      * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
@@ -130,7 +130,7 @@ class AuthChainJpaIntegrationTest {
 
     /**
      * DB 回填（商家真实数据 + rel）：account 表命中 type=SELLER → SELLER 角色 + 店铺上下文
-     * 写入 ThreadContext.tenantID（shopIds 落租户）。Phase 1 红（JPA 回填骨架态）。
+     * 写入 跟踪作用域 tenantID（shopIds 落租户）。Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_sellerFromDb_fillsTenantFromShopIds() throws Exception {

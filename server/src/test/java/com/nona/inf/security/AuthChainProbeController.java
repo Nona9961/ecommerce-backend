@@ -1,13 +1,13 @@
 package com.nona.inf.security;
 
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TenantContextAccessor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * 认证链路探测端点（测试支撑）：回显当前请求的 ThreadContext 快照，
+ * 认证链路探测端点（测试支撑）：回显当前请求的跟踪作用域快照，
  * 用于断言认证过滤器是否正确组装用户上下文。
  * <p>
  * 仅存在于测试 classpath，不进入生产制品。
@@ -16,17 +16,17 @@ import java.util.List;
 public class AuthChainProbeController {
 
     /**
-     * 当前请求上下文（request 作用域代理）
+     * 租户上下文访问器（单级解析：跟踪作用域持有者优先）
      */
-    private final ThreadContext threadContext;
+    private final TenantContextAccessor tenantContextAccessor;
 
     /**
      * 构造探测控制器。
      *
-     * @param threadContext 请求上下文
+     * @param tenantContextAccessor 租户上下文访问器
      */
-    public AuthChainProbeController(ThreadContext threadContext) {
-        this.threadContext = threadContext;
+    public AuthChainProbeController(TenantContextAccessor tenantContextAccessor) {
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -65,7 +65,8 @@ public class AuthChainProbeController {
      * @return 身份、角色与租户快照
      */
     private ProbeSnapshot snapshot() {
-        return new ProbeSnapshot(threadContext.getIdentity(), threadContext.getRole(), threadContext.getTenantID());
+        return new ProbeSnapshot(
+                tenantContextAccessor.getIdentity(), tenantContextAccessor.getRole(), tenantContextAccessor.getTenantID());
     }
 
     /**

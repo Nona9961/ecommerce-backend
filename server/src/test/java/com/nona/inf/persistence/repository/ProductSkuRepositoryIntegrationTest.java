@@ -6,8 +6,8 @@ import com.nona.domain.catalog.entity.SpecItem;
 import com.nona.domain.catalog.entity.SpecTemplate;
 import com.nona.domain.catalog.factory.ProductFactory;
 import com.nona.domain.catalog.repo.ProductRepository;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductAttributePO;
 import com.nona.inf.persistence.po.catalog.ProductImagePO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
@@ -20,10 +20,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.util.Arrays;
 import java.util.List;
@@ -94,11 +91,6 @@ class ProductSkuRepositoryIntegrationTest {
     @Autowired
     private TransactionTemplate tx;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -116,17 +108,6 @@ class ProductSkuRepositoryIntegrationTest {
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -136,33 +117,37 @@ class ProductSkuRepositoryIntegrationTest {
     @Test
     @DisplayName("配置模板后保存读回完整 SKU 集")
     void save_configuredTemplatePersistsSkuSet() {
-        final Product created = createDraft("测试商品");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Product created = createDraft("测试商品");
 
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(
-                    template(dim("颜色", "黑", "白"), dim("尺寸", "L", "XL")));
-            productRepository.save(loaded);
-            return null;
-        });
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(
+                        template(dim("颜色", "黑", "白"), dim("尺寸", "L", "XL")));
+                productRepository.save(loaded);
+                return null;
+            });
 
-        final Product reloaded = productRepository.getByID(created.getId());
-        assertThat(reloaded.getSpecTemplate()).hasValueSatisfying(template -> {
-            assertThat(template.combinationCount()).isEqualTo(4);
+            final Product reloaded = productRepository.getByID(created.getId());
+            assertThat(reloaded.getSpecTemplate()).hasValueSatisfying(template -> {
+                assertThat(template.combinationCount()).isEqualTo(4);
+            });
+            assertThat(reloaded.skusOrdered()).hasSize(4);
+            assertThat(reloaded.skusOrdered()).extracting(Sku::getSpecSummary)
+                    .containsExactly(
+                            "颜色:黑,尺寸:L",
+                            "颜色:黑,尺寸:XL",
+                            "颜色:白,尺寸:L",
+                            "颜色:白,尺寸:XL");
+            assertThat(reloaded.skusOrdered()).allSatisfy(sku -> {
+                assertThat(sku.getProductId()).isEqualTo(created.getId());
+                assertThat(sku.getPrice()).isNull();
+                assertThat(sku.isEnabled()).isFalse();
+            });
+    
         });
-        assertThat(reloaded.skusOrdered()).hasSize(4);
-        assertThat(reloaded.skusOrdered()).extracting(Sku::getSpecSummary)
-                .containsExactly(
-                        "颜色:黑,尺寸:L",
-                        "颜色:黑,尺寸:XL",
-                        "颜色:白,尺寸:L",
-                        "颜色:白,尺寸:XL");
-        assertThat(reloaded.skusOrdered()).allSatisfy(sku -> {
-            assertThat(sku.getProductId()).isEqualTo(created.getId());
-            assertThat(sku.getPrice()).isNull();
-            assertThat(sku.isEnabled()).isFalse();
-        });
-    }
+}
 
     /**
      * critical：模板变更（新增规格值）后保存读回——同组合 SKU 价格与
@@ -171,39 +156,43 @@ class ProductSkuRepositoryIntegrationTest {
     @Test
     @DisplayName("模板变更保留价格与 ID 的变更集落库读回")
     void save_templateChangeKeepsPriceAndIdentity() {
-        final Product created = createDraft("测试商品");
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(template(dim("颜色", "黑", "白"), dim("尺寸", "L")));
-            productRepository.save(loaded);
-            return null;
-        });
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Product created = createDraft("测试商品");
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(template(dim("颜色", "黑", "白"), dim("尺寸", "L")));
+                productRepository.save(loaded);
+                return null;
+            });
 
-        final Long blackLId = tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            final Long id = loaded.skusOrdered().get(0).getId();
-            loaded.updateSkuPrice(id, 100L);
-            productRepository.save(loaded);
-            return id;
-        });
+            final Long blackLId = tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                final Long id = loaded.skusOrdered().get(0).getId();
+                loaded.updateSkuPrice(id, 100L);
+                productRepository.save(loaded);
+                return id;
+            });
 
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(
-                    template(dim("颜色", "黑", "白", "蓝"), dim("尺寸", "L")));
-            productRepository.save(loaded);
-            return null;
-        });
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(
+                        template(dim("颜色", "黑", "白", "蓝"), dim("尺寸", "L")));
+                productRepository.save(loaded);
+                return null;
+            });
 
-        final Product reloaded = productRepository.getByID(created.getId());
-        assertThat(reloaded.skusOrdered()).hasSize(3);
-        final Sku survived = reloaded.getSkuById(blackLId).orElseThrow();
-        assertThat(survived.getPrice()).isEqualTo(100L);
-        final Sku added = reloaded.skusOrdered().stream()
-                .filter(sku -> sku.getSpecSummary().equals("颜色:蓝,尺寸:L"))
-                .findFirst().orElseThrow();
-        assertThat(added.getPrice()).isNull();
-    }
+            final Product reloaded = productRepository.getByID(created.getId());
+            assertThat(reloaded.skusOrdered()).hasSize(3);
+            final Sku survived = reloaded.getSkuById(blackLId).orElseThrow();
+            assertThat(survived.getPrice()).isEqualTo(100L);
+            final Sku added = reloaded.skusOrdered().stream()
+                    .filter(sku -> sku.getSpecSummary().equals("颜色:蓝,尺寸:L"))
+                    .findFirst().orElseThrow();
+            assertThat(added.getPrice()).isNull();
+    
+        });
+}
 
     /**
      * critical：空模板配置后保存读回——SKU 集清空、模板为空形态。
@@ -211,26 +200,30 @@ class ProductSkuRepositoryIntegrationTest {
     @Test
     @DisplayName("空模板清空 SKU 集的变更集落库读回")
     void save_emptyTemplateClearsSkuSet() {
-        final Product created = createDraft("测试商品");
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(template(dim("颜色", "黑", "白")));
-            productRepository.save(loaded);
-            return null;
-        });
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Product created = createDraft("测试商品");
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(template(dim("颜色", "黑", "白")));
+                productRepository.save(loaded);
+                return null;
+            });
 
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(new SpecTemplate(null));
-            productRepository.save(loaded);
-            return null;
-        });
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(new SpecTemplate(null));
+                productRepository.save(loaded);
+                return null;
+            });
 
-        final Product reloaded = productRepository.getByID(created.getId());
-        assertThat(reloaded.skusOrdered()).isEmpty();
-        assertThat(reloaded.getSpecTemplate()).hasValueSatisfying(SpecTemplate::isEmpty);
-        assertThat(reloaded.skusOrdered()).isEmpty();
-    }
+            final Product reloaded = productRepository.getByID(created.getId());
+            assertThat(reloaded.skusOrdered()).isEmpty();
+            assertThat(reloaded.getSpecTemplate()).hasValueSatisfying(SpecTemplate::isEmpty);
+            assertThat(reloaded.skusOrdered()).isEmpty();
+    
+        });
+}
 
     /**
      * error：跨店铺访问不可见（fail-closed）——A 店铺商品配置模板保存后，
@@ -239,20 +232,26 @@ class ProductSkuRepositoryIntegrationTest {
     @Test
     @DisplayName("跨店铺 SKU 与商品一并不可见")
     void crossTenantAccess_failClosed() {
-        final Product created = createDraft("测试商品");
-        tx.execute(status -> {
-            final Product loaded = productRepository.getByID(created.getId());
-            loaded.configureSpecTemplate(template(dim("颜色", "黑", "白")));
-            productRepository.save(loaded);
-            return null;
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            final Product created = createDraft("测试商品");
+            tx.execute(status -> {
+                final Product loaded = productRepository.getByID(created.getId());
+                loaded.configureSpecTemplate(template(dim("颜色", "黑", "白")));
+                productRepository.save(loaded);
+                return null;
+            });
+
+            TrackingContext.withScope(() -> {
+                TrackingContext.scope().setTenantID(TENANT_B);
+
+                assertThat(productRepository.getByID(created.getId())).isNull();
+                assertThat(productRepository.listByShopPaged(9101L, 0, 10)).isEmpty();
+                assertThat(productRepository.countByShop(9101L)).isZero();
+    
+            });
         });
-
-        threadContext.setTenantID(TENANT_B);
-
-        assertThat(productRepository.getByID(created.getId())).isNull();
-        assertThat(productRepository.listByShopPaged(9101L, 0, 10)).isEmpty();
-        assertThat(productRepository.countByShop(9101L)).isZero();
-    }
+}
 
     /**
      * 创建工作在事务内落库的草稿商品。

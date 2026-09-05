@@ -1,7 +1,7 @@
 package com.nona.inf.persistence.repository;
 
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.catalog.ProductAttributePO;
 import com.nona.inf.persistence.po.catalog.SkuPO;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
@@ -13,9 +13,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,11 +48,6 @@ class SkuUniqueConstraintRepositoryTest {
     @Autowired
     private ProductAttributeJpaRepository attributeJpaRepository;
 
-    /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
 
     /**
      * 提权工具（测试数据清理需要越过租户过滤）
@@ -72,17 +64,6 @@ class SkuUniqueConstraintRepositoryTest {
             skuJpaRepository.deleteAll();
             attributeJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT_A);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -92,15 +73,19 @@ class SkuUniqueConstraintRepositoryTest {
     @Test
     @DisplayName("重复 spec_hash 直插被唯一约束拒绝")
     void duplicateSpecHash_rejectedByUniqueConstraint() {
-        skuJpaRepository.save(newSkuPo(81001L, 91001L, "hash-a", "颜色:黑", 1999L, true));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            skuJpaRepository.save(newSkuPo(81001L, 91001L, "hash-a", "颜色:黑", 1999L, true));
 
-        assertThatThrownBy(() ->
-                skuJpaRepository.save(newSkuPo(81002L, 91001L, "hash-a", "颜色:黑", null, false)))
-                .isInstanceOf(DataIntegrityViolationException.class);
+            assertThatThrownBy(() ->
+                    skuJpaRepository.save(newSkuPo(81002L, 91001L, "hash-a", "颜色:黑", null, false)))
+                    .isInstanceOf(DataIntegrityViolationException.class);
 
-        assertThat(skuJpaRepository.findById(81001L)).isPresent();
-        assertThat(skuJpaRepository.findById(81002L)).isEmpty();
-    }
+            assertThat(skuJpaRepository.findById(81001L)).isPresent();
+            assertThat(skuJpaRepository.findById(81002L)).isEmpty();
+    
+        });
+}
 
     /**
      * critical：不同商品的相同 spec_hash 互不冲突（唯一约束按商品维度，
@@ -109,13 +94,17 @@ class SkuUniqueConstraintRepositoryTest {
     @Test
     @DisplayName("不同商品的相同 spec_hash 合法共存")
     void sameSpecHashAcrossProducts_allowed() {
-        skuJpaRepository.save(newSkuPo(81011L, 91001L, "hash-a", "颜色:黑", 1999L, true));
-        skuJpaRepository.save(newSkuPo(81012L, 91002L, "hash-a", "颜色:黑", 2599L, false));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            skuJpaRepository.save(newSkuPo(81011L, 91001L, "hash-a", "颜色:黑", 1999L, true));
+            skuJpaRepository.save(newSkuPo(81012L, 91002L, "hash-a", "颜色:黑", 2599L, false));
 
-        assertThat(skuJpaRepository.count()).isEqualTo(2);
-        assertThat(skuJpaRepository.findById(81011L)).isPresent();
-        assertThat(skuJpaRepository.findById(81012L)).isPresent();
-    }
+            assertThat(skuJpaRepository.count()).isEqualTo(2);
+            assertThat(skuJpaRepository.findById(81011L)).isPresent();
+            assertThat(skuJpaRepository.findById(81012L)).isPresent();
+    
+        });
+}
 
     /**
      * critical：product_attribute 唯一约束兜底——同商品同 attr_key 的
@@ -124,15 +113,19 @@ class SkuUniqueConstraintRepositoryTest {
     @Test
     @DisplayName("重复属性键直插被唯一约束拒绝")
     void duplicateAttributeKey_rejectedByUniqueConstraint() {
-        attributeJpaRepository.save(newAttributePo(82001L, 91001L, "材质", "纯棉"));
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT_A);
+            attributeJpaRepository.save(newAttributePo(82001L, 91001L, "材质", "纯棉"));
 
-        assertThatThrownBy(() ->
-                attributeJpaRepository.save(newAttributePo(82002L, 91001L, "材质", "涤纶")))
-                .isInstanceOf(DataIntegrityViolationException.class);
+            assertThatThrownBy(() ->
+                    attributeJpaRepository.save(newAttributePo(82002L, 91001L, "材质", "涤纶")))
+                    .isInstanceOf(DataIntegrityViolationException.class);
 
-        assertThat(attributeJpaRepository.findById(82001L)).isPresent();
-        assertThat(attributeJpaRepository.findById(82002L)).isEmpty();
-    }
+            assertThat(attributeJpaRepository.findById(82001L)).isPresent();
+            assertThat(attributeJpaRepository.findById(82002L)).isEmpty();
+    
+        });
+}
 
     /**
      * 构造 SKU 行（直插绕过聚合守卫，验证 DB 兜底）。

@@ -1,25 +1,21 @@
 package com.nona.inf.persistence.tenant;
 
-import com.nona.annotation.ScaffoldGenerated;
 import com.nona.EcommerceApplication;
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.exceptions.BusinessException;
 import com.nona.inf.context.TenantContextAccessor;
 import com.nona.inf.context.TenantPrivilege;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.jpa.TestGlobalNoteRepository;
 import com.nona.inf.persistence.repository.jpa.TestTenantNoteRepository;
 import jakarta.persistence.EntityManager;
 import org.hibernate.Session;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +26,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * 多租户隔离集成测试：写门禁、读过滤、提权作用域与 filter 双保险。
+ * <p>
+ * 上下文制造形态：租户身份经 {@link TrackingContext#withScope} + holder 写入
+ * （单级解析主通路）；租户切换 = 退出/重入作用域；tenant 缺失场景 = 无作用域
+ * （fail-closed，MISSING 占位）；空白 holder 语义与既有行为一致（空白视为缺失）。
  *
  * @author nona9961
  */
@@ -42,9 +42,6 @@ class TenantRepositoryAspectTest {
 
     @Autowired
     private TestGlobalNoteRepository globalNoteRepository;
-
-    @Autowired
-    private ThreadContext threadContext;
 
     @Autowired
     private ElevatedTenantTestService elevatedTenantTestService;
@@ -62,21 +59,11 @@ class TenantRepositoryAspectTest {
     private EntityManager entityManager;
 
     /**
-     * 初始化 request scope（模拟 Web 请求）并清理测试数据。
+     * 清理测试数据（不依赖请求作用域）。
      */
     @BeforeEach
-    void setUpRequestScope() {
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
+    void setUp() {
         elevatedTenantTestService.deleteAllNotes();
-    }
-
-    /**
-     * 清理测试现场，避免用例互相污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -84,36 +71,45 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedQueryShouldBeFilteredAndFailClosedWhenTenantMissing() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(1L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
-        assertThat(t1.getTenantID()).isEqualTo("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(1L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+            assertThat(t1.getTenantID()).isEqualTo("t1");
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(2L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
-        assertThat(t2.getTenantID()).isEqualTo("t2");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(2L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+            assertThat(t2.getTenantID()).isEqualTo("t2");
+        });
 
-        threadContext.setTenantID("t1");
-        List<TestTenantNotePO> visibleToT1 = tenantNoteRepository.findAll();
-        assertThat(visibleToT1).hasSize(1);
-        assertThat(visibleToT1.get(0).getId()).isEqualTo(1L);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            List<TestTenantNotePO> visibleToT1 = tenantNoteRepository.findAll();
+            assertThat(visibleToT1).hasSize(1);
+            assertThat(visibleToT1.get(0).getId()).isEqualTo(1L);
+        });
 
-        threadContext.setTenantID(null);
+        // tenant 缺失（无作用域）→ fail-closed 返回空
         assertThat(tenantNoteRepository.findAll()).isEmpty();
 
-        threadContext.setTenantID("   ");
-        assertThat(tenantNoteRepository.findAll()).isEmpty();
+        TrackingContext.withScope(() -> {
+            // 空白 holder 语义：空白视为缺失（与既有行为一致，继续 fail-closed）
+            TrackingContext.scope().setTenantID("   ");
+            assertThat(tenantNoteRepository.findAll()).isEmpty();
+        });
     }
 
     /**
@@ -121,35 +117,46 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedFindByIdShouldBeFiltered() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(1L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(1L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(2L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(2L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+        });
 
-        threadContext.setTenantID("t1");
-        assertThat(tenantNoteRepository.findById(2L)).isEmpty();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            assertThat(tenantNoteRepository.findById(2L)).isEmpty();
+        });
 
-        threadContext.setTenantID("t2");
-        assertThat(tenantNoteRepository.findById(2L)).isPresent();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            assertThat(tenantNoteRepository.findById(2L)).isPresent();
+        });
 
-        threadContext.setTenantID(null);
+        // tenant 缺失（无作用域）→ fail-closed
         assertThat(tenantNoteRepository.findById(1L)).isEmpty();
 
-        threadContext.setTenantID("   ");
-        assertThat(tenantNoteRepository.findById(1L)).isEmpty();
+        TrackingContext.withScope(() -> {
+            // 空白 holder 语义：空白视为缺失（继续 fail-closed）
+            TrackingContext.scope().setTenantID("   ");
+            assertThat(tenantNoteRepository.findById(1L)).isEmpty();
+        });
     }
 
     /**
@@ -157,34 +164,42 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedCountAndExistsShouldBeFiltered() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(31L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(31L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(32L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(32L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+        });
 
-        threadContext.setTenantID("t1");
-        assertThat(tenantNoteRepository.count()).isEqualTo(1);
-        assertThat(tenantNoteRepository.existsById(31L)).isTrue();
-        assertThat(tenantNoteRepository.existsById(32L)).isFalse();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            assertThat(tenantNoteRepository.existsById(31L)).isTrue();
+            assertThat(tenantNoteRepository.existsById(32L)).isFalse();
+        });
 
-        threadContext.setTenantID("t2");
-        assertThat(tenantNoteRepository.count()).isEqualTo(1);
-        assertThat(tenantNoteRepository.existsById(32L)).isTrue();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            assertThat(tenantNoteRepository.existsById(32L)).isTrue();
+        });
 
-        threadContext.setTenantID(null);
+        // tenant 缺失（无作用域）→ fail-closed
         assertThat(tenantNoteRepository.count()).isZero();
         assertThat(tenantNoteRepository.existsById(31L)).isFalse();
 
@@ -200,7 +215,7 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void globalQueryShouldNotBeFilteredWhenTenantMissing() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
         TestGlobalNotePO global = new TestGlobalNotePO();
         global.setId(10L);
@@ -209,11 +224,14 @@ class TenantRepositoryAspectTest {
         global.setUpdateTime(now);
         globalNoteRepository.save(global);
 
-        threadContext.setTenantID(null);
+        // tenant 缺失（无作用域）→ global 查询不受影响
         assertThat(globalNoteRepository.findAll()).hasSize(1);
 
-        threadContext.setTenantID("   ");
-        assertThat(globalNoteRepository.findAll()).hasSize(1);
+        TrackingContext.withScope(() -> {
+            // 空白 holder 语义：空白视为缺失 → global 查询仍不受影响
+            TrackingContext.scope().setTenantID("   ");
+            assertThat(globalNoteRepository.findAll()).hasSize(1);
+        });
     }
 
     /**
@@ -221,9 +239,8 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedWriteShouldFailWhenTenantMissing() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID(null);
         TestTenantNotePO po = new TestTenantNotePO();
         po.setId(3L);
         po.setContent("illegal");
@@ -238,16 +255,18 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedWriteShouldFailWhenTenantBlank() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID(" ");
-        TestTenantNotePO po = new TestTenantNotePO();
-        po.setId(41L);
-        po.setContent("illegal");
-        po.setCreateTime(now);
-        po.setUpdateTime(now);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(" ");
+            TestTenantNotePO po = new TestTenantNotePO();
+            po.setId(41L);
+            po.setContent("illegal");
+            po.setCreateTime(now);
+            po.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> tenantNoteRepository.save(po));
+            assertThrows(BusinessException.class, () -> tenantNoteRepository.save(po));
+        });
     }
 
     /**
@@ -255,17 +274,19 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedWriteShouldRejectMismatchedTenant() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO po = new TestTenantNotePO();
-        po.setId(4L);
-        po.setTenantID("t2");
-        po.setContent("illegal");
-        po.setCreateTime(now);
-        po.setUpdateTime(now);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO po = new TestTenantNotePO();
+            po.setId(4L);
+            po.setTenantID("t2");
+            po.setContent("illegal");
+            po.setCreateTime(now);
+            po.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> tenantNoteRepository.save(po));
+            assertThrows(BusinessException.class, () -> tenantNoteRepository.save(po));
+        });
     }
 
     /**
@@ -273,28 +294,30 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedSaveAllShouldInjectTenantID() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        TestTenantNotePO po1 = new TestTenantNotePO();
-        po1.setId(51L);
-        po1.setContent("note-1");
-        po1.setCreateTime(now);
-        po1.setUpdateTime(now);
+            TestTenantNotePO po1 = new TestTenantNotePO();
+            po1.setId(51L);
+            po1.setContent("note-1");
+            po1.setCreateTime(now);
+            po1.setUpdateTime(now);
 
-        TestTenantNotePO po2 = new TestTenantNotePO();
-        po2.setId(52L);
-        po2.setTenantID("   ");
-        po2.setContent("note-2");
-        po2.setCreateTime(now);
-        po2.setUpdateTime(now);
+            TestTenantNotePO po2 = new TestTenantNotePO();
+            po2.setId(52L);
+            po2.setTenantID("   ");
+            po2.setContent("note-2");
+            po2.setCreateTime(now);
+            po2.setUpdateTime(now);
 
-        tenantNoteRepository.saveAll(List.of(po1, po2));
+            tenantNoteRepository.saveAll(List.of(po1, po2));
 
-        assertThat(po1.getTenantID()).isEqualTo("t1");
-        assertThat(po2.getTenantID()).isEqualTo("t1");
-        assertThat(tenantNoteRepository.count()).isEqualTo(2);
+            assertThat(po1.getTenantID()).isEqualTo("t1");
+            assertThat(po2.getTenantID()).isEqualTo("t1");
+            assertThat(tenantNoteRepository.count()).isEqualTo(2);
+        });
     }
 
     /**
@@ -302,25 +325,27 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void tenantScopedSaveAllShouldRejectMismatchedTenant() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        TestTenantNotePO po1 = new TestTenantNotePO();
-        po1.setId(61L);
-        po1.setContent("note-1");
-        po1.setCreateTime(now);
-        po1.setUpdateTime(now);
+            TestTenantNotePO po1 = new TestTenantNotePO();
+            po1.setId(61L);
+            po1.setContent("note-1");
+            po1.setCreateTime(now);
+            po1.setUpdateTime(now);
 
-        TestTenantNotePO po2 = new TestTenantNotePO();
-        po2.setId(62L);
-        po2.setTenantID("t2");
-        po2.setContent("note-2");
-        po2.setCreateTime(now);
-        po2.setUpdateTime(now);
+            TestTenantNotePO po2 = new TestTenantNotePO();
+            po2.setId(62L);
+            po2.setTenantID("t2");
+            po2.setContent("note-2");
+            po2.setCreateTime(now);
+            po2.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> tenantNoteRepository.saveAll(List.of(po1, po2)));
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThrows(BusinessException.class, () -> tenantNoteRepository.saveAll(List.of(po1, po2)));
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -328,25 +353,29 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantShouldBypassTenantIsolationInReadAndBeScopeBound() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(11L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(11L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(12L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(12L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+        });
 
-        threadContext.setTenantID(null);
+        // tenant 缺失（无作用域）→ fail-closed 返回空
         assertThat(tenantNoteRepository.findAll()).isEmpty();
 
         List<TestTenantNotePO> all = elevatedTenantTestService.listAllNotes();
@@ -360,32 +389,36 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void elevatedScopeShouldExposeAllTenantsInsideAndRestoreIsolationAfterExit() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(91L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(91L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(92L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(92L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
 
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
 
-        List<TestTenantNotePO> all = elevatedTenantTestService.listAllNotes();
-        assertThat(all).hasSize(2);
-        assertThat(all).extracting(TestTenantNotePO::getId).containsExactlyInAnyOrder(91L, 92L);
+            List<TestTenantNotePO> all = elevatedTenantTestService.listAllNotes();
+            assertThat(all).hasSize(2);
+            assertThat(all).extracting(TestTenantNotePO::getId).containsExactlyInAnyOrder(91L, 92L);
 
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
-        assertThat(tenantNoteRepository.findAll().get(0).getId()).isEqualTo(92L);
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
+            assertThat(tenantNoteRepository.findAll().get(0).getId()).isEqualTo(92L);
+        });
     }
 
     /**
@@ -393,17 +426,18 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantFindByIdShouldBypassIsolation() {
-        LocalDateTime now = LocalDateTime.now();
+        final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(21L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(21L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID(null);
         assertThat(tenantNoteRepository.findById(21L)).isEmpty();
         assertThat(elevatedTenantTestService.getNote(21L)).isNotNull();
     }
@@ -413,11 +447,15 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantWriteShouldKeepExplicitTenantID() {
-        threadContext.setTenantID("t1");
-        elevatedTenantTestService.saveNoteForTenant("t2", 100L, "note-t2");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            elevatedTenantTestService.saveNoteForTenant("t2", 100L, "note-t2");
+        });
 
-        threadContext.setTenantID("t2");
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        });
     }
 
     /**
@@ -429,11 +467,13 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void elevatedWriteWithNullTenantShouldFail() {
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        assertThrows(BusinessException.class,
-                () -> elevatedTenantTestService.saveNoteWithoutTenantID(71L, "note-from-admin"));
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThrows(BusinessException.class,
+                    () -> elevatedTenantTestService.saveNoteWithoutTenantID(71L, "note-from-admin"));
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -441,7 +481,7 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantWriteShouldRejectMissingPlaceholderEntityTenant() {
-        threadContext.setTenantID(null);
+        // 当前 tenant 缺失（无作用域）
         assertThrows(BusinessException.class,
                 () -> elevatedTenantTestService.saveNoteForTenant(TenantContextAccessor.MISSING_TENANT_ID, 81L, "illegal"));
         assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
@@ -452,7 +492,7 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantWriteShouldKeepExplicitTenantWhenContextTenantMissing() {
-        threadContext.setTenantID(null);
+        // 当前 tenant 缺失（无作用域）
         elevatedTenantTestService.saveNoteForTenant("t1", 100L, "explicit");
 
         List<TestTenantNotePO> all = elevatedTenantTestService.listAllNotes();
@@ -466,8 +506,7 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantWriteShouldRejectWhenBothMissing() {
-        threadContext.setTenantID(null);
-
+        // 当前 tenant 缺失（无作用域）
         assertThrows(BusinessException.class, () -> elevatedTenantTestService.saveNoteWithoutTenantID(82L, "illegal"));
         assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
     }
@@ -488,27 +527,29 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void sameTransactionElevatedScopeShouldExposeAllTenantsAndRestoreAfterExit() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 101L, "note-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 102L, "note-B");
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 101L, "note-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 102L, "note-B");
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(2);
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            final Session sessionBefore = entityManager.unwrap(Session.class);
-            assertThat(tenantPrivilege.isActive()).isFalse();
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                final Session sessionBefore = entityManager.unwrap(Session.class);
+                assertThat(tenantPrivilege.isActive()).isFalse();
 
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            tenantPrivilege.elevated(() -> {
-                assertThat(tenantNoteRepository.count())
-                        .as("elevated query within already-stabilized session should bypass tenant filter")
-                        .isEqualTo(2);
+                tenantPrivilege.elevated(() -> {
+                    assertThat(tenantNoteRepository.count())
+                            .as("elevated query within already-stabilized session should bypass tenant filter")
+                            .isEqualTo(2);
+                });
+
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
+
+                final Session sessionAfter = entityManager.unwrap(Session.class);
+                assertThat(sessionAfter).isSameAs(sessionBefore);
             });
-
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
-
-            final Session sessionAfter = entityManager.unwrap(Session.class);
-            assertThat(sessionAfter).isSameAs(sessionBefore);
         });
     }
 
@@ -520,29 +561,35 @@ class TenantRepositoryAspectTest {
     void crossTenantAnnotatedReadShouldExposeAllTenantsAndRestoreIsolation() {
         final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(301L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(301L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(302L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(302L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+        });
 
-        threadContext.setTenantID("t1");
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
 
-        List<TestTenantNotePO> all = crossTenantTestService.listAllNotes();
-        assertThat(all).hasSize(2);
+            List<TestTenantNotePO> all = crossTenantTestService.listAllNotes();
+            assertThat(all).hasSize(2);
 
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        });
     }
 
     /**
@@ -551,17 +598,19 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantAnnotatedReadShouldBypassInStabilizedSession() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 311L, "note-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 312L, "note-B");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 311L, "note-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 312L, "note-B");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            assertThat(crossTenantTestService.getNote(311L)).isNotNull();
-            assertThat(crossTenantTestService.getNote(312L)).isNotNull();
+                assertThat(crossTenantTestService.getNote(311L)).isNotNull();
+                assertThat(crossTenantTestService.getNote(312L)).isNotNull();
 
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            });
         });
     }
 
@@ -573,25 +622,31 @@ class TenantRepositoryAspectTest {
     void crossTenantNestedAnnotatedScopesAreSafe() {
         final LocalDateTime now = LocalDateTime.now();
 
-        threadContext.setTenantID("t1");
-        TestTenantNotePO t1 = new TestTenantNotePO();
-        t1.setId(321L);
-        t1.setContent("note-t1");
-        t1.setCreateTime(now);
-        t1.setUpdateTime(now);
-        tenantNoteRepository.save(t1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            TestTenantNotePO t1 = new TestTenantNotePO();
+            t1.setId(321L);
+            t1.setContent("note-t1");
+            t1.setCreateTime(now);
+            t1.setUpdateTime(now);
+            tenantNoteRepository.save(t1);
+        });
 
-        threadContext.setTenantID("t2");
-        TestTenantNotePO t2 = new TestTenantNotePO();
-        t2.setId(322L);
-        t2.setContent("note-t2");
-        t2.setCreateTime(now);
-        t2.setUpdateTime(now);
-        tenantNoteRepository.save(t2);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t2");
+            TestTenantNotePO t2 = new TestTenantNotePO();
+            t2.setId(322L);
+            t2.setContent("note-t2");
+            t2.setCreateTime(now);
+            t2.setUpdateTime(now);
+            tenantNoteRepository.save(t2);
+        });
 
-        threadContext.setTenantID("t1");
-        assertThat(crossTenantTestService.listAllNotesNested()).hasSize(2);
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
+            assertThat(crossTenantTestService.listAllNotesNested()).hasSize(2);
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
+        });
     }
 
     /**
@@ -599,11 +654,13 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantAnnotatedWriteShouldStillRequireElevation() {
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        assertThatThrownBy(() -> crossTenantTestService.saveForeignTenantNote("t2", 331L, "illegal"))
-                .isInstanceOf(BusinessException.class);
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThatThrownBy(() -> crossTenantTestService.saveForeignTenantNote("t2", 331L, "illegal"))
+                    .isInstanceOf(BusinessException.class);
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -611,13 +668,14 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void crossTenantAnnotatedWriteShouldAllowCurrentTenant() {
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        crossTenantTestService.saveCurrentTenantNote(341L, "note-current");
+            crossTenantTestService.saveCurrentTenantNote(341L, "note-current");
 
-        threadContext.setTenantID("t1");
-        assertThat(tenantNoteRepository.findAll()).hasSize(1);
-        assertThat(tenantNoteRepository.findAll().get(0).getTenantID()).isEqualTo("t1");
+            assertThat(tenantNoteRepository.findAll()).hasSize(1);
+            assertThat(tenantNoteRepository.findAll().get(0).getTenantID()).isEqualTo("t1");
+        });
     }
 
     /**
@@ -625,16 +683,17 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void elevationInsideAnnotatedMethodShouldAllowForeignWrite() {
-        threadContext.setTenantID("t1");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("t1");
 
-        crossTenantTestService.saveForeignTenantNoteWithElevation("t2", 351L, "elevated-note");
+            crossTenantTestService.saveForeignTenantNoteWithElevation("t2", 351L, "elevated-note");
 
-        assertThat(elevatedTenantTestService.countAllNotes()).isEqualTo(1);
-        assertThat(elevatedTenantTestService.getNote(351L).getTenantID()).isEqualTo("t2");
+            assertThat(elevatedTenantTestService.countAllNotes()).isEqualTo(1);
+            assertThat(elevatedTenantTestService.getNote(351L).getTenantID()).isEqualTo("t2");
 
-        threadContext.setTenantID("t1");
-        assertThat(tenantNoteRepository.count()).isZero();
-        assertThat(crossTenantTestService.countAllNotesWithElevation()).isEqualTo(1);
+            assertThat(tenantNoteRepository.count()).isZero();
+            assertThat(crossTenantTestService.countAllNotesWithElevation()).isEqualTo(1);
+        });
     }
 
     /**
@@ -649,28 +708,30 @@ class TenantRepositoryAspectTest {
     @Test
     void sameTransactionElevatedWriteShouldFailFastWhenSessionAlreadyStabilizedAreas() {
         final LocalDateTime now = LocalDateTime.now();
-        threadContext.setTenantID("tenant-A");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
 
-        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            entityManager.unwrap(Session.class);
-            assertThat(tenantPrivilege.isActive()).isFalse();
+            assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                entityManager.unwrap(Session.class);
+                assertThat(tenantPrivilege.isActive()).isFalse();
 
-            tenantPrivilege.elevated(() -> {
-                final TestTenantNotePO po = new TestTenantNotePO();
-                po.setId(202L);
-                po.setTenantID("tenant-B");
-                po.setContent("note-B");
-                po.setCreateTime(now);
-                po.setUpdateTime(now);
-                tenantNoteRepository.save(po);
-                // 显式 flush：让 @TenantId assigned-id 校验立刻执行（而非推迟到后续查询的 auto-flush）
-                entityManager.flush();
-            });
-        })).isInstanceOf(RuntimeException.class);
+                tenantPrivilege.elevated(() -> {
+                    final TestTenantNotePO po = new TestTenantNotePO();
+                    po.setId(202L);
+                    po.setTenantID("tenant-B");
+                    po.setContent("note-B");
+                    po.setCreateTime(now);
+                    po.setUpdateTime(now);
+                    tenantNoteRepository.save(po);
+                    // 显式 flush：让 @TenantId assigned-id 校验立刻执行（而非推迟到后续查询的 auto-flush）
+                    entityManager.flush();
+                });
+            })).isInstanceOf(RuntimeException.class);
 
-        assertThat(elevatedTenantTestService.listAllNotes())
-                .extracting(TestTenantNotePO::getId)
-                .doesNotContain(202L);
+            assertThat(elevatedTenantTestService.listAllNotes())
+                    .extracting(TestTenantNotePO::getId)
+                    .doesNotContain(202L);
+        });
     }
 
     /**
@@ -687,24 +748,26 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void sameTransactionBypassWriteShouldSurviveScopeExitFlushClearAndCommit() {
-        threadContext.setTenantID("tenant-A");
-        final LocalDateTime now = LocalDateTime.now();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            final LocalDateTime now = LocalDateTime.now();
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            tenantPrivilege.withReadBypass(() -> {
-                final TestTenantNotePO po = new TestTenantNotePO();
-                po.setId(601L);
-                po.setContent("note-current");
-                po.setCreateTime(now);
-                po.setUpdateTime(now);
-                tenantNoteRepository.save(po);   // 非提权 + 当前租户 → 门禁注入 tenant-A，实体挂起
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                tenantPrivilege.withReadBypass(() -> {
+                    final TestTenantNotePO po = new TestTenantNotePO();
+                    po.setId(601L);
+                    po.setContent("note-current");
+                    po.setCreateTime(now);
+                    po.setUpdateTime(now);
+                    tenantNoteRepository.save(po);   // 非提权 + 当前租户 → 门禁注入 tenant-A，实体挂起
+                });
+                // 作用域退出：handler 此刻执行 flush+clear（EM 绑定，真实路径）
             });
-            // 作用域退出：handler 此刻执行 flush+clear（EM 绑定，真实路径）
-        });
 
-        // 事务已提交：数据必须落库（flush 先行防 clear 丢挂起写）
-        assertThat(tenantNoteRepository.findById(601L)).isPresent();
-        assertThat(tenantNoteRepository.findById(601L).orElseThrow().getTenantID()).isEqualTo("tenant-A");
+            // 事务已提交：数据必须落库（flush 先行防 clear 丢挂起写）
+            assertThat(tenantNoteRepository.findById(601L)).isPresent();
+            assertThat(tenantNoteRepository.findById(601L).orElseThrow().getTenantID()).isEqualTo("tenant-A");
+        });
     }
 
     // ==================== 删除门禁（参数判定覆盖 delete 系列：PO 形态受两条件判定）====================
@@ -715,18 +778,20 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void nonElevatedDeleteWithForeignTenantShouldBeRejected() {
-        threadContext.setTenantID("tenant-A");
-        final LocalDateTime now = LocalDateTime.now();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            final LocalDateTime now = LocalDateTime.now();
 
-        final TestTenantNotePO poB = new TestTenantNotePO();
-        poB.setId(501L);
-        poB.setTenantID("tenant-B");
-        poB.setContent("foreign");
-        poB.setCreateTime(now);
-        poB.setUpdateTime(now);
+            final TestTenantNotePO poB = new TestTenantNotePO();
+            poB.setId(501L);
+            poB.setTenantID("tenant-B");
+            poB.setContent("foreign");
+            poB.setCreateTime(now);
+            poB.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> tenantNoteRepository.delete(poB));
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThrows(BusinessException.class, () -> tenantNoteRepository.delete(poB));
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -734,18 +799,20 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void nonElevatedDeleteAllWithForeignTenantShouldBeRejected() {
-        threadContext.setTenantID("tenant-A");
-        final LocalDateTime now = LocalDateTime.now();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            final LocalDateTime now = LocalDateTime.now();
 
-        final TestTenantNotePO poB = new TestTenantNotePO();
-        poB.setId(502L);
-        poB.setTenantID("tenant-B");
-        poB.setContent("foreign");
-        poB.setCreateTime(now);
-        poB.setUpdateTime(now);
+            final TestTenantNotePO poB = new TestTenantNotePO();
+            poB.setId(502L);
+            poB.setTenantID("tenant-B");
+            poB.setContent("foreign");
+            poB.setCreateTime(now);
+            poB.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> tenantNoteRepository.deleteAll(List.of(poB)));
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThrows(BusinessException.class, () -> tenantNoteRepository.deleteAll(List.of(poB)));
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -753,20 +820,22 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void nonElevatedDeleteOwnTenantShouldSucceed() {
-        threadContext.setTenantID("tenant-A");
-        final LocalDateTime now = LocalDateTime.now();
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            final LocalDateTime now = LocalDateTime.now();
 
-        final TestTenantNotePO po = new TestTenantNotePO();
-        po.setId(503L);
-        po.setContent("own");
-        po.setCreateTime(now);
-        po.setUpdateTime(now);
-        tenantNoteRepository.save(po);
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
+            final TestTenantNotePO po = new TestTenantNotePO();
+            po.setId(503L);
+            po.setContent("own");
+            po.setCreateTime(now);
+            po.setUpdateTime(now);
+            tenantNoteRepository.save(po);
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
 
-        tenantNoteRepository.delete(po);
+            tenantNoteRepository.delete(po);
 
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -777,21 +846,23 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void elevatedDeleteForeignTenantShouldSucceed() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 504L, "foreign");
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 504L, "foreign");
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
 
-        final LocalDateTime now = LocalDateTime.now();
-        final TestTenantNotePO poB = new TestTenantNotePO();
-        poB.setId(504L);
-        poB.setTenantID("tenant-B");
-        poB.setContent("foreign");
-        poB.setCreateTime(now);
-        poB.setUpdateTime(now);
+            final LocalDateTime now = LocalDateTime.now();
+            final TestTenantNotePO poB = new TestTenantNotePO();
+            poB.setId(504L);
+            poB.setTenantID("tenant-B");
+            poB.setContent("foreign");
+            poB.setCreateTime(now);
+            poB.setUpdateTime(now);
 
-        tenantPrivilege.elevated(() -> tenantNoteRepository.delete(poB));
+            tenantPrivilege.elevated(() -> tenantNoteRepository.delete(poB));
 
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 
     /**
@@ -800,19 +871,21 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void annotatedDeleteWithForeignTenantPoShouldBeRejected() {
-        threadContext.setTenantID("tenant-A");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 505L, "foreign");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 505L, "foreign");
 
-        final LocalDateTime now = LocalDateTime.now();
-        final TestTenantNotePO poB = new TestTenantNotePO();
-        poB.setId(505L);
-        poB.setTenantID("tenant-B");
-        poB.setContent("foreign");
-        poB.setCreateTime(now);
-        poB.setUpdateTime(now);
+            final LocalDateTime now = LocalDateTime.now();
+            final TestTenantNotePO poB = new TestTenantNotePO();
+            poB.setId(505L);
+            poB.setTenantID("tenant-B");
+            poB.setContent("foreign");
+            poB.setCreateTime(now);
+            poB.setUpdateTime(now);
 
-        assertThrows(BusinessException.class, () -> crossTenantTestService.deleteNote(poB));
-        assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
+            assertThrows(BusinessException.class, () -> crossTenantTestService.deleteNote(poB));
+            assertThat(elevatedTenantTestService.listAllNotes()).hasSize(1);
+        });
     }
 
     /**
@@ -822,10 +895,12 @@ class TenantRepositoryAspectTest {
      */
     @Test
     void elevatedWriteWithBlankTenantShouldFail() {
-        threadContext.setTenantID("tenant-A");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
 
-        assertThrows(BusinessException.class,
-                () -> elevatedTenantTestService.saveNoteForTenant("   ", 506L, "blank"));
-        assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+            assertThrows(BusinessException.class,
+                    () -> elevatedTenantTestService.saveNoteForTenant("   ", 506L, "blank"));
+            assertThat(elevatedTenantTestService.listAllNotes()).isEmpty();
+        });
     }
 }

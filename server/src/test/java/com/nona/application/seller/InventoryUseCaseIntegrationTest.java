@@ -2,23 +2,19 @@ package com.nona.application.seller;
 
 import com.nona.application.seller.InventoryUseCase;
 import com.nona.domain.inventory.entity.InventoryItem;
-import com.nona.inf.context.ThreadContext;
 import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * （见 InventoryUniqueConstraintTest）。初始化无变更语义不产流水。
  * <p>
  * 事务边界在用例方法（@Transactional）；当前店铺由认证上下文定位（本
- * 测试以 ThreadContext.tenantID 模拟商家请求租户=当前店铺）。
+ * 测试以 TrackingContext.withScope + holder.setTenantID 模拟商家请求租户=当前店铺）。
  *
  * @author nona9961
  */
@@ -66,19 +62,13 @@ class InventoryUseCaseIntegrationTest {
     private InventoryLogJpaRepository inventoryLogJpaRepository;
 
     /**
-     * 请求级上下文（模拟商家请求租户=当前店铺）
-     */
-    @Autowired
-    private ThreadContext threadContext;
-
-    /**
      * 提权工具（测试数据清理需要越过租户过滤）
      */
     @Autowired
     private TenantPrivilege tenantPrivilege;
 
     /**
-     * 每用例前：提权清空两表 + 建立请求作用域 + 商家租户上下文。
+     * 每用例前：提权清空两表（上下文以 withScope 在用例内建立）。
      */
     @BeforeEach
     void setUp() {
@@ -86,17 +76,6 @@ class InventoryUseCaseIntegrationTest {
             inventoryLogJpaRepository.deleteAll();
             inventoryItemJpaRepository.deleteAll();
         });
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID(TENANT);
-    }
-
-    /**
-     * 每用例后：清理请求作用域与租户上下文，避免跨用例污染。
-     */
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
     }
 
     /**
@@ -106,6 +85,8 @@ class InventoryUseCaseIntegrationTest {
     @Test
     @DisplayName("初始化库存三态清零且不产流水")
     void initialize_createsZeroedRowWithoutLog() {
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
         final InventoryItem item = inventoryUseCase.initializeStock(9401L, SKU_ID);
 
         final InventoryItemPO po = inventoryItemJpaRepository.findById(item.getId()).orElseThrow();
@@ -116,6 +97,7 @@ class InventoryUseCaseIntegrationTest {
         assertThat(po.getSold()).isZero();
         assertThat(po.getVersion()).isZero();
         assertThat(inventoryLogJpaRepository.count()).isZero();
+        });
     }
 
     /**
@@ -125,6 +107,8 @@ class InventoryUseCaseIntegrationTest {
     @Test
     @DisplayName("重复初始化拒绝")
     void initialize_duplicateRejected() {
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID(TENANT);
         inventoryUseCase.initializeStock(9401L, SKU_ID);
 
         assertThatThrownBy(() -> inventoryUseCase.initializeStock(9401L, SKU_ID))
@@ -133,5 +117,6 @@ class InventoryUseCaseIntegrationTest {
                 .isEqualTo(EcommerceBusinessCode.INVENTORY_ALREADY_EXISTS.code());
 
         assertThat(inventoryItemJpaRepository.count()).isEqualTo(1);
+        });
     }
 }

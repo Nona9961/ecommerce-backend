@@ -1,24 +1,19 @@
 package com.nona.inf.persistence.tenant;
 
-import com.nona.annotation.ScaffoldGenerated;
 import com.nona.EcommerceApplication;
+import com.nona.annotation.ScaffoldGenerated;
 import com.nona.inf.context.TenantPrivilege;
-import com.nona.inf.context.ThreadContext;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.jpa.TestTenantNoteRepository;
 import com.nona.tenant.TenantScopeExitHandler;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.context.request.RequestContextHolder;
-import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
@@ -155,25 +150,10 @@ class TenantPrivilegeMultiContextContractATest {
     private TestTenantNoteRepository tenantNoteRepository;
 
     @Autowired
-    private ThreadContext threadContext;
-
-    @Autowired
     private ElevatedTenantTestService elevatedTenantTestService;
 
     @Autowired
     private PlatformTransactionManager transactionManager;
-
-    @BeforeEach
-    void setUpRequestScope() {
-        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(new MockHttpServletRequest()));
-        threadContext.setTenantID("tenant-A");
-    }
-
-    @AfterEach
-    void tearDown() {
-        threadContext.setTenantID(null);
-        RequestContextHolder.resetRequestAttributes();
-    }
 
     @Test
     void contextCollectsItsOwnHandlersOnly() {
@@ -199,28 +179,36 @@ class TenantPrivilegeMultiContextContractATest {
         TenantPrivilegeMultiContextContractTest.assertOnlyTagInvoked("A", before);
     }
 
+    /**
+     * 租户缓存契约在第二 context 下同样成立：租户身份经
+     * {@link TrackingContext#withScope} + holder 写入（不依赖请求作用域 bean），
+     * 作用域退出 flush+clear 语义由该 context 自己的 JpaTenantScopeExitHandler 驱动。
+     */
     @Test
     void tenantCacheContractHoldsInSecondContext() throws Exception {
-        elevatedTenantTestService.saveNoteForTenant("tenant-A", 801L, "note-a");
-        elevatedTenantTestService.saveNoteForTenant("tenant-B", 811L, "note-b");
+        TrackingContext.withScope(() -> {
+            TrackingContext.scope().setTenantID("tenant-A");
+            elevatedTenantTestService.saveNoteForTenant("tenant-A", 801L, "note-a");
+            elevatedTenantTestService.saveNoteForTenant("tenant-B", 811L, "note-b");
 
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            assertThat(tenantNoteRepository.count()).isEqualTo(1);
+            new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+                assertThat(tenantNoteRepository.count()).isEqualTo(1);
 
-            List<TestTenantNotePO> all;
-            try {
-                all = tenantPrivilege.elevated(() -> tenantNoteRepository.findAll());
-            }
-            catch (Exception e) {
-                throw new IllegalStateException("unexpected checked exception in elevated action", e);
-            }
-            assertThat(all).hasSize(2);
+                List<TestTenantNotePO> all;
+                try {
+                    all = tenantPrivilege.elevated(() -> tenantNoteRepository.findAll());
+                }
+                catch (Exception e) {
+                    throw new IllegalStateException("unexpected checked exception in elevated action", e);
+                }
+                assertThat(all).hasSize(2);
 
-            Optional<TestTenantNotePO> after =
-                    tenantNoteRepository.findById(811L);
-            assertThat(after)
-                    .as("multi-context contract: L1 cache must not retain foreign-tenant entity after scope exit")
-                    .isEmpty();
+                Optional<TestTenantNotePO> after =
+                        tenantNoteRepository.findById(811L);
+                assertThat(after)
+                        .as("multi-context contract: L1 cache must not retain foreign-tenant entity after scope exit")
+                        .isEmpty();
+            });
         });
     }
 }
