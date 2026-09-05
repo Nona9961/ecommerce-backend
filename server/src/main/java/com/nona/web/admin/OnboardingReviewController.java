@@ -24,8 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
  * {@link OnboardingReviewUseCase}；当前审核人 ID 从跟踪上下文
  * 取（认证过滤器已写入 JWT 主体）。列表状态参数为可选过滤（缺省全部），
  * 非法值显式解析拒绝（400 generic.validation_failed，与请求体校验语义一致）。
- * 审核通过时用例在事务内发布 ApplicationApproved 领域事件（开店编排在后续
- * 后续版本接入的编排消费，本控制器不含开店）。
+ * 审核通过时用例在同事务内完成开店编排（申请迁移 → 建店 → 绑定 → 事件 →
+ * 缓存失效）并返回新店铺 ID，本控制器保持薄壳委托。
  *
  * @author nona9961
  */
@@ -73,9 +73,8 @@ public class OnboardingReviewController implements OnboardingReviewApi {
      */
     @Override
     @PostMapping("/admin/onboarding/{applicationId}/approve")
-    public HttpResponse<Void> approve(@PathVariable("applicationId") Long applicationId) {
-        reviewUseCase.approve(applicationId, currentAccountId());
-        return HttpResponse.ok();
+    public HttpResponse<Long> approve(@PathVariable("applicationId") Long applicationId) {
+        return HttpResponse.ok(reviewUseCase.approve(applicationId, currentAccountId()));
     }
 
     /**

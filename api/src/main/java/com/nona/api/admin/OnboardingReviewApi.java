@@ -10,8 +10,9 @@ import com.nona.api.common.PageResult;
  * <p>
  * 列表按状态过滤（缺省全部）分页，资料完整可见；审核动作仅对待审申请合法
  * （状态机守卫，重复审核拒绝）；驳回必须附原因（商家据此修改重提）。
- * 审核通过发布领域事件（{@code ApplicationApproved}），店铺创建由后续
- * 版本接入的编排消费（本契约不含开店）。
+ * 审核通过 = 同事务开店编排完成（申请迁移 approved + 店铺创建 + 账号-店铺绑定，
+ * 任一失败整体回滚），响应返回新店铺 ID；{@code ApplicationApproved} 事件为
+ * 通知旁路。
  * 服务端实现位于 server 模块 web 层，审核人身份从认证上下文（JWT uid）取。
  *
  * @author nona9961
@@ -29,12 +30,13 @@ public interface OnboardingReviewApi {
     HttpResponse<PageResult<OnboardingAuditItem>> list(String status, int pageNum, int pageSize);
 
     /**
-     * 审核通过：申请迁移至 approved 终态，并发布 ApplicationApproved 领域事件。
+     * 审核通过：同事务内完成开店编排（申请迁移 approved + 店铺创建 + 账号-店铺
+     * 绑定，任一失败整体回滚），成功返回新店铺 ID（审核通过即开店成功的结果契约）。
      *
      * @param applicationId 申请 ID
-     * @return 成功响应
+     * @return 成功响应，data = 新店铺 ID
      */
-    HttpResponse<Void> approve(Long applicationId);
+    HttpResponse<Long> approve(Long applicationId);
 
     /**
      * 审核驳回：申请迁移至 rejected（附原因，可修改重提）。

@@ -90,6 +90,22 @@ public class RedisAuthUserCache implements AuthUserCache {
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * 按 uid 精确删除缓存 key（前缀 + uid）；删除故障（{@link DataAccessException}）
+     * 静默降级——残留条目由 TTL 兜底，关系变更于下一次请求 miss 回填时生效。
+     */
+    @Override
+    public void delete(Long uid) {
+        try {
+            redisTemplate.delete(key(uid));
+        }
+        catch (DataAccessException e) {
+            log.warn("[auth-cache] 主动失效失败（残留由 TTL 兜底） uid={}", uid, e);
+        }
+    }
+
+    /**
      * 组装缓存 key。
      *
      * @param uid 用户 ID

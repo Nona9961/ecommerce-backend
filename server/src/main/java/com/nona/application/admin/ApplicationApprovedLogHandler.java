@@ -6,11 +6,10 @@ import com.nona.events.Event;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 审核通过事件的日志兜底处理器：验收期间开店编排消费方未注册时，
- * 事件总线分发不至于因无处理器而失败（dispatch 语义为「必须有处理器」）。
- * <p>
- * 后续版本将以同事务开店处理器替换本处理器（同一事件类型
- * 只保留一个处理器）；本类保留日志行为，便于链路追踪与回归参考。
+ * 审核通过事件的日志兜底处理器：开店编排已由用例层同事务实现
+ * （{@link OnboardingReviewUseCase#approve}），事件为通知旁路——本处理器
+ * 仅记录事件载荷，便于链路追踪与回归参考（事件总线分发要求事件类型
+ * 必须有处理器）。
  *
  * @author nona9961
  */
@@ -21,8 +20,7 @@ public class ApplicationApprovedLogHandler
     /**
      * {@inheritDoc}
      * <p>
-     * 仅记录事件载荷（申请 ID / 提交实体 / 店铺名），不承载业务副作用；
-     * 开店编排由后续版本的同事务处理器承担。
+     * 仅记录事件载荷（申请 ID / 提交实体 / 店铺名），不承载业务副作用。
      */
     @Override
     public Void handle(Event<ApplicationApprovedEvent.ApplicationApprovedData> event) {

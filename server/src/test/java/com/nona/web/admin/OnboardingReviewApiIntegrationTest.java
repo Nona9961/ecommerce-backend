@@ -444,7 +444,7 @@ class OnboardingReviewApiIntegrationTest {
 
     /**
      * 静默日志处理器（事件兜底处理器恢复形态：验收期事件消费方未注册时
-     * 不抛错；后续版本将替换为同事务开店处理器）。
+     * 不抛错）。开店职责已由审核用例同事务编排承接，事件仅承载通知语义。
      */
     private static final class SilenceLogHandler
             extends com.nona.events.AbstractHandler<ApplicationApprovedEvent.ApplicationApprovedData, Void> {

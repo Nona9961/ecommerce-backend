@@ -16,7 +16,7 @@ public enum OnboardingStatus {
     PENDING,
 
     /**
-     * 已通过：终态，审核通过后将创建店铺（店铺创建编排在后续版本接入）。
+     * 已通过：终态，审核通过即同事务开店（申请迁移 + 店铺创建 + 关联绑定）。
      */
     APPROVED,
 
