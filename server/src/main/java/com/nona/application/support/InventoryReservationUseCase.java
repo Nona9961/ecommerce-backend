@@ -148,6 +148,42 @@ public class InventoryReservationUseCase {
     }
 
     /**
+     * 退款回补（未发货退款/发货超时关单驱动：已售减少、可售增加——
+     * 货未出库退回可售，C9 语义；已发货/已完成不回补由退款编排层按
+     * 子单状态判定保障，本用例只承载域能力）。并发防线为仓储条件
+     * 更新（sold >= quantity，防回补超已售——安全保证不回补多于已售）。
+     * 幂等键 (order_id, sku_id, type) 同三操作复用：同一订单同一 SKU 的
+     * REFUND_RESTORE 只允许一次（重复退款回调/重复请求不重复回补，
+     * 预查询快速拒绝 + 流水表唯一约束兜底并发窗口）。编排面同三操作
+     * 定式：校验订单上下文 → 幂等判定 → 定位加载聚合（租户过滤
+     * fail-closed）→ 仓储条件更新（受影响行数 0 即已售不足拒绝）→
+     * 聚合方法做领域前置守卫并内嵌构造 REFUND_RESTORE 流水 → 流水
+     * append-only 追加 → 事件统一触发点判定（售罄/恢复——回补路径
+     * 接入统一触发点，售罄态 SKU 经回补恢复可售发布恢复事件，一期
+     * 日志消费）。
+     *
+     * @param orderId  订单 ID（必填；幂等键组成）
+     * @param skuId    回补 SKU（必填）
+     * @param quantity 回补数量（必须为正）
+     * @return 回补后的库存聚合（本请求视角三态与版本）
+     */
+    @Transactional
+    public InventoryItem restore(Long orderId, Long skuId, int quantity) {
+        requireOrderContext(orderId, quantity, "回补数量必须为正");
+        rejectDuplicate(orderId, skuId, InventoryLogType.REFUND_RESTORE);
+        final InventoryItem item = loadItem(skuId);
+        final int affected = inventoryItemRepository.casRestore(item.getId(), quantity);
+        if (affected == 0) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "已售数量不足，无法回补");
+        }
+        final InventoryLog log = item.restoreSold(orderId, quantity);
+        inventoryLogRepository.append(log);
+        inventoryEventRouter.publishIfNeeded(log);
+        return item;
+    }
+
+    /**
      * 校验订单上下文（幂等判定与条件更新的前置形状校验）：订单 ID 必填
      * （幂等键组成）、变动数量必须为正；形状非法直接拒绝，不进入查询
      * 与更新路径。

@@ -92,4 +92,19 @@ public interface InventoryItemRepository extends BaseRepository<Long, InventoryI
      * @return 受影响行数（1=成功；0=调整致负或行不存在或跨店铺）
      */
     int casAdjust(Long itemId, int delta);
+
+    /**
+     * 条件更新退款回补（防回补超已售的持久化防线，与防超卖条件更新
+     * 同源）：单语句原子执行
+     * <code>sold −= quantity、available += quantity、version += 1</code>，
+     * WHERE 以 {@code sold >= quantity} 为业务量条件（基于 DB 当前值
+     * 判定——回补不超已售，不因加载快照陈旧而放行）。形态约定同
+     * {@link #casPreoccupy(Long, int)}（返回受影响行数、租户条件注入、
+     * version 不参与判定）。
+     *
+     * @param itemId   库存聚合根 ID
+     * @param quantity 回补数量（必须为正，由聚合前置守卫先行校验）
+     * @return 受影响行数（1=成功；0=已售不足或行不存在或跨店铺）
+     */
+    int casRestore(Long itemId, int quantity);
 }

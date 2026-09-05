@@ -171,6 +171,19 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * 条件更新退款回补（条件更新接缝——业务量条件 sold >= quantity
+     * 基于 DB 当前值判定，版本逐笔算术 +1 不参与条件；租户条件从请求
+     * 上下文读取并显式注入 WHERE，上下文缺失按 fail-closed 拒绝；
+     * 受影响行数 1=命中推进、0=已售不足/行不存在/跨店铺）。
+     */
+    @Override
+    public int casRestore(Long itemId, int quantity) {
+        return jpaRepository.casRestore(itemId, quantity, requiredTenantId());
+    }
+
+    /**
      * 读取当前请求租户作为条件更新注入值；上下文缺失按 fail-closed
      * 拒绝（不执行更新——跨店铺条件更新与视角缺失同语义拒绝）。
      *

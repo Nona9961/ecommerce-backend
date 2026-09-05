@@ -64,4 +64,20 @@ public interface InventoryFacade {
      * @param delta 可售调整量（带符号；调整后可售 ≥ 0）
      */
     void adjust(Long skuId, int delta);
+
+    /**
+     * 退款回补（未发货退款/发货超时关单驱动：已售回补可售——订单驱动，
+     * 签名冻结声明、行为实现属退款编排阶段；已发货/已完成不回补的
+     * 语义由编排层按子单状态判定保障——本契约只承载域能力）。
+     * <p>
+     * 幂等键 (order_id, sku_id, type) 同预占/确认/回滚复用：同一订单
+     * 同一 SKU 的 REFUND_RESTORE 只允许一次（重复退款回调不重复回补）；
+     * 批量原子性由编排层同事务边界保障（TD-07），本契约逐个 SKU 独立
+     * 幂等、独立判定。
+     *
+     * @param orderId 订单 ID（必填；幂等键组成——退款操作单元为子订单）
+     * @param items   回补明细（SKU + 数量——按子单退款持有 SKU 集合
+     *                显式传入；多子单退分数次调用）
+     */
+    void restore(Long orderId, List<StockChangeItem> items);
 }

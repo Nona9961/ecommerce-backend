@@ -111,4 +111,15 @@ public class InventoryFacadeImpl implements InventoryFacade {
     public void adjust(Long skuId, int delta) {
         throw new UnsupportedOperationException("手工调整编排属后续阶段");
     }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 动作编排属退款编排阶段实现（见类注：动作面签名随冻结声明，
+     * 行为实现与预占/扣减/回滚同轨）。
+     */
+    @Override
+    public void restore(Long orderId, List<StockChangeItem> items) {
+        throw new UnsupportedOperationException("退款回补编排属后续阶段");
+    }
 }
