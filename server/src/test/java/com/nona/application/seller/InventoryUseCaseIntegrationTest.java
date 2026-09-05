@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 商家端库存用例集成测试：SKU 库存显式初始化入口（D-5）的真实链路——
+ * 商家端库存用例集成测试：SKU 库存显式初始化入口的真实链路——
  * 初始化为三态清零行落库（inventory_item.sku_id 唯一）、用例守卫重复
  * 初始化拒绝（INVENTORY_ALREADY_EXISTS），并发兜底由表级唯一约束承载
  * （见 InventoryUniqueConstraintTest）。初始化无变更语义不产流水。

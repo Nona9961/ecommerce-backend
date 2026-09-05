@@ -15,9 +15,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 零变更不可能、方向由类型界定、前后快照算术自洽、上下文形态与类型
  * 一致」的不变量全部收敛在构造路径）。
  * <p>
- * 本文件为绿底座（不可变构造是设计交付物，校验已实现）：happy 各型
- * 构造与访问器 / critical 恰界数量与手动调整负向 / error 零变更、负
- * 快照、算术不一致、上下文形态不符各拒 / 幂等键语义。
+ * 覆盖：happy 各型构造与访问器 / critical 恰界数量与手动调整负向 /
+ * error 零变更、负快照、算术不一致、上下文形态不符各拒 / 幂等键语义。
+ *
+ * @author nona9961
  */
 class InventoryLogTest {
 

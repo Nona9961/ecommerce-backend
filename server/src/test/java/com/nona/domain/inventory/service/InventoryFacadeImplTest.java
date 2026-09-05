@@ -19,8 +19,8 @@ import static org.mockito.Mockito.when;
  * <p>
  * 用 mock 仓储隔离持久化：缺行语义（仓储返回 null）跨店铺与未初始化
  * 等价（fail-closed 统一按 0 呈现，调用方无需区分缺失与零——zip 语义）。
- * 动作面（preoccupy/confirmDeduct/rollback/adjust）签名冻结、行为属
- * 后续阶段——UOE 守卫由接口契约承载，本类不重复断言实现。
+ * 动作面（preoccupy/confirmDeduct/rollback/adjust）签名冻结、门面接线
+ * 未落地——UOE 守卫由接口契约承载，本类不重复断言实现。
  *
  * @author nona9961
  */

@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 库存聚合根仓储集成测试：inventory_item 主表存在性、三态/版本落库读回、
- * 变更 + 流水同事务编排（D-1 落库形态：聚合保存与流水追加同事务——
+ * 变更 + 流水同事务编排（聚合保存与流水追加同事务——
  * 任一失败整体回滚）、SKU 业务键读取与跨店铺租户隔离（fail-closed）。
  * <p>
  * 与 DDD 红线对应：InventoryItem 为独立聚合根，根表 inventory_item
@@ -185,7 +185,7 @@ class InventoryItemRepositoryIntegrationTest {
 }
 
     /**
-     * D-1 落库形态：变更 + 流水同事务编排——聚合保存与流水追加在
+     * 落库同事务形态：变更 + 流水同事务编排——聚合保存与流水追加在
      * 同一事务内完成，提交后根表行与流水行同时在库（任一失败整体
      * 回滚的编排面由用例层事务承载，本测试以事务模板模拟）。
      */

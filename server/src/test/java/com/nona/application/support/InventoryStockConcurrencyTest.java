@@ -34,7 +34,7 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 库存并发防超卖测试（验收锚点核心证据）：N 个线程竞争 M 份可售库存
+ * 库存并发防超卖测试：N 个线程竞争 M 份可售库存
  * （每线程预占 1 份、订单号唯一），恰好 M 个请求成功、其余全部以容量
  * 不足业务异常拒绝——最终三态一致（可售归零、预占 = M、已售为零、
  * version 逐笔推进（初始化调整 1 笔 + M 笔预占），PREOCCUPY 流水恰好 M 行。

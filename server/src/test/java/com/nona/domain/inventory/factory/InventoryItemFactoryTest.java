@@ -15,6 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 覆盖：happy（创建生成 Snowflake ID、归属店铺/SKU 绑定、三态清零、
  * 乐观锁版本 0、创建即可售查询为 0）、error（空归属店铺/空归属 SKU 拒绝
  * ——非法归属的库存行无业务意义）。
+ *
+ * @author nona9961
  */
 class InventoryItemFactoryTest {
 

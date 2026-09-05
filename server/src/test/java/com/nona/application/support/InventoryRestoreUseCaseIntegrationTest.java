@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 退款回补用例集成测试：restore 全链路契约（第四订单驱动操作，I7——未
+ * 退款回补用例集成测试：restore 全链路契约（未
  * 发货退款/发货超时关单把已售回补可售）——聚合前置守卫 + 仓储条件更新
  * （防回补超已售并发防线）+ REFUND_RESTORE 流水同事务 + 恢复事件统一
  * 触发点接入。
@@ -52,7 +52,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * </ul>
  * 事件断言经 mock 发布端口（统一触发点判定后的发布动作）验证；断言
  * 一律落库后核验（PO 层直读）。「已发货/已完成不回补」语义由退款编排
- * 层按子单状态判定保障（C9），域能力不感知发货状态——本测试不覆盖。
+ * 层按子单状态判定保障，域能力不感知发货状态——本测试不覆盖。
  *
  * @author nona9961
  */

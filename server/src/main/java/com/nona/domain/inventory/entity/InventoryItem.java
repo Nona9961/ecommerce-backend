@@ -13,15 +13,15 @@ import com.nona.util.IDUtils;
  * 关键不变量（全部收敛在本聚合方法内，包外无直接字段变更路径）：
  * <ol>
  *     <li>三态数量恒非负——变更守卫在聚合方法（前置校验）与仓储条件
- *         更新（并发防线，属后续阶段）双层表达；任何变更导致负值拒绝；</li>
+ *         更新（并发防线）双层表达；任何变更导致负值拒绝；</li>
  *     <li><b>每笔变更必有流水</b>：本聚合不存在无流水产出的变更路径——
  *         全部变更方法返回 {@link InventoryLog}（流水内嵌构造，before/after
  *         三态快照与 delta 在聚合内组装，语义最精确），聚合状态变更与
  *         流水追加同事务落库（编排在用例层：保存聚合 + 追加流水行，任一
  *         失败整体回滚——不可追踪的库存变更不可能）；</li>
- *     <li>防超卖唯一机制为数据库条件更新（属后续阶段：预占执行条件
- *         UPDATE 且可售充足判定，影响行数 0 即失败），聚合方法校验为
- *         领域前置守卫不替代并发防线；</li>
+ *     <li>防超卖唯一机制为数据库条件更新（预占执行条件 UPDATE 且可售
+ *         充足判定，影响行数 0 即失败），聚合方法校验为领域前置守卫
+ *         不替代并发防线；</li>
  *     <li>version 乐观锁列：初始 0，每笔变更 +1（递增推进无回退），仅
  *         承载手工调整/对账的冲突检测辅助，不参与防超卖条件更新；</li>
  *     <li>创建即三态清零（初始化无变更语义，不产流水），随后一切数量
@@ -116,23 +116,16 @@ public class InventoryItem {
 
     /**
      * 预占（订单驱动）：可售减少、预占增加——available ≥ demand 方可
-     * 执行（领域前置守卫；并发防线为仓储条件更新，属后续阶段）；同时
-     * 构造 PREOCCUPY 流水行（orderId 必填），聚合状态与流水随之同事务
-     * 落库（编排在用例层）。
+     * 执行（领域前置守卫；并发防线为仓储条件更新）；同时构造
+     * PREOCCUPY 流水行（orderId 必填），聚合状态与流水随之同事务落库
+     * （编排在用例层）。
      *
      * @param orderId 订单 ID（必填）
      * @param demand  预占数量（必须为正）
      * @return 待追加的 PREOCCUPY 流水行（before/after 三态快照就位）
      */
     public InventoryLog preoccupy(Long orderId, int demand) {
-        if (orderId == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(), "订单驱动预占必须携带订单 ID");
-        }
-        if (demand <= 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), "预占数量必须为正");
-        }
+        requireOrderContext(orderId, demand, "订单驱动预占必须携带订单 ID", "预占数量必须为正");
         if (available < demand) {
             throw new BusinessException(
                     EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "可售库存不足，无法预占");
@@ -155,14 +148,7 @@ public class InventoryItem {
      * @return 待追加的 CONFIRM 流水行
      */
     public InventoryLog confirmDeduct(Long orderId, int quantity) {
-        if (orderId == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(), "订单驱动确认扣减必须携带订单 ID");
-        }
-        if (quantity <= 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), "扣减数量必须为正");
-        }
+        requireOrderContext(orderId, quantity, "订单驱动确认扣减必须携带订单 ID", "扣减数量必须为正");
         if (held < quantity) {
             throw new BusinessException(
                     EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "预占库存不足，无法确认扣减");
@@ -185,14 +171,7 @@ public class InventoryItem {
      * @return 待追加的 ROLLBACK 流水行
      */
     public InventoryLog rollback(Long orderId, int quantity) {
-        if (orderId == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(), "订单驱动预占回滚必须携带订单 ID");
-        }
-        if (quantity <= 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), "回滚数量必须为正");
-        }
+        requireOrderContext(orderId, quantity, "订单驱动预占回滚必须携带订单 ID", "回滚数量必须为正");
         if (held < quantity) {
             throw new BusinessException(
                     EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "预占库存不足，无法回滚");
@@ -246,14 +225,7 @@ public class InventoryItem {
      * @return 待追加的 REFUND_RESTORE 流水行
      */
     public InventoryLog restoreSold(Long orderId, int quantity) {
-        if (orderId == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(), "订单驱动退款回补必须携带订单 ID");
-        }
-        if (quantity <= 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), "回补数量必须为正");
-        }
+        requireOrderContext(orderId, quantity, "订单驱动退款回补必须携带订单 ID", "回补数量必须为正");
         if (sold < quantity) {
             throw new BusinessException(
                     EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "已售数量不足，无法回补");
@@ -265,6 +237,29 @@ public class InventoryItem {
         available += quantity;
         version++;
         return log;
+    }
+
+    /**
+     * 订单上下文前置守卫（订单驱动四操作的公共校验形态）：订单 ID
+     * 必填（订单驱动流水上下文）、变动数量必须为正——形状非法直接拒绝，
+     * 不进入业务量判定与流水构造路径。
+     *
+     * @param orderId           订单 ID
+     * @param quantity          变动数量
+     * @param missingOrderMessage 订单 ID 缺失时的拒绝消息
+     * @param invalidQuantityMessage 数量非正时的拒绝消息
+     */
+    private void requireOrderContext(Long orderId, int quantity,
+                                     String missingOrderMessage,
+                                     String invalidQuantityMessage) {
+        if (orderId == null) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(), missingOrderMessage);
+        }
+        if (quantity <= 0) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), invalidQuantityMessage);
+        }
     }
 
     /**

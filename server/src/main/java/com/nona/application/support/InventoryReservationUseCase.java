@@ -11,6 +11,8 @@ import com.nona.exceptions.EcommerceBusinessCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.function.Supplier;
+
 /**
  * 库存保留用例（跨端共用编排层）：订单驱动的库存保留生命周期三操作——
  * 下单预占 / 支付确认扣减 / 取消与超时回滚（同一订单同一 SKU 的同一
@@ -87,14 +89,8 @@ public class InventoryReservationUseCase {
         rejectDuplicate(orderId, skuId, InventoryLogType.PREOCCUPY);
         final InventoryItem item = loadItem(skuId);
         final int affected = inventoryItemRepository.casPreoccupy(item.getId(), demand);
-        if (affected == 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "可售库存不足，无法预占");
-        }
-        final InventoryLog log = item.preoccupy(orderId, demand);
-        inventoryLogRepository.append(log);
-        inventoryEventRouter.publishIfNeeded(log);
-        return item;
+        return commitChange(item, affected, "可售库存不足，无法预占",
+                () -> item.preoccupy(orderId, demand));
     }
 
     /**
@@ -112,14 +108,8 @@ public class InventoryReservationUseCase {
         rejectDuplicate(orderId, skuId, InventoryLogType.CONFIRM);
         final InventoryItem item = loadItem(skuId);
         final int affected = inventoryItemRepository.casConfirmDeduct(item.getId(), quantity);
-        if (affected == 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "预占库存不足，无法确认扣减");
-        }
-        final InventoryLog log = item.confirmDeduct(orderId, quantity);
-        inventoryLogRepository.append(log);
-        inventoryEventRouter.publishIfNeeded(log);
-        return item;
+        return commitChange(item, affected, "预占库存不足，无法确认扣减",
+                () -> item.confirmDeduct(orderId, quantity));
     }
 
     /**
@@ -137,21 +127,15 @@ public class InventoryReservationUseCase {
         rejectDuplicate(orderId, skuId, InventoryLogType.ROLLBACK);
         final InventoryItem item = loadItem(skuId);
         final int affected = inventoryItemRepository.casRollback(item.getId(), quantity);
-        if (affected == 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "预占库存不足，无法回滚");
-        }
-        final InventoryLog log = item.rollback(orderId, quantity);
-        inventoryLogRepository.append(log);
-        inventoryEventRouter.publishIfNeeded(log);
-        return item;
+        return commitChange(item, affected, "预占库存不足，无法回滚",
+                () -> item.rollback(orderId, quantity));
     }
 
     /**
      * 退款回补（未发货退款/发货超时关单驱动：已售减少、可售增加——
-     * 货未出库退回可售，C9 语义；已发货/已完成不回补由退款编排层按
-     * 子单状态判定保障，本用例只承载域能力）。并发防线为仓储条件
-     * 更新（sold >= quantity，防回补超已售——安全保证不回补多于已售）。
+     * 货未出库退回可售；已发货/已完成不回补由退款编排层按子单状态
+     * 判定保障，本用例只承载域能力）。并发防线为仓储条件更新
+     * （sold >= quantity，防回补超已售——安全保证不回补多于已售）。
      * 幂等键 (order_id, sku_id, type) 同三操作复用：同一订单同一 SKU 的
      * REFUND_RESTORE 只允许一次（重复退款回调/重复请求不重复回补，
      * 预查询快速拒绝 + 流水表唯一约束兜底并发窗口）。编排面同三操作
@@ -173,11 +157,31 @@ public class InventoryReservationUseCase {
         rejectDuplicate(orderId, skuId, InventoryLogType.REFUND_RESTORE);
         final InventoryItem item = loadItem(skuId);
         final int affected = inventoryItemRepository.casRestore(item.getId(), quantity);
+        return commitChange(item, affected, "已售数量不足，无法回补",
+                () -> item.restoreSold(orderId, quantity));
+    }
+
+    /**
+     * 变更落库定式（订单驱动四操作共用的收尾形态）：条件更新命中判断 + 流水追加 + 事件判定。
+     * <p>
+     * 受影响行数 0 即容量/数量不足拒绝（翻译为业务异常，明确失败语义）——
+     * 此时聚合变更方法不执行（流水构造不产），库存与流水均不动；命中时
+     * 由聚合变更方法构造流水（before/after 三态快照与 delta 在聚合内组装），
+     * 流水 append-only 追加与事件统一触发点判定（售罄/恢复）同事务落库。
+     *
+     * @param item           已加载的库存聚合（快照基线）
+     * @param affected       仓储条件更新受影响行数（1=命中；0=拒绝）
+     * @param failureMessage 受影响行数 0 时的拒绝消息
+     * @param logFactory     聚合变更方法（流水构造；仅在条件更新命中后执行）
+     * @return 变更后的库存聚合（本请求视角三态与版本）
+     */
+    private InventoryItem commitChange(InventoryItem item, int affected, String failureMessage,
+                                       Supplier<InventoryLog> logFactory) {
         if (affected == 0) {
             throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), "已售数量不足，无法回补");
+                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), failureMessage);
         }
-        final InventoryLog log = item.restoreSold(orderId, quantity);
+        final InventoryLog log = logFactory.get();
         inventoryLogRepository.append(log);
         inventoryEventRouter.publishIfNeeded(log);
         return item;

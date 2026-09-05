@@ -10,20 +10,23 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 库存门面实现：跨上下文库存契约的最小落地形态（本阶段实现查询面，
- * 动作编排属后续阶段——签名随冻结声明、行为未实现）。
+ * 库存门面实现：跨上下文库存契约的落地形态——查询面已实现；动作面
+ * （preoccupy/confirmDeduct/rollback/adjust/restore）签名随冻结声明、
+ * 门面接线未落地（域内编排由应用层用例承载，本类动作方法保持契约
+ * 冻结占位形态）。
  * <p>
  * {@link #queryAvailable}——多 SKU 可售量查询：按请求 SKU 逐一经仓储
  * 读取（租户过滤 fail-closed——跨店铺/未初始化 SKU 按可售 0 呈现，不
  * 泄露归属），请求集合去重后 zip 语义全量返回（调用方无需区分缺失与
- * 零）。事务边界：本阶段为查询面（只读），事务非必需——读由持久化层
+ * 零）。事务边界：本类为查询面（只读），事务非必需——读由持久化层
  * 访问点自持，编排方事务内调用时随 REQUIRED 语义并入。
  * <p>
- * 动作面（preoccupy/confirmDeduct/rollback/adjust）签名随冻结声明，
- * 行为实现属后续阶段：编排路径（用例事务内：读取聚合 → 变更方法 →
- * 保存聚合 + 追加流水同事务落库）、预占防超卖条件更新接缝均在后置
- * 阶段落地。本阶段聚合变更方法已实现（校验 + 流水构造 + 版本推进），
- * Facade 动作编排即止于此。
+ * 动作面（preoccupy/confirmDeduct/rollback/adjust/restore）签名随冻结
+ * 声明、门面接线未落地：域内编排（用例事务内：定位加载聚合 → 仓储
+ * 条件更新 → 聚合变更方法产流水 → 追加流水 + 事件判定同事务落库）
+ * 已由应用层用例承载（库存保留用例承载订单驱动四操作、商家端库存
+ * 用例承载手工调整）；聚合变更方法与条件更新接缝均已实现，本类动作
+ * 方法保持契约冻结占位（UnsupportedOperationException）待消费方接线。
  *
  * @author nona9961
  */
@@ -75,51 +78,51 @@ public class InventoryFacadeImpl implements InventoryFacade {
     /**
      * {@inheritDoc}
      * <p>
-     * 动作编排属后续阶段实现（见类注）。
+     * 门面动作面接线未落地——抛契约冻结占位异常（见类注）。
      */
     @Override
     public void preoccupy(Long orderId, List<StockChangeItem> items) {
-        throw new UnsupportedOperationException("下单预占编排属后续阶段");
+        throw new UnsupportedOperationException("下单预占门面接线未落地");
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 动作编排属后续阶段实现（见类注）。
+     * 门面动作面接线未落地——抛契约冻结占位异常（见类注）。
      */
     @Override
     public void confirmDeduct(Long orderId, List<StockChangeItem> items) {
-        throw new UnsupportedOperationException("支付确认扣减编排属后续阶段");
+        throw new UnsupportedOperationException("支付确认扣减门面接线未落地");
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 动作编排属后续阶段实现（见类注）。
+     * 门面动作面接线未落地——抛契约冻结占位异常（见类注）。
      */
     @Override
     public void rollback(Long orderId, List<StockChangeItem> items) {
-        throw new UnsupportedOperationException("预占回滚编排属后续阶段");
+        throw new UnsupportedOperationException("预占回滚门面接线未落地");
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 动作编排属后续阶段实现（见类注）。
+     * 门面动作面接线未落地——抛契约冻结占位异常（见类注）。
      */
     @Override
     public void adjust(Long skuId, int delta) {
-        throw new UnsupportedOperationException("手工调整编排属后续阶段");
+        throw new UnsupportedOperationException("手工调整门面接线未落地");
     }
 
     /**
      * {@inheritDoc}
      * <p>
-     * 动作编排属退款编排阶段实现（见类注：动作面签名随冻结声明，
-     * 行为实现与预占/扣减/回滚同轨）。
+     * 门面动作面接线未落地——抛契约冻结占位异常（与预占/扣减/回滚
+     * 动作面成员同冻结语义，见类注）。
      */
     @Override
     public void restore(Long orderId, List<StockChangeItem> items) {
-        throw new UnsupportedOperationException("退款回补编排属后续阶段");
+        throw new UnsupportedOperationException("退款回补门面接线未落地");
     }
 }

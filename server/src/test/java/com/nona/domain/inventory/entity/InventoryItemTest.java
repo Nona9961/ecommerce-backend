@@ -12,12 +12,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 库存聚合根单元测试：三态库存行为面契约（预占/确认/回滚/调整/回补 →
  * 每笔变更必产流水）与装配形态守卫。
  * <p>
- * 红阶段状态说明：本文件是行为面契约的红测试——变更方法（
- * {@link InventoryItem#preoccupy} 等）当前以
- * {@link UnsupportedOperationException} 占位（行为实现属后续阶段），
- * 「变更携带流水」「三态恰界」「负值守卫」类用例当前红因即实现缺失；
- * 装配形态守卫（构造校验/归属定型）为绿底座。绿化路径：行为面实现后
- * 本文件断言（流水语义/before/after/delta/version 推进）即成立。
+ * 行为面现状：变更方法（{@link InventoryItem#preoccupy} 等）均已实现
+ * （前置守卫 + 流水构造 + 三态推进 + 版本递增），本文件断言即行为面
+ * 契约——「变更携带流水」「三态恰界」「负值守卫」类用例验证实现语义；
+ * 装配形态守卫（构造校验/归属定型）同文件覆盖。
  * <p>
  * 断言契约（实现方核对）：
  * <ul>
@@ -31,6 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * </ul>
  * 注：测试内以全量构造器装配「读回形态」库存行（三态非零的状态基线），
  * 与仓储读回路径同构；创建路径（三态清零）由工厂测试覆盖。
+ *
+ * @author nona9961
  */
 class InventoryItemTest {
 
@@ -326,7 +326,7 @@ class InventoryItemTest {
     }
 
     /**
-     * 绿底座：三态负值装配拒绝（读回/创建路径的形状守卫——负库存行无
+     * 三态负值装配拒绝（读回/创建路径的形状守卫——负库存行无
      * 业务意义）。
      */
     @Test
@@ -339,7 +339,7 @@ class InventoryItemTest {
     }
 
     /**
-     * 绿底座：负预占/负已售装配拒绝。
+     * 负预占/负已售装配拒绝。
      */
     @Test
     @DisplayName("负预占或负已售装配拒绝")
@@ -355,7 +355,7 @@ class InventoryItemTest {
     }
 
     /**
-     * 绿底座：乐观锁版本负值装配拒绝（版本设值守卫——乐观锁只进不退）。
+     * 乐观锁版本负值装配拒绝（版本设值守卫——乐观锁只进不退）。
      */
     @Test
     @DisplayName("负乐观锁版本装配拒绝")
@@ -367,7 +367,7 @@ class InventoryItemTest {
     }
 
     /**
-     * 绿底座：空归属装配拒绝（店铺/SKU 缺失的库存行无业务意义）。
+     * 空归属装配拒绝（店铺/SKU 缺失的库存行无业务意义）。
      */
     @Test
     @DisplayName("空归属装配拒绝")
@@ -383,7 +383,7 @@ class InventoryItemTest {
     }
 
     /**
-     * 绿底座：归属定型不可变——店铺/SKU 装配后无变更路径（跨店铺归属
+     * 归属定型不可变——店铺/SKU 装配后无变更路径（跨店铺归属
      * 在类型上不可伪造，租户 fail-closed 的领域侧半场）。
      */
     @Test
