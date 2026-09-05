@@ -386,6 +386,16 @@ public enum EcommerceBusinessCode {
     PAYMENT_NOT_FOUND("payment.not_found", 404),
 
     /**
+     * 支付域：网关受理/查询参数非法（单号空白、金额非正）——渠道拒绝受理。
+     */
+    PAYMENT_GATEWAY_INVALID_ARGUMENT("payment.gateway_invalid_argument", 400),
+
+    /**
+     * 支付域：渠道回调非法（缺字段、金额非正、类型与字段不配套）——渠道自身防御。
+     */
+    PAYMENT_GATEWAY_CALLBACK_INVALID("payment.gateway_callback_invalid", 400),
+
+    /**
      * 存储域：上传 contentType 不在白名单（nona.storage.allowed-content-types 可配）。
      */
     STORAGE_CONTENT_TYPE_NOT_ALLOWED("storage.content_type_not_allowed", 400),

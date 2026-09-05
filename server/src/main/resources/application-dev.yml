@@ -32,6 +32,11 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2s
 
+nona:
+  mock-gateway:
+    # mock 支付渠道默认剧本（无标记单号走此剧本；SUCCESS/FAIL/NOCALLBACK）
+    default-script: SUCCESS
+
 change-tracking:
   identifier-methods:
     com.nona.domain.identity.entity.Address: getId
