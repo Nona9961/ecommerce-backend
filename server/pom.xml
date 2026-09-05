@@ -103,6 +103,13 @@
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
         </dependency>
+        <!-- 搜索读模型动态 SQL 生成（type-safe SQL builder，Apache 2.0）：
+             support 类 + SPRING_NAMED_PARAMETER 渲染，见
+             ProductSearchDynamicSqlSupport / NamedParameterJdbcTemplateExtensions -->
+        <dependency>
+            <groupId>org.mybatis.dynamic-sql</groupId>
+            <artifactId>mybatis-dynamic-sql</artifactId>
+        </dependency>
         <dependency>
             <groupId>com.nona</groupId>
             <artifactId>change-tracking-api</artifactId>

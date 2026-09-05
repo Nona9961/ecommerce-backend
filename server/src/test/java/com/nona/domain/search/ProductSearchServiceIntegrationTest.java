@@ -205,6 +205,28 @@ class ProductSearchServiceIntegrationTest {
     // ---------- critical path ----------
 
     /**
+     * happy：关键词与过滤组合生效（OR 组括号语义回归锁——关键词命中
+     * 标题或描述任一大列，过滤条件与整个 OR 组 AND，而非仅与描述列
+     * 组合）：关键词「手机」命中 name 101/103、desc 101；叠加类目 102
+     * （无可售手机行）恒空——括号缺失时 name 命中行不受类目约束会脏
+     * 返回；叠加店铺 9001 时仅 desc 命中的 101 保留（103 属店铺 B）。
+     */
+    @Test
+    @DisplayName("happy：关键词与过滤组合生效（OR 组括号语义）")
+    void keywordWithFilterCombination() {
+        PageResult<ProductCard> noCategoryHit = productSearchService.search(
+                new SearchCriteria("手机", 102L, null, null, null, null, null),
+                new PageQuery(1, 10));
+        assertEquals(0, noCategoryHit.total());
+
+        PageResult<ProductCard> shopFiltered = productSearchService.search(
+                new SearchCriteria("手机", null, null, 9001L, null, null, null),
+                new PageQuery(1, 10));
+        assertEquals(1, shopFiltered.total());
+        assertEquals(List.of(101L), productIds(shopFiltered));
+    }
+
+    /**
      * 空结果：无命中关键词 → total 0 + 空列表（非 null），空态可提示（B5.2 空态）。
      */
     @Test
