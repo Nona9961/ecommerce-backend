@@ -37,6 +37,17 @@ nona:
     # mock 支付渠道默认剧本（无标记单号走此剧本；SUCCESS/FAIL/NOCALLBACK）
     default-script: SUCCESS
 
+# replica 读库（WU-41 双数据源基建，顶层命名空间 replica.datasource.*）：
+# dev 无宿主 PG 直连（沙箱隔离），以 H2 内存库模拟 product_search_view
+# 跑服务层语义（ILIKE 兼容，实测 H2 2.4.240 原生支持）；生产形态指向
+# PG 读库，见报告决策表。注：本段经 Binder 绑定
+# （url/username/password），池参数用 Hikari 默认即可
+replica:
+  datasource:
+    url: jdbc:h2:mem:replica;MODE=PostgreSQL
+    username: sa
+    password: ""
+
 change-tracking:
   identifier-methods:
     com.nona.domain.identity.entity.Address: getId

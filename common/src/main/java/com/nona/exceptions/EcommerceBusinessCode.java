@@ -396,6 +396,12 @@ public enum EcommerceBusinessCode {
     PAYMENT_GATEWAY_CALLBACK_INVALID("payment.gateway_callback_invalid", 400),
 
     /**
+     * 搜索域：价格区间非法（下界或上界为负值，或区间倒挂即上界小于下界；
+     * 搜索检索条件校验位拒绝，B5.3 价格筛选入参把关）。
+     */
+    SEARCH_INVALID_PRICE_RANGE("search.invalid_price_range", 400),
+
+    /**
      * 存储域：上传 contentType 不在白名单（nona.storage.allowed-content-types 可配）。
      */
     STORAGE_CONTENT_TYPE_NOT_ALLOWED("storage.content_type_not_allowed", 400),
