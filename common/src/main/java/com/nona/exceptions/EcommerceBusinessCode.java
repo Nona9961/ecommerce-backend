@@ -381,6 +381,24 @@ public enum EcommerceBusinessCode {
     ORDER_NOT_FOUND("order.not_found", 404),
 
     /**
+     * 订单域：购物车加购/改量的 SKU 不可购（SKU 不属于请求商品、规格已停用
+     * 或商品生命周期状态不满足——请求与商品内容不匹配，属请求构造错误）。
+     */
+    ORDER_CART_SKU_NOT_FOUND("order.cart_sku_not_found", 400),
+
+    /**
+     * 订单域：购物车条目不存在（改量/勾选目标 SKU 不在当前买家购物车——
+     * 列表过期或并发变更后操作已消失条目，显式提示而非静默忽略）。
+     */
+    ORDER_CART_ITEM_NOT_FOUND("order.cart_item_not_found", 404),
+
+    /**
+     * 订单域：购物车数量超过可售上限（加购/改量后数量大于买家可见可售量，
+     * 拒绝本次写入并提示；购物车为软校验，下单预占为最终防线——冲突语义 409）。
+     */
+    ORDER_CART_QUANTITY_EXCEEDS("order.cart_quantity_exceeds", 409),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),

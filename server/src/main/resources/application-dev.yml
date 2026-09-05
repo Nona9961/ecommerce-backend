@@ -51,6 +51,7 @@ replica:
 change-tracking:
   identifier-methods:
     com.nona.domain.identity.entity.Address: getId
+    com.nona.domain.order.entity.CartItem: getId
     com.nona.domain.catalog.entity.ShopCategory: getId
     com.nona.domain.catalog.entity.ProductImage: getId
     com.nona.domain.catalog.entity.ProductAttribute: getId
