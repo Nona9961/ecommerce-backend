@@ -20,6 +20,7 @@ import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.TenantContextAccessor;
 import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
+import com.nona.inf.replica.LastWriteMarker;
 import com.nona.inf.persistence.converters.ProductSnapshotJson;
 import com.nona.util.JacksonUtil;
 import org.springframework.stereotype.Service;
@@ -83,6 +84,11 @@ public class ProductVersionUseCase {
     private final ProductSnapshotConvertor snapshotConvertor;
 
     /**
+     * 写后自读窗口埋点（TD-08：版本回滚属商品内容变更，落库后标记写者）
+     */
+    private final LastWriteMarker lastWriteMarker;
+
+    /**
      * 构造商品编辑版本用例。
      *
      * @param productRepository   商品仓储
@@ -90,17 +96,20 @@ public class ProductVersionUseCase {
      * @param editVersionFactory  编辑版本工厂
      * @param threadContext       请求上下文（操作人）
      * @param snapshotConvertor   商品内容快照转换器（序列化/反序列化）
+     * @param lastWriteMarker     写后窗口埋点（版本变更后标记写者）
      */
     public ProductVersionUseCase(ProductRepository productRepository,
                                  ProductEditVersionRepository editVersionRepository,
                                  ProductEditVersionFactory editVersionFactory,
                                  TenantContextAccessor tenantContextAccessor,
-                                 ProductSnapshotConvertor snapshotConvertor) {
+                                 ProductSnapshotConvertor snapshotConvertor,
+                                 LastWriteMarker lastWriteMarker) {
         this.productRepository = productRepository;
         this.editVersionRepository = editVersionRepository;
         this.editVersionFactory = editVersionFactory;
         this.tenantContextAccessor = tenantContextAccessor;
         this.snapshotConvertor = snapshotConvertor;
+        this.lastWriteMarker = lastWriteMarker;
     }
 
     /**
@@ -204,6 +213,7 @@ public class ProductVersionUseCase {
             editVersionRepository.append(editVersionFactory.createRollback(
                     productId, nextVersionNo, snapshotJson, currentOperator()));
         }
+        markCurrentOperatorWrite();
         return toDetail(product);
     }
 
@@ -309,5 +319,21 @@ public class ProductVersionUseCase {
      */
     private String currentOperator() {
         return tenantContextAccessor.getIdentity();
+    }
+
+    /**
+     * 写后窗口埋点（当前商家账号：请求上下文身份转 Long 打标——回滚 =
+     * 商品内容变更、搜索可见内容变化，TD-08；身份缺失或非数字时跳过埋点，
+     * 降级语义同埋点设施故障）。
+     */
+    private void markCurrentOperatorWrite() {
+        final String identity = currentOperator();
+        if (identity == null || identity.isBlank()) {
+            return;
+        }
+        try {
+            lastWriteMarker.markWrite(Long.valueOf(identity));
+        } catch (NumberFormatException e) {
+        }
     }
 }

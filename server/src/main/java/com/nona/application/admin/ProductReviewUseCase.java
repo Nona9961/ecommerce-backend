@@ -9,11 +9,13 @@ import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.factory.ProductEditVersionFactory;
 import com.nona.domain.catalog.repo.ProductEditVersionRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
+import com.nona.domain.identity.repo.AccountShopRelRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
+import com.nona.inf.replica.LastWriteMarker;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -72,6 +74,17 @@ public class ProductReviewUseCase {
     private final TransactionTemplate transactionTemplate;
 
     /**
+     * 写后自读窗口埋点（TD-08：审核通过 = 商品转入在售、搜索可见性变化，
+     * 标记商品归属商家使其 3s 内搜索立即可见——主体语义见用例契约）
+     */
+    private final LastWriteMarker lastWriteMarker;
+
+    /**
+     * 账号-店铺关联仓储（店铺归属商家反查——审核通过埋点主体定位）
+     */
+    private final AccountShopRelRepository accountShopRelRepository;
+
+    /**
      * 构造平台商品审核用例。
      *
      * @param productRepository      商品仓储
@@ -80,19 +93,25 @@ public class ProductReviewUseCase {
      * @param snapshotConvertor      商品内容快照转换器
      * @param tenantPrivilege        提权工具（跨租户写放行）
      * @param transactionTemplate    事务模板（提权事务）
+     * @param lastWriteMarker        写后窗口埋点（审核通过后标记商家）
+     * @param accountShopRelRepository 账号-店铺关联仓储（归属商家反查）
      */
     public ProductReviewUseCase(ProductRepository productRepository,
                                 ProductEditVersionRepository editVersionRepository,
                                 ProductEditVersionFactory editVersionFactory,
                                 ProductSnapshotConvertor snapshotConvertor,
                                 TenantPrivilege tenantPrivilege,
-                                TransactionTemplate transactionTemplate) {
+                                TransactionTemplate transactionTemplate,
+                                LastWriteMarker lastWriteMarker,
+                                AccountShopRelRepository accountShopRelRepository) {
         this.productRepository = productRepository;
         this.editVersionRepository = editVersionRepository;
         this.editVersionFactory = editVersionFactory;
         this.snapshotConvertor = snapshotConvertor;
         this.tenantPrivilege = tenantPrivilege;
         this.transactionTemplate = transactionTemplate;
+        this.lastWriteMarker = lastWriteMarker;
+        this.accountShopRelRepository = accountShopRelRepository;
     }
 
     /**
@@ -142,6 +161,7 @@ public class ProductReviewUseCase {
                 final int nextVersionNo = editVersionRepository.maxVersionNo(productId) + 1;
                 editVersionRepository.append(editVersionFactory.createReviewPass(
                         productId, nextVersionNo, snapshotJson, String.valueOf(reviewerId)));
+                markMerchantWrite(product);
                 return null;
             });
         } catch (RuntimeException e) {
@@ -149,6 +169,18 @@ public class ProductReviewUseCase {
         } catch (Exception e) {
             throw new IllegalStateException("审核通过事务失败", e);
         }
+    }
+
+    /**
+     * 审核通过埋点：商品转入在售 = 搜索可见性变化，按店铺反查归属商家
+     * 账号打标（使商家 3s 内搜索立即可见自身商品在售；无反查结果则跳过
+     * ——降级语义同埋点设施故障）。
+     *
+     * @param product 已通过审核的商品聚合
+     */
+    private void markMerchantWrite(Product product) {
+        accountShopRelRepository.findByShopId(product.getShopId())
+                .ifPresent(rel -> lastWriteMarker.markWrite(rel.getAccountId()));
     }
 
     /**

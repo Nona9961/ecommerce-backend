@@ -32,4 +32,12 @@ public interface AccountShopRelJpaRepository extends JpaRepository<AccountShopRe
      * @return 关联；不存在返回空
      */
     Optional<AccountShopRelPO> findByAccountIdAndShopId(Long accountId, Long shopId);
+
+    /**
+     * 按店铺 ID 查询关联（店铺归属账号反查，一期每商家一行至多一行）。
+     *
+     * @param shopId 店铺 ID
+     * @return 关联；不存在返回空
+     */
+    Optional<AccountShopRelPO> findByShopId(Long shopId);
 }

@@ -15,6 +15,7 @@ import com.nona.domain.identity.repo.MerchantApplicationRepository;
 import com.nona.events.Dispatcher;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.replica.LastWriteMarker;
 import com.nona.inf.security.AuthUserCache;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -69,6 +70,12 @@ public class OnboardingReviewUseCase {
     private final Dispatcher dispatcher;
 
     /**
+     * 写后自读窗口埋点（TD-08：审核通过 = 商家侧数据生效，标记商家账号
+     * 使其 3s 内搜索立即可见——主体语义见用例契约）
+     */
+    private final LastWriteMarker lastWriteMarker;
+
+    /**
      * 构造平台审核用例。
      *
      * @param applicationRepository 入驻申请仓储
@@ -77,19 +84,22 @@ public class OnboardingReviewUseCase {
      * @param accountShopRelRepository 账号-店铺关联仓储
      * @param authUserCache         用户上下文缓存
      * @param dispatcher            事件分发器
+     * @param lastWriteMarker       写后窗口埋点（审核通过后标记商家）
      */
     public OnboardingReviewUseCase(MerchantApplicationRepository applicationRepository,
                                    ShopFactory shopFactory,
                                    ShopRepository shopRepository,
                                    AccountShopRelRepository accountShopRelRepository,
                                    AuthUserCache authUserCache,
-                                   Dispatcher dispatcher) {
+                                   Dispatcher dispatcher,
+                                   LastWriteMarker lastWriteMarker) {
         this.applicationRepository = applicationRepository;
         this.shopFactory = shopFactory;
         this.shopRepository = shopRepository;
         this.accountShopRelRepository = accountShopRelRepository;
         this.authUserCache = authUserCache;
         this.dispatcher = dispatcher;
+        this.lastWriteMarker = lastWriteMarker;
     }
 
     /**
@@ -141,6 +151,7 @@ public class OnboardingReviewUseCase {
         dispatcher.dispatch(new ApplicationApprovedEvent(
                 application.getId(), application.getAccountId(), application.getShopName()));
         authUserCache.delete(application.getAccountId());
+        lastWriteMarker.markWrite(application.getAccountId());
         return shop.getId();
     }
 

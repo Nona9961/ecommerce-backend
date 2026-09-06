@@ -27,7 +27,11 @@ import com.nona.api.common.PageResult;
 public interface ProductSearchService {
 
     /**
-     * 商品搜索（分页）。
+     * 商品搜索（分页，无账号形态——既有契约保留）。
+     * <p>
+     * 账号缺省 = 无写后窗口判定：本次查询按静态装配走 PG 读库
+     * （replica 通道）。行为与既有 2 参入口完全一致（匿名/未登录调用与
+     * 非写者账号均可走本重载）。
      *
      * @param criteria 检索条件（关键词/类目/品牌/价格区间/店铺/排序；
      *                 非法价格区间按 {@code search.invalid_price_range}
@@ -37,4 +41,20 @@ public interface ProductSearchService {
      * @return 分页卡片结果（空搜索返回空列表 + total 0，非 null）
      */
     PageResult<ProductCard> search(SearchCriteria criteria, PageQuery page);
+
+    /**
+     * 商品搜索（分页，账号形态——TD-08 写后自读窗口路由）。
+     * <p>
+     * 账号为当前登录用户（写者本人视角）：落入 3s 写后窗口（账号级
+     * lastWrite 标记）时本次查询临时走<b>主库</b>（read-your-writes，
+     * 写者可见自己刚写入的内容）；窗口外/Redis 故障降级照常走 PG
+     * 读库（replica 通道）。类型路由为主、窗口为次：其余查询场景
+     * （订单/详情/购物车等）静态走主库，与本入口无关。
+     *
+     * @param criteria 检索条件（同 {@link #search(SearchCriteria, PageQuery)}）
+     * @param page     分页请求（同 {@link #search(SearchCriteria, PageQuery)}）
+     * @param uid      当前账号 ID（写者本人；null = 无窗口判定，走 PG 读库）
+     * @return 分页卡片结果（空搜索返回空列表 + total 0，非 null）
+     */
+    PageResult<ProductCard> search(SearchCriteria criteria, PageQuery page, Long uid);
 }

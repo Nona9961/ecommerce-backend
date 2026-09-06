@@ -6,6 +6,8 @@ import com.nona.domain.search.ports.ProductCard;
 import com.nona.domain.search.ports.ProductSearchService;
 import com.nona.domain.search.ports.SearchCriteria;
 import com.nona.domain.search.ports.SearchSort;
+import com.nona.domain.search.ports.SearchWriteWindow;
+import com.nona.domain.search.repo.PrimaryProductSearchViewRepository;
 import com.nona.domain.search.repo.ProductSearchViewRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
@@ -16,7 +18,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 商品搜索服务实现（WU-41 一期，设计契约=搜索编排）。
+ * 商品搜索服务实现（一期契约=搜索编排；写后窗口路由）。
  * <p>
  * 编排职责：
  * <ol>
@@ -26,8 +28,10 @@ import java.util.List;
  *     <li>仓储编排：读 PG 视图分页查询 + 总数统计（同条件），组装
  *         {@link PageResult}。</li>
  * </ol>
- * 数据源语义：本实现不直接触达任何数据源——读路径经搜索读模型仓储
- * 走 replica（PG 镜像视图），静态装配白名单，无运行时路由。
+ * 数据源语义：无账号形态（既有 2 参契约）静态走 replica 通道（PG 镜像视图，
+ * 白名单装配无运行时路由）；账号形态在写后窗口命中时本次查询
+ * 走主库通道（{@link PrimaryProductSearchViewRepository}，read-your-writes），
+ * 其余照常走 replica——「类型路由为主、窗口为次」的账号级受控覆盖（TD-08）。
  *
  * @author nona9961
  */
@@ -39,6 +43,16 @@ public class ProductSearchServiceImpl implements ProductSearchService {
      * 搜索读模型仓储（PG 镜像视图读取，replica 数据源）。
      */
     private final ProductSearchViewRepository productSearchViewRepository;
+
+    /**
+     * 搜索主库通道仓储（写后窗口命中时的强一致查询，TD-08 主库覆盖）。
+     */
+    private final PrimaryProductSearchViewRepository primaryProductSearchViewRepository;
+
+    /**
+     * 写后自读窗口判定端口（3s 业务窗口；Redis 故障降级 false）。
+     */
+    private final SearchWriteWindow searchWriteWindow;
 
     /**
      * {@inheritDoc}
@@ -55,6 +69,28 @@ public class ProductSearchServiceImpl implements ProductSearchService {
         final List<ProductCard> records = productSearchViewRepository.search(normalized, page);
         final long total = productSearchViewRepository.count(normalized);
         return PageResult.of(records, total, page);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 编排语义：校验/归约同等（同 {@link #search(SearchCriteria, PageQuery)}）
+     * → 账号级窗口判定（null 账号不判定）→ 窗口内走主库通道（强一致，
+     * 写者可见刚写入内容）、否则走 replica 通道；两通道同构查询语义，
+     * 路由只换执行通道——「类型路由为主、窗口为次」的账号级受控覆盖
+     * （TD-08），路由决策唯一出现在本入口。
+     */
+    @Override
+    public PageResult<ProductCard> search(SearchCriteria criteria, PageQuery page, Long uid) {
+        validatePriceRange(criteria);
+        final SearchCriteria normalized = normalizeKeyword(criteria);
+        if (uid != null && searchWriteWindow.isWithinWriteWindow(uid)) {
+            final List<ProductCard> records =
+                    primaryProductSearchViewRepository.search(normalized, page);
+            final long total = primaryProductSearchViewRepository.count(normalized);
+            return PageResult.of(records, total, page);
+        }
+        return search(criteria, page);
     }
 
     /**

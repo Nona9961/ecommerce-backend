@@ -41,6 +41,8 @@ import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.domain.catalog.repo.ShopRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.TenantContextAccessor;
+import com.nona.inf.replica.LastWriteMarker;
 import com.nona.inf.persistence.converters.ProductSnapshotConvertor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -114,6 +116,17 @@ public class ProductUseCase {
     private final FreightTemplateRepository freightTemplateRepository;
 
     /**
+     * 写后自读窗口埋点（TD-08：写用例完成时标记当前账号，搜索入口据此
+     * 3s 内主库重路由）；写方法成功落库后调用。
+     */
+    private final LastWriteMarker lastWriteMarker;
+
+    /**
+     * 请求上下文（当前商家账号身份取值，埋点主体）
+     */
+    private final TenantContextAccessor tenantContextAccessor;
+
+    /**
      * 构造商品草稿用例。
      *
      * @param productRepository      商品仓储
@@ -124,6 +137,8 @@ public class ProductUseCase {
      * @param snapshotConvertor      商品内容快照转换器（敏感编辑分流回退）
      * @param shopRepository         店铺仓储（店铺分类绑定归属校验）
      * @param freightTemplateRepository 运费模板仓储（模板绑定归属校验）
+     * @param lastWriteMarker        写后窗口埋点（搜索可见性变更后标记写者）
+     * @param tenantContextAccessor  请求上下文（当前账号身份）
      */
     public ProductUseCase(ProductRepository productRepository,
                           ProductFactory productFactory,
@@ -132,7 +147,9 @@ public class ProductUseCase {
                           BrandRepository brandRepository,
                           ProductSnapshotConvertor snapshotConvertor,
                           ShopRepository shopRepository,
-                          FreightTemplateRepository freightTemplateRepository) {
+                          FreightTemplateRepository freightTemplateRepository,
+                          LastWriteMarker lastWriteMarker,
+                          TenantContextAccessor tenantContextAccessor) {
         this.productRepository = productRepository;
         this.productFactory = productFactory;
         this.productVersionUseCase = productVersionUseCase;
@@ -141,6 +158,8 @@ public class ProductUseCase {
         this.snapshotConvertor = snapshotConvertor;
         this.shopRepository = shopRepository;
         this.freightTemplateRepository = freightTemplateRepository;
+        this.lastWriteMarker = lastWriteMarker;
+        this.tenantContextAccessor = tenantContextAccessor;
     }
 
     /**
@@ -159,6 +178,7 @@ public class ProductUseCase {
                 shopId, request.name(), request.description(), request.categoryId(), request.brandId());
         productRepository.save(product);
         productVersionUseCase.recordEdit(product);
+        markCurrentMerchantWrite();
         return toDetail(product);
     }
 
@@ -200,6 +220,7 @@ public class ProductUseCase {
         requireReferenceOnChange(product, request.categoryId(), request.brandId());
         persistEdit(product, () -> product.updateInfo(
                 request.name(), request.description(), request.categoryId(), request.brandId()));
+        markCurrentMerchantWrite();
         return toDetail(product);
     }
 
@@ -218,6 +239,7 @@ public class ProductUseCase {
                     EcommerceBusinessCode.CATALOG_PRODUCT_STATUS_ILLEGAL.code(), "仅草稿商品可删除");
         }
         productRepository.deleteByID(productId);
+        markCurrentMerchantWrite();
     }
 
     /**
@@ -234,6 +256,7 @@ public class ProductUseCase {
         final ProductImage image = productFactory.createImage(
                 product, request.url(), Boolean.TRUE.equals(request.primary()));
         persistEdit(product, () -> product.addImage(image));
+        markCurrentMerchantWrite();
         return toImageItem(image);
     }
 
@@ -248,6 +271,7 @@ public class ProductUseCase {
     public void removeImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.removeImage(imageId));
+        markCurrentMerchantWrite();
     }
 
     /**
@@ -261,6 +285,7 @@ public class ProductUseCase {
     public ProductImageItem setPrimaryImage(Long productId, Long imageId) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.setPrimaryImage(imageId));
+        markCurrentMerchantWrite();
         return toImageItem(product.getImageById(imageId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_IMAGE_NOT_FOUND.code(), "图片不存在")));
@@ -280,6 +305,7 @@ public class ProductUseCase {
         final ProductAttribute attribute = productFactory.createAttribute(
                 product, request.key(), request.value());
         persistEdit(product, () -> product.addAttribute(attribute));
+        markCurrentMerchantWrite();
         return toAttributeItem(attribute);
     }
 
@@ -296,6 +322,7 @@ public class ProductUseCase {
                                                 ProductAttributeRequest request) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.updateAttribute(attributeId, request.key(), request.value()));
+        markCurrentMerchantWrite();
         return toAttributeItem(product.getAttributeById(attributeId)
                 .orElseThrow(() -> new BusinessException(
                         EcommerceBusinessCode.CATALOG_PRODUCT_ATTRIBUTE_NOT_FOUND.code(), "属性不存在")));
@@ -311,6 +338,7 @@ public class ProductUseCase {
     public void removeAttribute(Long productId, Long attributeId) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.removeAttribute(attributeId));
+        markCurrentMerchantWrite();
     }
 
     /**
@@ -326,6 +354,7 @@ public class ProductUseCase {
     public List<SkuItem> configureSpecTemplate(Long productId, SpecTemplateRequest request) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.configureSpecTemplate(toTemplate(request)));
+        markCurrentMerchantWrite();
         return product.skusOrdered().stream().map(ProductUseCase::toSkuItem).toList();
     }
 
@@ -342,6 +371,7 @@ public class ProductUseCase {
     public SkuItem updateSkuPrice(Long productId, Long skuId, SkuPriceRequest request) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.updateSkuPrice(skuId, request.price()));
+        markCurrentMerchantWrite();
         return toSkuItem(requireSku(product, skuId));
     }
 
@@ -357,6 +387,7 @@ public class ProductUseCase {
     public SkuItem setSkuEnabled(Long productId, Long skuId, SkuEnabledRequest request) {
         final Product product = requireProduct(productId);
         persistEdit(product, () -> product.setSkuEnabled(skuId, request.enabled()));
+        markCurrentMerchantWrite();
         return toSkuItem(requireSku(product, skuId));
     }
 
@@ -378,6 +409,7 @@ public class ProductUseCase {
         final Product product = requireProduct(productId);
         product.submitForReview();
         productRepository.save(product);
+        markCurrentMerchantWrite();
         return toDetail(product);
     }
 
@@ -542,6 +574,22 @@ public class ProductUseCase {
         final boolean routed = routeSensitiveEdit(product, effectiveBefore);
         if (productRepository.save(product) && !routed) {
             productVersionUseCase.recordEdit(product);
+        }
+    }
+
+    /**
+     * 写后窗口埋点（当前商家账号：请求上下文身份转 Long 打标——写者本人
+     * 即搜索调用者，TD-08 read-your-writes；身份缺失或非数字时跳过埋点，
+     * 降级语义同埋点设施故障——窗口失效走 PG 读库）。
+     */
+    private void markCurrentMerchantWrite() {
+        final String identity = tenantContextAccessor.getIdentity();
+        if (identity == null || identity.isBlank()) {
+            return;
+        }
+        try {
+            lastWriteMarker.markWrite(Long.valueOf(identity));
+        } catch (NumberFormatException e) {
         }
     }
 

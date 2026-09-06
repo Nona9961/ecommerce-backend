@@ -8,6 +8,7 @@ import com.nona.domain.inventory.repo.InventoryLogRepository;
 import com.nona.domain.inventory.service.InventoryEventRouter;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.replica.LastWriteMarker;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,21 +51,29 @@ public class InventoryUseCase {
     private final InventoryEventRouter inventoryEventRouter;
 
     /**
+     * 写后自读窗口埋点（TD-08：库存调整影响搜索有货态，落库后标记操作人）
+     */
+    private final LastWriteMarker lastWriteMarker;
+
+    /**
      * 构造库存用例。
      *
      * @param inventoryItemRepository 库存聚合根仓储
      * @param inventoryItemFactory    库存聚合根工厂
      * @param inventoryLogRepository  库存流水仓储
      * @param inventoryEventRouter    事件统一触发点
+     * @param lastWriteMarker         写后窗口埋点（库存变更后标记操作人）
      */
     public InventoryUseCase(InventoryItemRepository inventoryItemRepository,
                             InventoryItemFactory inventoryItemFactory,
                             InventoryLogRepository inventoryLogRepository,
-                            InventoryEventRouter inventoryEventRouter) {
+                            InventoryEventRouter inventoryEventRouter,
+                            LastWriteMarker lastWriteMarker) {
         this.inventoryItemRepository = inventoryItemRepository;
         this.inventoryItemFactory = inventoryItemFactory;
         this.inventoryLogRepository = inventoryLogRepository;
         this.inventoryEventRouter = inventoryEventRouter;
+        this.lastWriteMarker = lastWriteMarker;
     }
 
     /**
@@ -139,6 +148,21 @@ public class InventoryUseCase {
         final InventoryLog log = item.adjust(operator, delta, reason);
         inventoryLogRepository.append(log);
         inventoryEventRouter.publishIfNeeded(log);
+        markOperatorWrite(operator);
         return item;
+    }
+
+    /**
+     * 写后窗口埋点（操作人账号：认证上下文身份转 Long 打标——库存调整
+     * 影响搜索有货态，TD-08；身份非数字时跳过埋点，降级语义同埋点设施
+     * 故障——窗口失效走 PG 读库）。
+     *
+     * @param operator 操作人（认证上下文身份，已断言非空）
+     */
+    private void markOperatorWrite(String operator) {
+        try {
+            lastWriteMarker.markWrite(Long.valueOf(operator));
+        } catch (NumberFormatException e) {
+        }
     }
 }

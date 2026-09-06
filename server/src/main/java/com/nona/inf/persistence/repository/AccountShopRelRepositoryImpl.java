@@ -128,6 +128,17 @@ public class AccountShopRelRepositoryImpl
     /**
      * {@inheritDoc}
      * <p>
+     * 直接委托 JPA 定向查询（按店铺 ID 反查归属账号，一期每商家一行）。
+     */
+    @Override
+    public Optional<AccountShopRel> findByShopId(Long shopId) {
+        return jpaRepository.findByShopId(shopId)
+                .map(po -> convertor.convertToRoot(po, null));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
      * 幂等绑定：先按账号+店铺查重，已存在直接返回 false；否则经工厂创建关联并
      * saveAndFlush 立即落库（并发重复撞唯一约束时捕获冲突返回 false，视为已存在）。
      */

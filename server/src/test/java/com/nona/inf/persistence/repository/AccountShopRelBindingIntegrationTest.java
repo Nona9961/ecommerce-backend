@@ -94,6 +94,29 @@ class AccountShopRelBindingIntegrationTest {
     }
 
     /**
+     * happy：绑定后按店铺反查归属账号可见（契约演进：搜索写后窗口埋点
+     * 按归属账号打标的前置反查）。
+     */
+    @Test
+    @DisplayName("绑定后按店铺反查归属账号")
+    void bind_createsRel_visibleByFindByShopId() {
+        assertThat(accountShopRelRepository.bind(1001L, 2001L)).isTrue();
+
+        final AccountShopRel rel = accountShopRelRepository.findByShopId(2001L).orElseThrow();
+        assertThat(rel.getAccountId()).isEqualTo(1001L);
+        assertThat(rel.getShopId()).isEqualTo(2001L);
+    }
+
+    /**
+     * critical：无关联店铺反查为空（不抛错，调用方按无归属处理）。
+     */
+    @Test
+    @DisplayName("无关联店铺反查为空")
+    void findByShopId_noRel_empty() {
+        assertThat(accountShopRelRepository.findByShopId(9999L)).isEmpty();
+    }
+
+    /**
      * error：并发绑定同一账号同一店铺 → 唯一约束兜底，恰一行落库（幂等语义并发展开）。
      */
     @Test
