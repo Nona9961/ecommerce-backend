@@ -502,6 +502,37 @@ public enum EcommerceBusinessCode {
     LOGISTICS_SUB_ORDER_CONFLICT("logistics.sub_order_conflict", 409),
 
     /**
+     * 订单域：下单条目为空（请求 skuIds 为空，或与购物车勾选集求交后
+     * 无条目——空订单无业务意义，拒绝提交）。
+     */
+    ORDER_PLACE_EMPTY("order.place_empty", 400),
+
+    /**
+     * 订单域：买家不可下单（账号不存在或封禁统一拒绝——不区分提示，
+     * 防账号存在性泄露，与登录防枚举同哲学）。
+     */
+    ORDER_BUYER_NOT_PURCHASABLE("order.buyer_not_purchasable", 403),
+
+    /**
+     * 订单域：下单地址不存在（目标地址不在当前买家地址簿中——归属
+     * 校验拒绝，防越权使用他人地址）。
+     */
+    ORDER_ADDRESS_NOT_FOUND("order.address_not_found", 404),
+
+    /**
+     * 订单域：下单条目不在购物车勾选集中（提交的 SKU 未勾选或已不在
+     * 购物车——B7.2 未勾选项不进订单的服务端强制；冲突语义提示回购物
+     * 车重新选择）。
+     */
+    ORDER_ITEM_NOT_CHECKED("order.item_not_checked", 409),
+
+    /**
+     * 订单域：下单条目的 SKU 不属于请求商品（请求与商品内容不匹配，
+     * 请求构造错误；非在售商品统一由目录侧 404 语义透传，不判本码）。
+     */
+    ORDER_PLACE_SKU_INVALID("order.place_sku_invalid", 400),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),
