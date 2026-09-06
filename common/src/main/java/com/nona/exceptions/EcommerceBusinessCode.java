@@ -420,6 +420,48 @@ public enum EcommerceBusinessCode {
     ORDER_SNAPSHOT_AMOUNT_INVALID("order.snapshot_amount_invalid", 400),
 
     /**
+     * 订单域：主订单不存在（按 ID 操作命中不存在的买家主单）。
+     */
+    ORDER_MASTER_NOT_FOUND("order.master_not_found", 404),
+
+    /**
+     * 订单域：子订单不存在（按 ID 操作命中不存在的店铺子订单）。
+     */
+    ORDER_SUB_NOT_FOUND("order.sub_not_found", 404),
+
+    /**
+     * 订单域：子订单非法状态迁移（状态机守卫拒绝——重复支付/末发货直接
+     * 完成/终态再迁移/未支付退款等违例，由聚合状态机守卫抛出）。
+     */
+    ORDER_SUB_STATUS_ILLEGAL("order.sub_status_illegal", 400),
+
+    /**
+     * 订单域：子订单店铺归属不符（发货操作者店铺与子单归属店铺不一致——
+     * 聚合内归属校验拒绝；fail-closed 的租户过滤先行，本码为提权/装配
+     * 路径的第二道防线，越权语义 403）。
+     */
+    ORDER_SUB_SHOP_MISMATCH("order.sub_shop_mismatch", 403),
+
+    /**
+     * 订单域：子订单金额与订单项合计不自洽（商品总额必须等于 Σ 订单项
+     * 小计——装配守卫，正常路径不可达：金额来自下单用例装配）。
+     */
+    ORDER_SUB_AMOUNT_MISMATCH("order.sub_amount_mismatch", 400),
+
+    /**
+     * 订单域：主订单金额摘要与子订单金额合计不自洽（商品额/运费/优惠/
+     * 实付四维必须各自等于 Σ 子单——装配守卫，正常路径不可达：金额摘要
+     * 来自下单用例按子单合计装配）。
+     */
+    ORDER_AMOUNT_MISMATCH("order.amount_mismatch", 400),
+
+    /**
+     * 订单域：订单内容为空（子单无订单项/主单无子单——拆单装配错误，
+     * 空订单无业务意义）。
+     */
+    ORDER_SUB_EMPTY("order.sub_empty", 400),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),
