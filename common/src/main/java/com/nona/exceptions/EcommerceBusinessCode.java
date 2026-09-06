@@ -462,6 +462,46 @@ public enum EcommerceBusinessCode {
     ORDER_SUB_EMPTY("order.sub_empty", 400),
 
     /**
+     * 物流域占位基码：资源不存在。
+     */
+    LOGISTICS_NOT_FOUND("logistics.not_found", 404),
+
+    /**
+     * 物流域：运单装配形态非法（缺失子单引用/轨迹集合为空/轨迹末条
+     * 状态与运单当前状态不一致——构造与装载路径的形态守卫，自相矛盾
+     * 的运单无业务意义）。
+     */
+    LOGISTICS_WAYBILL_INVALID("logistics.waybill_invalid", 400),
+
+    /**
+     * 物流域：轨迹行形态非法（轨迹主键/归属运单/状态/发生时间缺失——
+     * 轨迹是 append-only 审计时间线，缺关键字段的时间线条目无业务意义）。
+     */
+    LOGISTICS_TRACK_INVALID("logistics.track_invalid", 400),
+
+    /**
+     * 物流域：物流公司不能为空（商家录单必填承运公司）。
+     */
+    LOGISTICS_COMPANY_BLANK("logistics.company_blank", 400),
+
+    /**
+     * 物流域：运单号不能为空（录单必填；仓配信息的唯一业务凭证）。
+     */
+    LOGISTICS_TRACKING_NO_BLANK("logistics.tracking_no_blank", 400),
+
+    /**
+     * 物流域：运单非法状态迁移（跳级/重复/回退/终态再推进等违例，由
+     * 聚合状态机守卫抛出；轨迹归属其他运单的装配错误同码拒绝）。
+     */
+    LOGISTICS_STATUS_ILLEGAL("logistics.status_illegal", 400),
+
+    /**
+     * 物流域：一子单一在途运单冲突（子单已存在在途运单再创建——重复
+     * 发货拒绝，由发货编排按在途查询命中拒绝，冲突语义 409）。
+     */
+    LOGISTICS_SUB_ORDER_CONFLICT("logistics.sub_order_conflict", 409),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),
