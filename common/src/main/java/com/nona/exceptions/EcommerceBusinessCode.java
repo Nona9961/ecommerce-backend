@@ -399,6 +399,27 @@ public enum EcommerceBusinessCode {
     ORDER_CART_QUANTITY_EXCEEDS("order.cart_quantity_exceeds", 409),
 
     /**
+     * 订单域：订单项快照模型非法（商品/SKU 引用缺失、商品名空白、单价负、
+     * 数量非正、小计与单价×数量不自洽、扩展属性键空白——下单装配的防御
+     * 校验，正常路径不可达：商品内容来自 catalog 已校验数据）。
+     */
+    ORDER_SNAPSHOT_ITEM_INVALID("order.snapshot_item_invalid", 400),
+
+    /**
+     * 订单域：地址快照非法（收件人/电话/省市区/详细地址缺失——下单时地址
+     * 必须完整固化，防订单地址事后漂移；正常路径不可达：地址来自地址簿
+     * 已校验数据）。
+     */
+    ORDER_SNAPSHOT_ADDRESS_INVALID("order.snapshot_address_invalid", 400),
+
+    /**
+     * 订单域：金额明细非法（商品额/运费/优惠/实付非自洽——实付必须等于
+     * 商品额+运费-优惠且非负；正常路径不可达：金额来自运费计算器与用例
+     * 层装配）。
+     */
+    ORDER_SNAPSHOT_AMOUNT_INVALID("order.snapshot_amount_invalid", 400),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),
