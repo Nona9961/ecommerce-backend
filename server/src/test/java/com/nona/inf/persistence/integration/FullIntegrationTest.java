@@ -1355,8 +1355,8 @@ class FullIntegrationTest {
         }
 
         @Test
-        @DisplayName("X03: excludeNew 排除")
-        void shouldExcludeNewlyRegisteredObjects() {
+        @DisplayName("X03: 集合新增元素不产生 items 路径的 ValueChange")
+        void shouldNotProduceValueChangesForAddedCollectionItems() {
             Order order = new Order(1L, "ORD-001");
             order.setStatus("PENDING");
             insertOrder(orderConverter.toMainPO(order));
@@ -1365,13 +1365,12 @@ class FullIntegrationTest {
             ChangeTracker changeTracker = new ChangeTracker(trackingProvider.create());
             changeTracker.track(loaded);
 
-            // 新增的 item 标记为 new
+            // 集合新增元素：元素本身未独立注册追踪，变更计算只作用于根实体
             OrderItem newItem = new OrderItem(101L, "SKU-001", "商品A", 2, Money.of(new BigDecimal("30.00")));
             loaded.getItems().add(newItem);
-            changeTracker.excludeNew(newItem);
 
             ChangeSet changeSet = changeTracker.calculateChanges();
-            // 新增的对象不应该产生 ValueChange（只有 ItemAddedChange）
+            // 集合新增元素不产生 items 路径的 ValueChange（如产生，仅表现为容器级 ItemAddedChange）
             List<ValueChange> fieldChanges = changeSet.getLeafChanges().stream()
                     .filter(c -> c instanceof ValueChange)
                     .map(c -> (ValueChange) c)

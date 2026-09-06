@@ -379,7 +379,7 @@ public class ProductRepositoryImpl extends DifferRepository<Product, ProductPO, 
      */
     @Override
     public EditSensitivity summarizeSensitiveEdit(Product product) {
-        final ChangeSet changeSet = getOrCreateChangeTracker().calculateChanges();
+        final ChangeSet changeSet = getOrCreateChangeTracker().calculateChangesFor(product);
         if (changeSet.isEmpty()) {
             return EditSensitivity.NONE;
         }

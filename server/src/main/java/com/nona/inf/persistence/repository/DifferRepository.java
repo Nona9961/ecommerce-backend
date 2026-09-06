@@ -111,7 +111,8 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
     /**
      * {@inheritDoc}
      * <p>
-     * 新增：直接插入并登记追踪；更新：计算变更集，非空才执行 {@link #doUpdate}，
+     * 新增：直接插入并登记追踪；更新：按当前根计算变更集（{@code calculateChangesFor}，
+     * 与本根无关的其他已追踪对象不参与），非空才执行 {@link #doUpdate}，
      * 完成后重新登记快照基线。
      */
     @Override
@@ -127,7 +128,7 @@ public abstract class DifferRepository<Root, PO extends BasePO, Other> implement
             return true;
         }
 
-        final ChangeSet changeSet = changeTracker.calculateChanges();
+        final ChangeSet changeSet = changeTracker.calculateChangesFor(root);
         if (changeSet.isEmpty()) {
             return false;
         }
