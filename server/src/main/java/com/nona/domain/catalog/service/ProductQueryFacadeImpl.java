@@ -1,10 +1,8 @@
 package com.nona.domain.catalog.service;
 
-import com.nona.domain.catalog.entity.FreightTemplate;
 import com.nona.domain.catalog.entity.Product;
 import com.nona.domain.catalog.entity.ProductAttribute;
 import com.nona.domain.catalog.entity.ProductImage;
-import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.entity.Sku;
 import com.nona.domain.catalog.entity.SpecItem;
@@ -13,25 +11,25 @@ import com.nona.domain.catalog.ports.ProductQueryFacade;
 import com.nona.domain.catalog.repo.FreightTemplateRepository;
 import com.nona.domain.catalog.repo.ProductRepository;
 import com.nona.domain.catalog.repo.ShopRepository;
-import com.nona.domain.inventory.ports.InventoryAvailable;
 import com.nona.domain.inventory.ports.InventoryFacade;
-import com.nona.exceptions.BusinessException;
-import com.nona.exceptions.EcommerceBusinessCode;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 商品查询门面实现（买家视图装配）：商品加载（在售校验：非 ON_SALE
  * 按不存在呈现）→ 生效内容 + 从表集合
- * → 绑定运费模板规则概要（FreightTemplate 聚合读）→ 店铺卡片（Shop 聚合
+ * → 运费模板规则概要（绑定概要；未绑定/绑定悬挂回退<b>店铺默认模板</b>
+ * 概要——freight 恒非空，非空设计 §2.5）→ 店铺卡片（Shop 聚合
  * 读）→ SKU 可售量（跨域 InventoryFacade.queryAvailable zip）→ 视图拼装。
  * <p>
  * 租户语义：本实现自身不放行——买家/下单编排视角（contextTenant 空）的
  * 读放行（@CrossTenant）由应用层调用方（mall 详情用例/order 编排）承载；
  * 跨域库存读在同一放行上下文内执行（跨店铺/未初始化 SKU 按可售 0 呈现）。
+ * <p>
+ * 红阶段：getBuyerView 为签名冻结（实现缺失）；回退装配点
+ * （{@link #toFreight}）双参签名冻结。
  *
  * @author nona9961
  */
@@ -79,36 +77,19 @@ public class ProductQueryFacadeImpl implements ProductQueryFacade {
     /**
      * {@inheritDoc}
      * <p>
-     * 装配语义：商品加载（租户过滤在调用方放行上下文内生效）→ 非
-     * ON_SALE 按不存在呈现（{@code CATALOG_PRODUCT_NOT_FOUND} 404，不
-     * 泄露生命周期状态）→ 生效内容 + 从表集合映射（SKU 行按模板展开序
-     * 全量——停用 SKU 不出售可售置 0，启用 SKU 经库存门面 zip 可售，
-     * 缺行按 0 置灰）→ 绑定运费模板规则概要（模板行缺失/未绑定按 null
-     * 呈现——展示用信息悬挂防御）→ 店铺卡片（店铺行缺失按 null 呈现——
-     * 脏数据形态降级，店铺归属信息齐备）。
+     * 红阶段签名冻结（实现缺失）：绿阶段实现 = 商品加载（租户过滤在调用方
+     * 放行上下文内生效）→ 非 ON_SALE 按不存在呈现（{@code CATALOG_PRODUCT_NOT_FOUND}
+     * 404，不泄露生命周期状态）→ 生效内容 + 从表集合映射（SKU 行按模板展开序
+     * 全量——停用 SKU 不出售可售置 0，启用 SKU 经库存门面 zip 可售，缺行按 0
+     * 置灰）→ 运费模板规则概要（绑定行存在 → 绑定概要；未绑定/绑定悬挂 →
+     * 回退 {@code findDefaultByShopId} 概要；默认缺失 → 防御拒绝
+     * {@code catalog.freight_default_template_not_found}——freight 恒非空）
+     * → 店铺卡片（店铺行缺失按 null 呈现——脏数据形态降级）。
      */
     @Override
     public ProductBuyerView getBuyerView(Long productId) {
-        final Product product = productRepository.getByID(productId);
-        if (product == null || product.getStatus() != ProductStatus.ON_SALE) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.CATALOG_PRODUCT_NOT_FOUND.code(), "商品不存在");
-        }
-        final Map<Long, Integer> availableBySku = inventoryFacade
-                .queryAvailable(product.skusOrdered().stream().map(Sku::getId).toList())
-                .stream()
-                .collect(Collectors.toMap(InventoryAvailable::skuId, InventoryAvailable::available));
-        return new ProductBuyerView(
-                product.getId(),
-                product.getShopId(),
-                product.getName(),
-                product.getDescription(),
-                toImages(product),
-                toAttributes(product),
-                toSpecDimensions(product),
-                toSkus(product, availableBySku),
-                toFreight(product.getFreightTemplateId()),
-                toShop(product.getShopId()));
+        throw new UnsupportedOperationException(
+                "red phase: getBuyerView pending (回退装配)");
     }
 
     /**
@@ -172,27 +153,20 @@ public class ProductQueryFacadeImpl implements ProductQueryFacade {
     }
 
     /**
-     * 运费模板规则概要（未绑定/模板行缺失按 null 呈现——展示使信息，
-     * 悬挂引用不阻断详情读）。
+     * 运费模板规则概要装配（红阶段签名冻结——实现缺失）：绿阶段实现 =
+     * 绑定行存在 → 绑定概要；未绑定/绑定悬挂（模板行缺失）→ 回退
+     * {@code findDefaultByShopId(shopId)} 概要（freight 恒非空，非空设计
+     * §2.5）；默认模板缺失 → 防御拒绝
+     * {@code catalog.freight_default_template_not_found}（开店必建故不可达，
+     * 不静默降级为 null/包邮）。
      *
-     * @param templateId 绑定模板 ID（可空）
-     * @return 运费概要；无模板返回 null
+     * @param templateId 绑定模板 ID（可空——未绑定语义由回退承载）
+     * @param shopId     归属店铺 ID（回退锚点定位）
+     * @return 运费概要（恒非空）
      */
-    private ProductBuyerView.Freight toFreight(Long templateId) {
-        if (templateId == null) {
-            return null;
-        }
-        final FreightTemplate template = freightTemplateRepository.getByID(templateId);
-        if (template == null) {
-            return null;
-        }
-        return new ProductBuyerView.Freight(
-                template.getId(),
-                template.getName(),
-                template.getRuleType().name(),
-                template.getPerItemPrice(),
-                template.getBaseFreight(),
-                template.getFreeThreshold());
+    private ProductBuyerView.Freight toFreight(Long templateId, Long shopId) {
+        throw new UnsupportedOperationException(
+                "red phase: toFreight(templateId, shopId) pending (回退装配)");
     }
 
     /**

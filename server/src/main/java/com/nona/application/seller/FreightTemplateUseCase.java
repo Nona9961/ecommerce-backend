@@ -125,14 +125,17 @@ public class FreightTemplateUseCase {
     }
 
     /**
-     * 删除模板（物理删除；商品引用守卫随商品域后补）。
+     * 删除模板（红阶段签名冻结——实现缺失）：绿阶段实现 = 默认模板禁删守卫
+     * （加载后 isDefault → {@code catalog.freight_default_template_frozen}
+     * 400 拒绝且不落删除——回退锚点恒可用；普通模板按既有语义物理删除，
+     * 商品引用守卫随商品域后补）。
      *
      * @param templateId 模板 ID（必须属于当前店铺，否则 404）
      */
     @Transactional
     public void delete(Long templateId) {
-        final FreightTemplate template = requireTemplate(templateId);
-        freightTemplateRepository.deleteByID(template.getId());
+        throw new UnsupportedOperationException(
+                "red phase: delete pending (默认模板禁删守卫)");
     }
 
     /**

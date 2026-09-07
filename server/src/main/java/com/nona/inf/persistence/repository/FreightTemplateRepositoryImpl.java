@@ -117,4 +117,17 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
                 .map(po -> convertor.convertToRoot(po, null))
                 .toList();
     }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 红阶段签名冻结（实现缺失）：绿阶段实现 = 租户过滤 + is_default 定位
+     * （JPA 派生查询 {@code findByShopIdAndIsDefaultTrue}，转换器透传默认
+     * 标记重建走 9 参构造器）。
+     */
+    @Override
+    public FreightTemplate findDefaultByShopId(Long shopId) {
+        throw new UnsupportedOperationException(
+                "red phase: findDefaultByShopId pending");
+    }
 }

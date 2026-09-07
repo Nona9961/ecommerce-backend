@@ -161,6 +161,19 @@ public enum EcommerceBusinessCode {
     CATALOG_FREIGHT_INPUT_INVALID("catalog.freight_input_invalid", 400),
 
     /**
+     * 商品域：店铺默认运费模板缺失（开店必建故正常不可达——系统数据损坏面，
+     * 防御性拒绝，不静默降级为 null/包邮语义；非空设计 §2.5）。
+     */
+    CATALOG_FREIGHT_DEFAULT_TEMPLATE_NOT_FOUND(
+            "catalog.freight_default_template_not_found", 500),
+
+    /**
+     * 商品域：默认运费模板冻结操作拒绝（禁停用/禁删除——回退锚点恒可用守卫）。
+     */
+    CATALOG_FREIGHT_DEFAULT_TEMPLATE_FROZEN(
+            "catalog.freight_default_template_frozen", 400),
+
+    /**
      * 商品域：草稿商品不存在（按 ID 操作命中不存在的商品或不属于当前店铺的商品）。
      */
     CATALOG_PRODUCT_NOT_FOUND("catalog.product_not_found", 404),

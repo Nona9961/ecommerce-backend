@@ -4,12 +4,12 @@ import com.nona.api.admin.OnboardingAuditItem;
 import com.nona.api.common.OnboardingStatus;
 import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
-import com.nona.domain.catalog.entity.Shop;
+import com.nona.domain.catalog.factory.FreightTemplateFactory;
 import com.nona.domain.catalog.factory.ShopFactory;
+import com.nona.domain.catalog.repo.FreightTemplateRepository;
 import com.nona.domain.catalog.repo.ShopRepository;
 import com.nona.domain.identity.entity.ApplicationStatus;
 import com.nona.domain.identity.entity.MerchantApplication;
-import com.nona.domain.identity.ports.ApplicationApprovedEvent;
 import com.nona.domain.identity.repo.AccountShopRelRepository;
 import com.nona.domain.identity.repo.MerchantApplicationRepository;
 import com.nona.events.Dispatcher;
@@ -28,11 +28,15 @@ import java.util.List;
  * 审核路径先取申请行写锁（{@link MerchantApplicationRepository#lockApplication}）
  * ——串行化同一申请的审核事务，并发审核只有一个状态迁移生效；随后加载聚合、
  * 状态机迁移（仅待审可审核，由聚合守卫）、落库。审核通过即在同一事务内完成
- * 跨域开店编排：创建店铺聚合（数据源自申请资料）+ 账号-店铺关联绑定，
- * 并同步发布 {@link ApplicationApprovedEvent}（通知旁路）——任一工序失败整体回滚，
- * 不存在「审核通过但店未开」的部分成功态；事务尾部主动失效商家用户上下文缓存
- * （关系变更即时生效）。审核人身份由认证上下文提供（web 层从跟踪上下文取当前
- * 账号 ID 传入）；申请表为平台全局数据（global），平台列表直接查询，无租户过滤语义。
+ * 跨域开店编排：申请迁移 → 创建店铺聚合（数据源自申请资料）→ 创建并落库
+ * <b>店铺默认运费模板</b>（包邮 FREE、可编辑、tenant=shopId，非空设计
+ * §2.5 回退锚点）→ 账号-店铺关联绑定，并同步发布通知旁路事件；任一工序
+ * 失败整体回滚，不存在「审核通过但店未开」的部分成功态；事务尾部主动失效
+ * 商家用户上下文缓存（关系变更即时生效）。审核人身份由认证上下文提供（web
+ * 层从跟踪上下文取当前账号 ID 传入）；申请表为平台全局数据（global），平台
+ * 列表直接查询，无租户过滤语义。
+ * <p>
+ * 红阶段：approve 为签名冻结（实现缺失）——编排精确顺序由契约测试钉死。
  *
  * @author nona9961
  */
@@ -53,6 +57,16 @@ public class OnboardingReviewUseCase {
      * 店铺仓储（开店落库）
      */
     private final ShopRepository shopRepository;
+
+    /**
+     * 运费模板工厂（店铺默认模板创建入口——开店编排补建步骤）
+     */
+    private final FreightTemplateFactory freightTemplateFactory;
+
+    /**
+     * 运费模板仓储（店铺默认模板落库——tenant=shopId）
+     */
+    private final FreightTemplateRepository freightTemplateRepository;
 
     /**
      * 账号-店铺关联仓储（审核通过时绑定）
@@ -81,6 +95,8 @@ public class OnboardingReviewUseCase {
      * @param applicationRepository 入驻申请仓储
      * @param shopFactory           店铺工厂
      * @param shopRepository        店铺仓储
+     * @param freightTemplateFactory 运费模板工厂（开店补建默认模板）
+     * @param freightTemplateRepository 运费模板仓储（默认模板落库）
      * @param accountShopRelRepository 账号-店铺关联仓储
      * @param authUserCache         用户上下文缓存
      * @param dispatcher            事件分发器
@@ -89,6 +105,8 @@ public class OnboardingReviewUseCase {
     public OnboardingReviewUseCase(MerchantApplicationRepository applicationRepository,
                                    ShopFactory shopFactory,
                                    ShopRepository shopRepository,
+                                   FreightTemplateFactory freightTemplateFactory,
+                                   FreightTemplateRepository freightTemplateRepository,
                                    AccountShopRelRepository accountShopRelRepository,
                                    AuthUserCache authUserCache,
                                    Dispatcher dispatcher,
@@ -96,6 +114,8 @@ public class OnboardingReviewUseCase {
         this.applicationRepository = applicationRepository;
         this.shopFactory = shopFactory;
         this.shopRepository = shopRepository;
+        this.freightTemplateFactory = freightTemplateFactory;
+        this.freightTemplateRepository = freightTemplateRepository;
         this.accountShopRelRepository = accountShopRelRepository;
         this.authUserCache = authUserCache;
         this.dispatcher = dispatcher;
@@ -128,12 +148,15 @@ public class OnboardingReviewUseCase {
     }
 
     /**
-     * 审核通过（同事务开店编排）：申请行锁内加载聚合 → 状态机迁移（pending →
-     * approved）→ 落库 → 创建店铺（名称取申请资料，logo/简介恒空）→ 店铺落库 →
-     * 账号-店铺关联绑定（首绑；幂等已存在不视为失败）→ 同步发布审核通过领域
-     * 事件（通知旁路，既有契约保留）→ 主动失效商家用户上下文缓存（末位；
+     * 审核通过（同事务开店编排，红阶段签名冻结——实现缺失）：申请行锁内
+     * 加载聚合 → 状态机迁移（pending → approved）→ 落库 → 创建店铺（名称
+     * 取申请资料，logo/简介恒空）→ 店铺落库 → <b>创建店铺默认运费模板
+     * （{@link FreightTemplateFactory#createDefaultFreightTemplate} + 落库，
+     * tenant=shopId；顺序在店铺落库之后——契约测试钉死）</b> → 账号-店铺
+     * 关联绑定（首绑；幂等已存在不视为失败）→ 同步发布审核通过领域事件
+     * （通知旁路，既有契约保留）→ 主动失效商家用户上下文缓存（末位；
      * Redis 不参与本地事务，提前失效无害——miss 回填重建）。任一工序失败 →
-     * 本地事务整体回滚（申请迁移/店铺/关联全部撤销）。
+     * 本地事务整体回滚（申请迁移/店铺/默认模板/关联全部撤销）。
      *
      * @param applicationId 申请 ID
      * @param reviewerId    审核人账号 ID（认证上下文）
@@ -141,18 +164,8 @@ public class OnboardingReviewUseCase {
      */
     @Transactional
     public Long approve(Long applicationId, Long reviewerId) {
-        applicationRepository.lockApplication(applicationId);
-        final MerchantApplication application = require(applicationId);
-        application.approve(reviewerId);
-        applicationRepository.save(application);
-        final Shop shop = shopFactory.createShop(application.getShopName(), null, null);
-        shopRepository.save(shop);
-        accountShopRelRepository.bind(application.getAccountId(), shop.getId());
-        dispatcher.dispatch(new ApplicationApprovedEvent(
-                application.getId(), application.getAccountId(), application.getShopName()));
-        authUserCache.delete(application.getAccountId());
-        lastWriteMarker.markWrite(application.getAccountId());
-        return shop.getId();
+        throw new UnsupportedOperationException(
+                "red phase: approve pending (默认模板创建步骤)");
     }
 
     /**
