@@ -13,8 +13,8 @@ import java.util.List;
 
 /**
  * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete +
- * onPaid；markShipped 为其他编排 WU 消费面，本类仅保留冻结签名，实现体
- * 未接线）。
+ * onPaid + markShipped 四成员；markShipped 为商家发货编排消费面——运单
+ * 创建后子单发货推进 + 运单引用定型 + 主单派生，双参冻结签名）。
  * <p>
  * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约，绿阶段实现依据）：
  * <ul>
@@ -54,8 +54,21 @@ import java.util.List;
  *         支付，派生见 {@link MasterOrder#deriveStatus}），子单与主单同批
  *         保存。整单支付语义——主单下全部子单同事务推进（payment → order
  *         → inventory 回调编排的订单侧消费面）；</li>
- *     <li><b>markShipped</b>：签名冻结（WU-27），由发货编排 WU 接线，本
- *         类实现体未接线（UOE）。</li>
+ *     <li><b>markShipped</b>：按 subOrderId 装载子单——不存在 →
+ *         {@code order.sub_not_found}（404，编排层归属校验先行，此处为
+ *         契约防御）；按子单归属主单装载主单——不存在 →
+ *         {@code order.master_not_found}（404，防御）；按 master_order_id
+ *         装载子单集合——为空 → {@code order.sub_not_found}（防御装配
+ *         错误，下单保证至少一子单）；目标子单
+ *         {@link SubOrder#markShipped(Long, Long)}（归属校验/运单必填/
+ *         仅已支付可发货守卫内建——操作者店铺以子单归属店铺自证：用例
+ *         层归属校验先行保证相等，门面签名双参冻结不携带操作者上下文）；
+ *         全部推进成功后按子单状态投影刷新主单整体状态（全部已发货 →
+ *         主单已发货，多子单部分发货 → 部分发货，派生见
+ *         {@link MasterOrder#deriveStatus}），子单与主单同批保存。已发
+ *         货子单再发货的幂等成功语义<b>不落本类</b>——由编排层短路
+ *         （编排先查目标子单状态，SHIPPED 直接返回），本类保持「非法
+ *         状态拒绝」的契约语义（供防御与独立消费方）；</li>
  * </ul>
  * 库存回滚编排（取消场景）不落本类——跨域动作按应用层用例承载（编排
  * 用例经 InventoryFacade 逐子单回滚，与预占对称）。
@@ -166,15 +179,54 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     /**
-     * 子单发货推进（签名冻结，消费者：商家发货用例；实现随发货编排 WU
-     * 接线，本阶段未实现）。
+     * 子单发货推进（签名冻结双参；消费者：商家发货用例——同事务创建运
+     * 单后调用，运单引用定型入子单聚合）。
+     * <p>
+     * 编排语义：按 subOrderId 装载子单（不存在 404，编排层归属校验先行，
+     * 此处为契约防御）→ 按归属主单装载主单（不存在 404，防御）→ 装载
+     * 子单集合（空 404 防御装配错误）→ 目标子单
+     * {@link SubOrder#markShipped(Long, Long)}（归属 403 / 运单必填 /
+     * 仅已支付可发货三项守卫内建——操作者店铺以子单归属店铺自证：用例
+     * 层归属校验已保证操作者店铺 = 子单归属店铺，不符早按不存在 404
+     * 呈现，门面签名双参冻结不携带操作者上下文）→ 主单按子单投影派生
+     * （全部已发货 → 主单已发货；多子单部分发货 → 部分发货）→ 子单与
+     * 主单同批保存。已发货子单重复发货的幂等成功语义由编排层短路承载
+     * （编排先查目标子单状态），本方法对非已支付子单按非法迁移拒绝
+     * （防御面）。
      *
-     * @param subOrderId 子订单 ID
-     * @param waybillId  运单 ID（必填）
+     * @param subOrderId 子订单 ID（已支付 → 已发货 + 运单引用定型）
+     * @param waybillId  运单 ID（必填，物流域创建后引用）
      */
     @Override
     public void markShipped(Long subOrderId, Long waybillId) {
-        throw new UnsupportedOperationException("markShipped 实现随发货编排 WU 接线");
+        final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
+        if (subOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "子订单不存在", 404);
+        }
+        final MasterOrder masterOrder =
+                masterOrderRepository.getByID(subOrder.getMasterOrderId());
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(subOrder.getMasterOrderId());
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        // 操作者店铺以子单归属店铺自证：用例层归属校验先行保证二者相等
+        // （不符早按不存在 404 呈现），门面签名双参冻结不携带操作者上下文
+        subOrder.markShipped(subOrder.getShopId(), waybillId);
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder item : subOrders) {
+            subOrderRepository.save(item);
+        }
+        masterOrderRepository.save(masterOrder);
     }
 
     /**
