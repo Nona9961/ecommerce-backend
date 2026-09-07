@@ -431,4 +431,133 @@ class OrderFacadeImplUnitTest {
         verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
         verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
     }
+
+    /* ================= onPaid（支付成功推进接线，回调编排消费面） ================= */
+
+    /**
+     * happy-4 整单支付推进：待支付主单下全部子单标记已支付（真实聚合
+     * 迁移）＋主单按全部子单投影派生已支付（M9）＋子单与主单全部保存
+     * （回调编排同事务面：payment → order → inventory）。
+     */
+    @Test
+    @DisplayName("成功推进：全部子单已支付 + 主单派生已支付 + 全部保存")
+    void onPaid_pendingMaster_allPaidAndSaved() {
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(subA(), subB()));
+
+        orderFacade.onPaid(MASTER_ID);
+
+        final InOrder inOrder = inOrder(subOrderRepository, masterOrderRepository);
+        inOrder.verify(subOrderRepository, org.mockito.Mockito.times(2))
+                .save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        inOrder.verify(masterOrderRepository).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+        // 仓储桩内实例原地推进：断言聚合状态迁移与派生结果
+        assertThat(subOrderRepository.getByMasterOrderId(MASTER_ID))
+                .extracting(SubOrder::getStatus)
+                .containsExactly(SubOrderStatus.PAID, SubOrderStatus.PAID);
+        assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
+                .isEqualTo(MasterOrderStatus.PAID);
+    }
+
+    /**
+     * happy-5 单子单主单整单支付：唯一子单已支付 + 主单派生已支付。
+     */
+    @Test
+    @DisplayName("单子单成功推进：子单已支付 + 主单派生已支付")
+    void onPaid_singleSubOrder_paid() {
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(subB()));
+
+        orderFacade.onPaid(MASTER_ID);
+
+        assertThat(subOrderRepository.getByMasterOrderId(MASTER_ID).get(0).getStatus())
+                .isEqualTo(SubOrderStatus.PAID);
+        assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
+                .isEqualTo(MasterOrderStatus.PAID);
+    }
+
+    /**
+     * critical-3 混态推进（部分子单已支付）：逐子单推进遇已支付子单
+     * 聚合守卫拒绝（子单状态非法迁移）→ 异常透传、同批保存不执行。
+     */
+    @Test
+    @DisplayName("混态推进（部分子单已支付）：非法迁移拒绝，无保存")
+    void onPaid_mixedStatus_rejected() {
+        final SubOrder paidB = new SubOrder(SUB_B, MASTER_ID, SHOP_B, "SO202609070002",
+                address(), amount(10000L, 0L, 10000L),
+                List.of(item(3005L, 10000L, 1)), SubOrderStatus.PAID, null);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(subA(), paidB));
+
+        assertThatThrownBy(() -> orderFacade.onPaid(MASTER_ID))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code());
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * critical-4 子单集合为空：主单无子单为装配异常（下单保证至少一
+     * 子单），防御 404 order.sub_not_found，无保存动作。
+     */
+    @Test
+    @DisplayName("主单下无子单：防御 404，拒绝推进")
+    void onPaid_noSubOrders_rejected() {
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> orderFacade.onPaid(MASTER_ID))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code());
+                    assertThat(error.getHttpStatus()).isEqualTo(404);
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * fail-10 主单不存在：404 order.master_not_found（编排列装载先于
+     * 推进，缺失为数据异常防御），无保存动作。
+     */
+    @Test
+    @DisplayName("主单不存在：404（防御）")
+    void onPaid_masterMissing_rejected() {
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> orderFacade.onPaid(MASTER_ID))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code());
+                    assertThat(error.getHttpStatus()).isEqualTo(404);
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * fail-11 全部子单已支付（重复支付推进）：首个子单即命中聚合守卫
+     * （仅待支付可标记支付成功）→ 非法迁移拒绝，无保存（幂等短路由
+     * 回调端口支付单守卫承载，本实现保持防御面契约）。
+     */
+    @Test
+    @DisplayName("全部子单已支付（重复推进）：非法迁移拒绝，无保存")
+    void onPaid_allPaid_rejected() {
+        final SubOrder paidA = subWithStatus(SubOrderStatus.PAID, null);
+        final SubOrder paidB = new SubOrder(SUB_B, MASTER_ID, SHOP_B, "SO202609070002",
+                address(), amount(10000L, 0L, 10000L),
+                List.of(item(3005L, 10000L, 1)), SubOrderStatus.PAID, null);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(paidA, paidB));
+
+        assertThatThrownBy(() -> orderFacade.onPaid(MASTER_ID))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code());
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
 }

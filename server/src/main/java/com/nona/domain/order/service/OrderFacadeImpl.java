@@ -12,8 +12,8 @@ import com.nona.exceptions.EcommerceBusinessCode;
 import java.util.List;
 
 /**
- * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete；
- * onPaid / markShipped 为其他编排 WU 消费面，本类仅保留冻结签名，实现体
+ * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete +
+ * onPaid；markShipped 为其他编排 WU 消费面，本类仅保留冻结签名，实现体
  * 未接线）。
  * <p>
  * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约，绿阶段实现依据）：
@@ -43,8 +43,19 @@ import java.util.List;
  *         子单再完成的幂等成功语义<b>不落本类</b>——由编排层短路
  *         （编排先查目标子单状态，COMPLETED 直接返回），本类保持「非法
  *         状态拒绝」的契约语义（供防御与独立消费方）；</li>
- *     <li><b>onPaid / markShipped</b>：签名冻结（WU-27），由对应编排 WU
- *         接线，本类实现体未接线（UOE）。</li>
+ *     <li><b>onPaid</b>：按 masterOrderId 装载主单——不存在 →
+ *         {@code order.master_not_found}（404，编排层归属校验先行，此处
+ *         为契约防御）；按 master_order_id 装载子单集合——为空 →
+ *         {@code order.sub_not_found}（防御装配错误，下单保证至少一子单）；
+ *         逐子单 {@link SubOrder#markPaid()}（仅待支付可标记支付成功，已
+ *         支付/已取消等非法迁移由聚合守卫拒绝 {@code order.sub_status_illegal}——
+ *         重复支付推进即命中，幂等短路由回调端口支付单守卫承载）；全部推
+ *         进成功后按子单状态投影刷新主单整体状态（全部已支付 → 主单已
+ *         支付，派生见 {@link MasterOrder#deriveStatus}），子单与主单同批
+ *         保存。整单支付语义——主单下全部子单同事务推进（payment → order
+ *         → inventory 回调编排的订单侧消费面）；</li>
+ *     <li><b>markShipped</b>：签名冻结（WU-27），由发货编排 WU 接线，本
+ *         类实现体未接线（UOE）。</li>
  * </ul>
  * 库存回滚编排（取消场景）不落本类——跨域动作按应用层用例承载（编排
  * 用例经 InventoryFacade 逐子单回滚，与预占对称）。
@@ -80,14 +91,40 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     /**
-     * 整单支付成功推进（签名冻结，消费者：支付回调用例；实现随回调编排
-     * WU 接线，本阶段未实现）。
+     * 整单支付成功推进（消费者：支付回调用例，同事务压链回调编排面）。
+     * <p>
+     * 编排语义（绿阶段实现依据，见类 javadoc）：装载主单（不存在 404）
+     * → 装载子单集合（空 404 防御）→ 逐子单 markPaid（聚合守卫仅待支付
+     * 可迁移，重复推进按非法迁移拒绝——幂等短路由回调端口支付单守卫承
+     * 载，本方法保持防御面契约）→ 主单按子单投影派生（全部已支付 → 主
+     * 单已支付）→ 子单与主单同批保存。
      *
-     * @param masterOrderId 主订单 ID
+     * @param masterOrderId 主订单 ID（主单下全部子单同事务推进已支付）
      */
     @Override
     public void onPaid(Long masterOrderId) {
-        throw new UnsupportedOperationException("onPaid 实现随支付回调编排 WU 接线");
+        final MasterOrder masterOrder = masterOrderRepository.getByID(masterOrderId);
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(masterOrderId);
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        for (final SubOrder subOrder : subOrders) {
+            subOrder.markPaid();
+        }
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder subOrder : subOrders) {
+            subOrderRepository.save(subOrder);
+        }
+        masterOrderRepository.save(masterOrder);
     }
 
     /**
