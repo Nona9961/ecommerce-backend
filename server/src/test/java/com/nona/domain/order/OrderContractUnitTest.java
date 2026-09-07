@@ -113,7 +113,7 @@ class OrderContractUnitTest {
     // ---------- 门面契约（ACL 冻结，0.5 契约表） ----------
 
     @Test
-    @DisplayName("订单门面：onPaid/cancel/markShipped/autoComplete 签名定型")
+    @DisplayName("订单门面：onPaid/cancel/markShipped/autoComplete + 退款面三成员签名定型")
     void orderFacade_signaturesFrozen() throws Exception {
         assertThat(OrderFacade.class.getMethod("onPaid", Long.class).getReturnType())
                 .isEqualTo(void.class);
@@ -123,7 +123,16 @@ class OrderContractUnitTest {
                 .getReturnType()).isEqualTo(void.class);
         assertThat(OrderFacade.class.getMethod("autoComplete", Long.class).getReturnType())
                 .isEqualTo(void.class);
-        assertThat(OrderFacade.class.getDeclaredMethods()).hasSize(4);
+        // 契约演进（WU-27 明示：接口成员随消费编排 WU 演进只增不改）——退款面三
+        // 成员：退款申请推进 / 退款成功推进 / 发货超时关单推进，消费者为退款
+        // 编排与发货超时编排
+        assertThat(OrderFacade.class.getMethod("beginRefund", Long.class).getReturnType())
+                .isEqualTo(void.class);
+        assertThat(OrderFacade.class.getMethod("completeRefund", Long.class).getReturnType())
+                .isEqualTo(void.class);
+        assertThat(OrderFacade.class.getMethod("closeByTimeout", Long.class).getReturnType())
+                .isEqualTo(void.class);
+        assertThat(OrderFacade.class.getDeclaredMethods()).hasSize(7);
     }
 
     // ---------- 仓储契约 ----------

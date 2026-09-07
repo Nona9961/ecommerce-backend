@@ -587,6 +587,33 @@ public enum EcommerceBusinessCode {
     PAYMENT_CALLBACK_DUPLICATE("payment.callback_duplicate", 409),
 
     /**
+     * 支付域：退款单不存在（按退款单号/ID 操作命中不存在的退款单——孤儿
+     * 退款回调不产生处理路径，防存在性泄露）。
+     */
+    PAYMENT_REFUND_NOT_FOUND("payment.refund_not_found", 404),
+
+    /**
+     * 支付域：退款单非法状态迁移（状态机守卫——终态再迁移、重复受理、
+     * 非失败态重试、同号重复退款回调幂等命中等违例；同号重复回调由编排
+     * 捕获后按已处理应答，不重放订单/库存编排）。
+     */
+    PAYMENT_REFUND_STATUS_ILLEGAL("payment.refund_status_illegal", 400),
+
+    /**
+     * 支付域：退款单创建形态非法（退款单必须关联子单与支付单号、退款金额
+     * 必须为正——一子单一退款单，操作单元子单必填，冲突语义按 400
+     * 呈现请求构造错误）。
+     */
+    PAYMENT_REFUND_INVALID("payment.refund_invalid", 400),
+
+    /**
+     * 支付域：重复申请退款（一子单一生至多一个退款单——已存在退款单
+     * （含 FAILED 可重试态）再申请拒绝，重试走既有退款单重试路径，
+     * 冲突语义 409）。
+     */
+    PAYMENT_REFUND_DUPLICATE("payment.refund_duplicate", 409),
+
+    /**
      * 搜索域：价格区间非法（下界或上界为负值，或区间倒挂即上界小于下界；
      * 搜索检索条件校验位拒绝，B5.3 价格筛选入参把关）。
      */

@@ -219,4 +219,150 @@ public class OrderFacadeImpl implements OrderFacade {
         }
         masterOrderRepository.save(masterOrder);
     }
+
+    /**
+     * 退款申请推进（订单侧状态推进；退款单创建/受理与库存回补见退款
+     * 申请编排）。
+     * <p>
+     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * subOrderId 装载子单（不存在 404，编排层归属校验先行，此处为
+     * 契约防御）→ 按归属主单装载主单（不存在 404，防御）→ 装载子单
+     * 集合（空 404 防御装配错误）→ 目标子单 {@code markRefunding}
+     * （聚合守卫仅已支付/已发货/已完成可进入退款中，未支付/终态非法
+     * 迁移拒绝 {@code order.sub_status_illegal}——B8.4① 内建）→ 主单
+     * 按子单投影刷新整体状态（任一退款中 → 主单退款中，派生见
+     * {@link com.nona.domain.order.entity.MasterOrder#deriveStatus}）
+     * → 子单与主单同批保存。防重短路<b>不落本类</b>——由退款申请编排
+     * 先行判定（退款单按子单查重，一子单一退款单），本类保持「非法
+     * 状态拒绝」的契约语义（供防御与独立消费方）。
+     *
+     * @param subOrderId 子订单 ID（已支付/已发货/已完成 → 退款中 + 主单派生）
+     */
+    @Override
+    public void beginRefund(Long subOrderId) {
+        final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
+        if (subOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "子订单不存在", 404);
+        }
+        final MasterOrder masterOrder =
+                masterOrderRepository.getByID(subOrder.getMasterOrderId());
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(subOrder.getMasterOrderId());
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        subOrder.markRefunding();
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder item : subOrders) {
+            subOrderRepository.save(item);
+        }
+        masterOrderRepository.save(masterOrder);
+    }
+
+    /**
+     * 退款成功推进（订单侧状态推进；资金侧迁移/回补见退款回调成功编排）。
+     * <p>
+     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * subOrderId 装载子单（不存在 404）→ 子单状态分派——
+     * {@code REFUNDING} → 按归属主单装载主单（不存在 404，防御）→
+     * 装载子单集合 → 目标子单 {@code markRefunded}（仅退款中可迁移）→
+     * 主单派生（全部已退款 → 主单已退款）→ 同批保存；{@code CLOSED}
+     * → <b>幂等跳过</b>（发货超时关单退款路径：履约侧终态定格，资金侧
+     * 由退款单 SUCCEEDED 承载，不迁移不落库）；其余状态 →
+     * {@code order.sub_status_illegal}（防御拒绝数据异常）。
+     *
+     * @param subOrderId 子订单 ID（退款中 → 已退款 + 主单派生；已关闭幂等跳过）
+     */
+    @Override
+    public void completeRefund(Long subOrderId) {
+        final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
+        if (subOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "子订单不存在", 404);
+        }
+        // 发货超时关单退款路径：履约侧终态定格（CLOSED 而非 REFUNDED，领域模型
+        // 明示），资金侧退款成功由退款单 SUCCEEDED 承载——幂等跳过，不迁移不落库
+        if (subOrder.getStatus() == SubOrderStatus.CLOSED) {
+            return;
+        }
+        if (subOrder.getStatus() != SubOrderStatus.REFUNDING) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code(),
+                    "仅退款中子单可标记退款成功（未退款流程的子单属数据异常防御）");
+        }
+        final MasterOrder masterOrder =
+                masterOrderRepository.getByID(subOrder.getMasterOrderId());
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(subOrder.getMasterOrderId());
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        subOrder.markRefunded();
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder item : subOrders) {
+            subOrderRepository.save(item);
+        }
+        masterOrderRepository.save(masterOrder);
+    }
+
+    /**
+     * 发货超时关单推进（订单侧状态推进；退款单创建/受理与库存回补见
+     * 发货超时编排——退款编排由调用方部署）。
+     * <p>
+     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * subOrderId 装载子单（不存在 404）→ 按归属主单装载主单（不存在
+     * 404，防御）→ 装载子单集合 → 目标子单 {@code closeByTimeout}
+     * （聚合守卫仅已支付未发货可超时关单——支付超时走取消，重复关闭
+     * 非法迁移拒绝 {@code order.sub_status_illegal}）→ 主单按子单投影
+     * 刷新整体状态（全部已关闭 → 主单已关闭）→ 子单与主单同批保存。
+     * 幂等短路<b>不落本类</b>——由编排层先行判定（子单状态预检，超时
+     * 重扫不重复推进），本类保持「非法状态拒绝」的契约语义。
+     *
+     * @param subOrderId 子订单 ID（已支付 → 已关闭 + 主单派生）
+     */
+    @Override
+    public void closeByTimeout(Long subOrderId) {
+        final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
+        if (subOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "子订单不存在", 404);
+        }
+        final MasterOrder masterOrder =
+                masterOrderRepository.getByID(subOrder.getMasterOrderId());
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(subOrder.getMasterOrderId());
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        subOrder.closeByTimeout();
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder item : subOrders) {
+            subOrderRepository.save(item);
+        }
+        masterOrderRepository.save(masterOrder);
+    }
 }

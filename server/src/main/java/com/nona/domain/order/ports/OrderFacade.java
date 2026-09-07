@@ -16,10 +16,21 @@ package com.nona.domain.order.ports;
  *         超时自动完成（B9.4③）共用同一迁移（已发货 → 已完成 + 主单
  *         派生），由确认收货用例与超时引擎用例编排。</li>
  * </ul>
- * 契约冻结说明：本接口方法签名与语义在 WU-27 冻结（0.5 契约表），
- * 实现接线随各消费编排 WU 落位（调用方经应用层用例注入，不跨域直连
- * 仓储）；消费者（支付回调/发货/超时编排）按本签名装配，签名演进
- * 只增不改。
+ * 契约演进：接口方法签名与语义在 WU-27 冻结（0.5 契约表），实现接线随
+ * 各消费编排 WU 落位（调用方经应用层用例注入，不跨域直连仓储）；
+ * 消费者（支付回调/发货/超时编排）按本签名装配，签名演进只增不改
+ * ——退款面成员（{@link #beginRefund} / {@link #completeRefund} /
+ * {@link #closeByTimeout}）随退款编排 WU 演进冻结：
+ * <ul>
+ *     <li>{@link #beginRefund}——买家退款申请推进（子单 已支付/已发货/
+ *         已完成 → 退款中 + 主单派生），由退款申请编排消费；</li>
+ *     <li>{@link #completeRefund}——退款成功推进（子单 退款中 → 已退款
+ *         + 主单派生；发货超时关单路径子单已关闭幂等跳过——资金侧由
+ *         退款单承载），由退款回调成功编排消费；</li>
+ *     <li>{@link #closeByTimeout}——发货超时关单推进（子单 已支付 →
+ *         已关闭 + 主单派生），由发货超时编排（本 WU 系统入口 + 超时
+ *         handler 复用面）消费。</li>
+ * </ul>
  *
  * @author nona9961
  */
@@ -58,4 +69,58 @@ public interface OrderFacade {
      * @param subOrderId 子订单 ID（已发货 → 已完成 + 主单派生）
      */
     void autoComplete(Long subOrderId);
+
+    /**
+     * 退款申请推进（签名冻结；消费者：退款申请编排——B8.4 已支付/已发货/
+     * 已完成子单 → 退款中 + 主单派生）。
+     * <p>
+     * 语义：按 subOrderId 装载子单（不存在 404 契约防御，编排层归属
+     * 校验先行）——聚合迁移守卫内建（仅已支付/已发货/已完成可进入退款
+     * 中，其余状态 {@code order.sub_status_illegal} 拒绝，B8.4①）；全部
+     * 推进成功后按子单状态投影刷新主单整体状态（任一退款中 → 主单退款
+     * 中），子单与主单同批保存。幂等/防重短路<b>不落本类</b>——由编排
+     * 层先行判定（退款单防重 + 子单状态预检），本类保持「非法状态拒绝」
+     * 的契约语义；消费者编排语义见 {@link #beginRefund} 文档。</p>
+     *
+     * @param subOrderId 子订单 ID（已支付/已发货/已完成 → 退款中 + 主单派生）
+     */
+    void beginRefund(Long subOrderId);
+
+    /**
+     * 退款成功推进（签名冻结；消费者：退款回调成功编排——B8.5 子单
+     * 退款中 → 已退款 + 主单派生）。
+     * <p>
+     * 语义：按 subOrderId 装载子单（不存在 404 契约防御）——子单状态
+     * 分派：
+     * <ul>
+     *     <li>{@code REFUNDING} → 聚合迁移 {@code markRefunded}（仅退款
+     *         中可迁移，其余 {@code order.sub_status_illegal} 拒绝）+ 主单
+     *         按子单投影派生 + 同批保存；</li>
+     *     <li>{@code CLOSED} → <b>幂等跳过</b>（发货超时关单退款路径：
+     *         履约侧终态已定格，资金侧退款成功由退款单承载
+     *         {@code SUCCEEDED}——领域模型明示 ship-timeout 子单终态为
+     *         CLOSED 而非 REFUNDED，本方法不迁移不落库）；</li>
+     *     <li>其余状态 → {@code order.sub_status_illegal}（防御拒绝——
+     *         退款成功回调到达未退款流程的子单属数据异常）。</li>
+     * </ul>
+     *
+     * @param subOrderId 子订单 ID（退款中 → 已退款 + 主单派生；已关闭幂等跳过）
+     */
+    void completeRefund(Long subOrderId);
+
+    /**
+     * 发货超时关单推进（签名冻结；消费者：发货超时编排——B9.4② 子单
+     * 已支付 → 已关闭 + 主单派生；退款编排由调用方部署，资金侧状态由
+     * 退款单承载）。
+     * <p>
+     * 语义：按 subOrderId 装载子单（不存在 404 契约防御）——聚合迁移
+     * {@code closeByTimeout}（仅已支付未发货子单可超时关单，其余状态
+     * {@code order.sub_status_illegal} 拒绝——支付超时走取消，重复关闭
+     * 拒绝）+ 主单按子单投影刷新整体状态（全部已关闭 → 主单已关闭）+ 
+     * 同批保存。幂等短路<b>不落本类</b>——由编排层先行判定（子单状态
+     * 预检，超时重扫不重复推进），本类保持「非法状态拒绝」的契约语义。
+     *
+     * @param subOrderId 子订单 ID（已支付 → 已关闭 + 主单派生）
+     */
+    void closeByTimeout(Long subOrderId);
 }
