@@ -34,7 +34,7 @@ public class JpaTenantReadIsolationAdapter implements TenantReadIsolationAdapter
      * 契约：值必须与 Hibernate 内部 `TenantIdBinder.FILTER_NAME` 一致（当前为 {@code "_tenantId"}；
      * 该类位于 internal 包，无公开常量可引用）。升级 Hibernate 时必须按源码查证
      * （{@code AbstractSharedSessionContract#setUpMultitenancy} 中该常量的引用点）；
-     * 本常量的回归比对由 {@code JpaTenantReadIsolationAdapterConstantsTest} 钉住。
+     * 本常量的回归比对由 {@code JpaTenantReadIsolationAdapterConstantsUnitTest} 钉住。
      */
     static final String TENANT_ID_FILTER_NAME = "_tenantId";
 
