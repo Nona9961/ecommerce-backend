@@ -12,7 +12,6 @@ import java.time.Instant;
  *         主单实付（创建时固化，防中途改价）；</li>
  *     <li>{@code payTimeoutMillis} 为下单编排传入的支付超时时长（订单域
  *         D1-o1 规则，取值承载于 TimeoutType.ORDER_PAY），本视图携带
- *         本视图携带
  *         原值回显供校验（防实现侧静默改写规则）；</li>
  *     <li>{@code timeoutAt} = 创建时刻 + 支付超时时长（B8.3 注册截止时间
  *         的落库形态由实现承载：payment_order.timeout_at 冗余列，超时
