@@ -1,12 +1,17 @@
 package com.nona.domain.payment.service;
 
+import com.nona.domain.payment.entity.PaymentOrder;
+import com.nona.domain.payment.entity.PaymentOrderStatus;
+import com.nona.domain.payment.factory.PaymentOrderFactory;
 import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
 
 /**
- * PaymentPort 实现骨架（红阶段冻结签名语义，方法体 UOE；实现接线
- * 归绿阶段）。
+ * PaymentPort 实现（绿阶段已实现创建/复用与关单签名语义；bean 装配
+ * 与事务注解随仓储实现落地后接线，属编排接线阶段）。
  * <p>
  * 接线语义（按 PaymentPort 接口 javadoc + 聚合契约，绿阶段实现依据）：
  * <ul>
@@ -29,6 +34,11 @@ import com.nona.domain.payment.repo.PaymentOrderRepository;
  * @author nona9961
  */
 public class PaymentPortImpl implements PaymentPort {
+
+    /**
+     * 一期唯一支付渠道（真实渠道扩展位：字段保留，单据创建时定型）。
+     */
+    private static final String MOCK_CHANNEL = "MOCK";
 
     /**
      * 支付单仓储（装载/落库锚点）
@@ -55,7 +65,24 @@ public class PaymentPortImpl implements PaymentPort {
     @Override
     public PendingPayment createPendingPayment(Long masterOrderId, long paidAmount,
                                                long payTimeoutMillis) {
-        throw new UnsupportedOperationException("红阶段契约：createPendingPayment 实现留绿阶段（PaymentPortImpl 创建/复用）");
+        if (masterOrderId == null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_ORDER_INVALID.code(),
+                    "主订单 ID 不能为空（支付单一对一锚点）");
+        }
+        final PaymentOrder existing = repository.findByOrderId(masterOrderId);
+        if (existing == null) {
+            final PaymentOrder created = new PaymentOrderFactory()
+                    .create(masterOrderId, paidAmount, MOCK_CHANNEL, payTimeoutMillis);
+            repository.save(created);
+            return new PendingPayment(created.getId(), created.getPayNo(),
+                    created.getAmount(), payTimeoutMillis, created.getTimeoutAt());
+        }
+        if (existing.getStatus() != PaymentOrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_ORDER_INVALID.code(),
+                    "同主单已存在非待支付支付单（一对一，防重复发起）");
+        }
+        return new PendingPayment(existing.getId(), existing.getPayNo(),
+                existing.getAmount(), payTimeoutMillis, existing.getTimeoutAt());
     }
 
     /**
@@ -65,6 +92,19 @@ public class PaymentPortImpl implements PaymentPort {
      */
     @Override
     public void closePay(String payNo) {
-        throw new UnsupportedOperationException("红阶段契约：closePay 实现留绿阶段（PaymentPortImpl 关单）");
+        if (payNo == null || payNo.isBlank()) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_NOT_FOUND.code(),
+                    "支付单号不能为空");
+        }
+        final PaymentOrder order = repository.findByPayNo(payNo);
+        if (order == null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_NOT_FOUND.code(),
+                    "支付单不存在");
+        }
+        if (order.getStatus() == PaymentOrderStatus.CLOSED) {
+            return;
+        }
+        order.close();
+        repository.save(order);
     }
 }

@@ -6,6 +6,7 @@ import com.nona.domain.payment.ports.PendingPayment;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,9 +37,18 @@ class PaymentPortImplTest {
     private PaymentOrderRepository repository;
 
     /**
-     * 被测端口实现骨架（直接装配，红阶段不注册 Spring）。
+     * 被测端口实现（直接装配，红阶段不注册 Spring；mock 注入后于实例构造，
+     * 端口经 setUp 装配）。
      */
-    private final PaymentPortImpl port = new PaymentPortImpl(repository);
+    private PaymentPortImpl port;
+
+    /**
+     * 每用例前重建被测端口（依赖为 mock，无状态跨用例残留）。
+     */
+    @BeforeEach
+    void setUp() {
+        port = new PaymentPortImpl(repository);
+    }
 
     /**
      * 待支付支付单基线（创建构造器装配）。
@@ -51,12 +61,16 @@ class PaymentPortImplTest {
     @DisplayName("happy-1 补建：主单无支付单 → 创建待支付单并返回视图（payNo/金额/超时回显）")
     void createPendingPayment_noExisting_createsAndReturnsView() {
         when(repository.findByOrderId(100L)).thenReturn(null);
+        final Instant before = Instant.now();
         final PendingPayment created = port.createPendingPayment(100L, 10000L, 1_800_000L);
+        final Instant after = Instant.now();
         assertThat(created.paymentOrderId()).isNotNull();
         assertThat(created.payNo()).isNotBlank();
         assertThat(created.amount()).isEqualTo(10000L);
         assertThat(created.payTimeoutMillis()).isEqualTo(1_800_000L);
-        assertThat(created.timeoutAt()).isAfter(Instant.parse("2026-09-07T10:00:00Z"));
+        assertThat(created.timeoutAt().toEpochMilli())
+                .isBetween(before.plusMillis(1_800_000L).toEpochMilli(),
+                        after.plusMillis(1_800_000L).toEpochMilli());
         verify(repository).save(org.mockito.ArgumentMatchers.any(PaymentOrder.class));
     }
 

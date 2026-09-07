@@ -2,6 +2,9 @@ package com.nona.domain.payment.entity;
 
 import com.nona.domain.payment.ports.CallbackType;
 import com.nona.domain.payment.ports.GatewayResult;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.util.BusinessAssert;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,7 +27,7 @@ import java.util.List;
  * {@code occurredAt} 收到时间。真实渠道原始报文（raw JSON）为二期扩展位
  * （接真实渠道时仅需向本实体追加一列，契约演进只增不改）。
  * <p>
- * 形态不变式（红阶段契约声明，守卫收敛在构造路径，绿阶段实现）：
+ * 形态不变式（守卫已收敛在构造路径实现）：
  * <ol>
  *     <li>必填字段（id/paymentOrderId/callbackType/payNo/result/
  *         channelTxnNo/occurredAt）缺失即非法形态，构造拒绝；</li>
@@ -102,6 +105,23 @@ public class PaymentCallbackRecord {
     public PaymentCallbackRecord(Long id, Long paymentOrderId, CallbackType callbackType,
                                  String payNo, String refundNo, GatewayResult result,
                                  String channelTxnNo, long amountCents, Instant occurredAt) {
+        BusinessAssert.assertNonNull(id, "留痕记录主键不能为空");
+        BusinessAssert.assertNonNull(paymentOrderId, "归属支付单 ID 不能为空（rootId 必填）");
+        BusinessAssert.assertNonNull(callbackType, "回调类型不能为空");
+        BusinessAssert.assertTrue(payNo != null && !payNo.isBlank(), "业务支付单号不能为空");
+        BusinessAssert.assertNonNull(result, "渠道侧业务结果不能为空");
+        BusinessAssert.assertTrue(channelTxnNo != null && !channelTxnNo.isBlank(),
+                "渠道流水号不能为空（留痕行缺关键字段无对账意义）");
+        BusinessAssert.assertTrue(amountCents > 0, "回调金额必须为正整数分");
+        BusinessAssert.assertNonNull(occurredAt, "回调收到时间不能为空");
+        if (callbackType == CallbackType.REFUND && (refundNo == null || refundNo.isBlank())) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "REFUND 回调必须携带退款单号（类型与字段配套约束）");
+        }
+        if (callbackType == CallbackType.PAY && refundNo != null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "PAY 回调退款单号必须为空（类型与字段配套约束）");
+        }
         this.id = id;
         this.paymentOrderId = paymentOrderId;
         this.callbackType = callbackType;
@@ -119,7 +139,7 @@ public class PaymentCallbackRecord {
      * @return 主键
      */
     public Long getId() {
-        throw new UnsupportedOperationException("红阶段契约：getId 实现留绿阶段（PaymentCallbackRecord）");
+        return id;
     }
 
     /**
@@ -128,7 +148,7 @@ public class PaymentCallbackRecord {
      * @return 支付单 ID
      */
     public Long getPaymentOrderId() {
-        throw new UnsupportedOperationException("红阶段契约：getPaymentOrderId 实现留绿阶段（PaymentCallbackRecord）");
+        return paymentOrderId;
     }
 
     /**
@@ -137,7 +157,7 @@ public class PaymentCallbackRecord {
      * @return 回调类型
      */
     public CallbackType getCallbackType() {
-        throw new UnsupportedOperationException("红阶段契约：getCallbackType 实现留绿阶段（PaymentCallbackRecord）");
+        return callbackType;
     }
 
     /**
@@ -146,7 +166,7 @@ public class PaymentCallbackRecord {
      * @return 支付单号
      */
     public String getPayNo() {
-        throw new UnsupportedOperationException("红阶段契约：getPayNo 实现留绿阶段（PaymentCallbackRecord）");
+        return payNo;
     }
 
     /**
@@ -155,7 +175,7 @@ public class PaymentCallbackRecord {
      * @return 退款单号，或 null（PAY 回调配套约束）
      */
     public String getRefundNo() {
-        throw new UnsupportedOperationException("红阶段契约：getRefundNo 实现留绿阶段（PaymentCallbackRecord）");
+        return refundNo;
     }
 
     /**
@@ -164,7 +184,7 @@ public class PaymentCallbackRecord {
      * @return 结果
      */
     public GatewayResult getResult() {
-        throw new UnsupportedOperationException("红阶段契约：getResult 实现留绿阶段（PaymentCallbackRecord）");
+        return result;
     }
 
     /**
@@ -173,7 +193,7 @@ public class PaymentCallbackRecord {
      * @return 渠道流水号
      */
     public String getChannelTxnNo() {
-        throw new UnsupportedOperationException("红阶段契约：getChannelTxnNo 实现留绿阶段（PaymentCallbackRecord）");
+        return channelTxnNo;
     }
 
     /**
@@ -182,7 +202,7 @@ public class PaymentCallbackRecord {
      * @return 金额
      */
     public long getAmountCents() {
-        throw new UnsupportedOperationException("红阶段契约：getAmountCents 实现留绿阶段（PaymentCallbackRecord）");
+        return amountCents;
     }
 
     /**
@@ -191,6 +211,6 @@ public class PaymentCallbackRecord {
      * @return 时间
      */
     public Instant getOccurredAt() {
-        throw new UnsupportedOperationException("红阶段契约：getOccurredAt 实现留绿阶段（PaymentCallbackRecord）");
+        return occurredAt;
     }
 }

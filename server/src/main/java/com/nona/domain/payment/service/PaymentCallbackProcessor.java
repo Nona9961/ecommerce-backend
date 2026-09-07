@@ -2,13 +2,23 @@ package com.nona.domain.payment.service;
 
 import com.nona.domain.inventory.ports.InventoryFacade;
 import com.nona.domain.order.ports.OrderFacade;
+import com.nona.domain.payment.entity.PaymentCallbackRecord;
+import com.nona.domain.payment.entity.PaymentOrder;
+import com.nona.domain.payment.ports.CallbackType;
+import com.nona.domain.payment.ports.GatewayResult;
 import com.nona.domain.payment.ports.PaymentCallbackPort;
 import com.nona.domain.payment.ports.ValidatedCallback;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.util.IDUtils;
+
+import java.time.Instant;
+import java.util.List;
 
 /**
- * 支付回调处理实现骨架（红阶段冻结签名语义，方法体 UOE；实现
- * 接线归绿阶段，订单/库存同事务编排随 回调编排接线落位）。
+ * 支付回调处理实现（绿阶段已实现留痕→迁移→编排挂点签名语义；
+ * bean 装配/事务注解/回调编排接线随编排接线阶段落地）。
  * <p>
  * 接线语义（按 PaymentCallbackPort 接口 javadoc + PaymentOrder 聚合
  * 契约，绿阶段实现依据）：
@@ -76,6 +86,36 @@ public class PaymentCallbackProcessor implements PaymentCallbackPort {
      */
     @Override
     public void handlePayCallback(ValidatedCallback callback) {
-        throw new UnsupportedOperationException("红阶段契约：handlePayCallback 实现留绿阶段（PaymentCallbackProcessor 留痕→迁移→编排挂点）");
+        if (callback == null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "回调事件不能为空");
+        }
+        if (callback.type() != CallbackType.PAY) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "支付回调处理端口只消费 PAY 回调（REFUND 归退款流契约接续）");
+        }
+        final PaymentOrder order = repository.findByPayNo(callback.payNo());
+        if (order == null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_NOT_FOUND.code(),
+                    "支付单不存在（孤儿回调不产生处理路径）");
+        }
+        final PaymentCallbackRecord record = new PaymentCallbackRecord(
+                IDUtils.generateID(), order.getId(), callback.type(), callback.payNo(),
+                callback.refundNo(), callback.result(), callback.channelTxnNo(),
+                callback.amountCents(), Instant.now());
+        order.appendCallbackRecord(record);
+        try {
+            if (callback.result() == GatewayResult.SUCCESS) {
+                order.markPaid(callback.channelTxnNo(), callback.amountCents());
+                orderFacade.onPaid(order.getOrderId());
+                inventoryFacade.confirmDeduct(order.getOrderId(), List.of());
+            } else {
+                order.markFailed(callback.channelTxnNo(), callback.amountCents());
+            }
+        } catch (BusinessException e) {
+            repository.save(order);
+            throw e;
+        }
+        repository.save(order);
     }
 }

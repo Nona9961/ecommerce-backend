@@ -7,6 +7,7 @@ import com.nona.domain.payment.factory.PaymentOrderFactory;
 import com.nona.domain.payment.ports.PaymentCallbackPort;
 import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
+import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,15 +16,21 @@ import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 支付单域契约钉测试（红阶段：纯只读断言——枚举值/业务码码值/
- * 签名面/UOE 红阶段防线，不触碰任何实现逻辑，正常即绿）。
+ * 签名面，不触碰实现逻辑即绿；UOE 断言锁定红态防半实现回潮）。
  * <p>
- * 本文件的绿是「设计物契约」的成立（非实现）：枚举常量、业务码、签名
- * 声明是红阶段契约本体；UOE 断言锁定「实现缺失」的红状态（防半实现回
- * 潮——任何非抽象非构造器方法一旦被实现，本法立即转红）。
+ * <b>绿阶段改造记录（上报主会话）</b>：契约-8/9 原为红阶段「UOE 自证
+ * 防线」（断言实现缺失的红态），与绿阶段实现互斥——红报告第七节
+ * 「11 个契约钉测试保持绿」的预设要求绿阶段将其改造为<b>绿态防线</b>：
+ * 断言实现已落地（任何方法回退成 UOE 或行为偏离即红），用例数与
+ * 防线意图不变（防半实现回潮的反向形态）。
+ * <p>
+ * 其余用例为「设计物契约」的成立（非实现）：枚举常量、业务码、签名
+ * 声明是红阶段契约本体，实现不触碰。
  */
 class PaymentContractTest {
 
@@ -125,46 +132,57 @@ class PaymentContractTest {
     // ------------------------------------------------------------------
 
     @Test
-    @DisplayName("契约-8 UOE 防线：聚合全部读取/迁移方法在红阶段必须抛 UnsupportedOperationException")
-    void aggregateMethodsAreUnimplementedInRedPhase() {
+    @DisplayName("契约-8 绿态防线：聚合全部读取/迁移方法已实现落地（防回退 UOE/行为偏离）")
+    void aggregateMethodsAreImplementedInGreenPhase() {
         final PaymentOrder order = new PaymentOrder(
                 1L, "PAY202609070001", 100L, 10000L, "MOCK",
                 Instant.parse("2026-09-07T10:00:00Z"));
-        assertThatThrownBy(order::getPayNo).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getOrderId).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getAmount).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getChannel).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getTimeoutAt).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getStatus).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getChannelTxnNo).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::getCallbacks).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> order.markPaid("TXN", 10000L))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> order.markFailed("TXN", 10000L))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(order::close).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(order.getId()).isEqualTo(1L);
+        assertThat(order.getPayNo()).isEqualTo("PAY202609070001");
+        assertThat(order.getOrderId()).isEqualTo(100L);
+        assertThat(order.getAmount()).isEqualTo(10000L);
+        assertThat(order.getChannel()).isEqualTo("MOCK");
+        assertThat(order.getTimeoutAt()).isEqualTo(Instant.parse("2026-09-07T10:00:00Z"));
+        assertThat(order.getStatus()).isEqualTo(PaymentOrderStatus.PENDING_PAYMENT);
+        assertThat(order.getChannelTxnNo()).isNull();
+        assertThat(order.getCallbacks()).isEmpty();
+        order.appendCallbackRecord(new PaymentCallbackRecord(
+                11L, 1L, com.nona.domain.payment.ports.CallbackType.PAY, "PAY202609070001",
+                null, com.nona.domain.payment.ports.GatewayResult.SUCCESS,
+                "TXN-ALIPAY-001", 10000L, Instant.parse("2026-09-07T10:01:00Z")));
+        assertThat(order.getCallbacks()).hasSize(1);
+        order.markPaid("TXN-ALIPAY-001", 10000L);
+        assertThat(order.getStatus()).isEqualTo(PaymentOrderStatus.PAID);
+        assertThat(order.getChannelTxnNo()).isEqualTo("TXN-ALIPAY-001");
+        final PaymentOrder closed = new PaymentOrder(
+                2L, "PAY202609070002", 100L, 10000L, "MOCK",
+                Instant.parse("2026-09-07T10:00:00Z"));
+        closed.markFailed("TXN-ALIPAY-002", 10000L);
+        closed.close();
+        assertThat(closed.getStatus()).isEqualTo(PaymentOrderStatus.CLOSED);
         assertThatThrownBy(() -> order.appendCallbackRecord(null))
-                .isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(() -> new PaymentOrderFactory()
+                .isInstanceOf(BusinessException.class);
+        assertThatCode(() -> new PaymentOrderFactory()
                 .create(100L, 10000L, "MOCK", 1_800_000L))
-                .isInstanceOf(UnsupportedOperationException.class);
+                .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("契约-9 UOE 防线：留痕实体在红阶段读取方法必须抛 UnsupportedOperationException")
-    void callbackRecordMethodsAreUnimplementedInRedPhase() {
+    @DisplayName("契约-9 绿态防线：留痕实体读取方法全部实现落地（防回退 UOE/行为偏离）")
+    void callbackRecordMethodsAreImplementedInGreenPhase() {
         final PaymentCallbackRecord record = new PaymentCallbackRecord(
                 11L, 1L, com.nona.domain.payment.ports.CallbackType.PAY, "PAY202609070001",
                 null, com.nona.domain.payment.ports.GatewayResult.SUCCESS,
                 "TXN-ALIPAY-001", 10000L, Instant.parse("2026-09-07T10:01:00Z"));
-        assertThatThrownBy(record::getId).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getPaymentOrderId).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getCallbackType).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getPayNo).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getResult).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getChannelTxnNo).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getAmountCents).isInstanceOf(UnsupportedOperationException.class);
-        assertThatThrownBy(record::getOccurredAt).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(record.getId()).isEqualTo(11L);
+        assertThat(record.getPaymentOrderId()).isEqualTo(1L);
+        assertThat(record.getCallbackType()).isEqualTo(com.nona.domain.payment.ports.CallbackType.PAY);
+        assertThat(record.getPayNo()).isEqualTo("PAY202609070001");
+        assertThat(record.getRefundNo()).isNull();
+        assertThat(record.getResult()).isEqualTo(com.nona.domain.payment.ports.GatewayResult.SUCCESS);
+        assertThat(record.getChannelTxnNo()).isEqualTo("TXN-ALIPAY-001");
+        assertThat(record.getAmountCents()).isEqualTo(10000L);
+        assertThat(record.getOccurredAt()).isEqualTo(Instant.parse("2026-09-07T10:01:00Z"));
     }
 
     @Test

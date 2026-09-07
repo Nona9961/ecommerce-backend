@@ -10,6 +10,7 @@ import com.nona.domain.payment.ports.ValidatedCallback;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,10 +48,18 @@ class PaymentCallbackProcessorTest {
     private InventoryFacade inventoryFacade;
 
     /**
-     * 被测回调处理器骨架（直接装配，红阶段不注册 Spring）。
+     * 被测回调处理器（直接装配，红阶段不注册 Spring；mock 注入后于实例
+     * 构造，处理器经 setUp 装配）。
      */
-    private final PaymentCallbackProcessor processor =
-            new PaymentCallbackProcessor(repository, orderFacade, inventoryFacade);
+    private PaymentCallbackProcessor processor;
+
+    /**
+     * 每用例前重建被测处理器（依赖均为 mock，无状态跨用例残留）。
+     */
+    @BeforeEach
+    void setUp() {
+        processor = new PaymentCallbackProcessor(repository, orderFacade, inventoryFacade);
+    }
 
     /**
      * 待支付支付单基线。

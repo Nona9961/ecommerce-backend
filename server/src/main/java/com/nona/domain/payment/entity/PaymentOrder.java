@@ -1,6 +1,12 @@
 package com.nona.domain.payment.entity;
 
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.util.BusinessAssert;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -119,13 +125,19 @@ public class PaymentOrder {
      */
     public PaymentOrder(Long id, String payNo, Long orderId, long amount,
                         String channel, Instant timeoutAt) {
+        BusinessAssert.assertNonNull(id, "支付单主键不能为空");
+        BusinessAssert.assertTrue(payNo != null && !payNo.isBlank(), "支付单号不能为空");
+        BusinessAssert.assertNonNull(orderId, "关联主单 ID 不能为空（一对一锚点）");
+        BusinessAssert.assertTrue(amount >= 0, "支付金额不能为负");
+        BusinessAssert.assertTrue(channel != null && !channel.isBlank(), "支付渠道不能为空");
+        BusinessAssert.assertNonNull(timeoutAt, "支付超时截止时间不能为空");
         this.id = id;
         this.payNo = payNo;
         this.orderId = orderId;
         this.amount = amount;
         this.channel = channel;
         this.timeoutAt = timeoutAt;
-        this.callbacks = List.of();
+        this.callbacks = new ArrayList<>();
         this.status = PaymentOrderStatus.PENDING_PAYMENT;
         this.channelTxnNo = null;
     }
@@ -149,6 +161,14 @@ public class PaymentOrder {
     public PaymentOrder(Long id, String payNo, Long orderId, long amount,
                         String channel, Instant timeoutAt, PaymentOrderStatus status,
                         String channelTxnNo, List<PaymentCallbackRecord> callbacks) {
+        BusinessAssert.assertNonNull(id, "支付单主键不能为空");
+        BusinessAssert.assertTrue(payNo != null && !payNo.isBlank(), "支付单号不能为空");
+        BusinessAssert.assertNonNull(orderId, "关联主单 ID 不能为空（一对一锚点）");
+        BusinessAssert.assertTrue(amount >= 0, "支付金额不能为负");
+        BusinessAssert.assertTrue(channel != null && !channel.isBlank(), "支付渠道不能为空");
+        BusinessAssert.assertNonNull(timeoutAt, "支付超时截止时间不能为空");
+        BusinessAssert.assertNonNull(status, "支付单状态不能为空");
+        BusinessAssert.assertNonNull(callbacks, "回调留痕集合不能为空（装载必填，可为空集合）");
         this.id = id;
         this.payNo = payNo;
         this.orderId = orderId;
@@ -157,7 +177,7 @@ public class PaymentOrder {
         this.timeoutAt = timeoutAt;
         this.status = status;
         this.channelTxnNo = channelTxnNo;
-        this.callbacks = callbacks;
+        this.callbacks = new ArrayList<>(callbacks);
     }
 
     /**
@@ -177,7 +197,25 @@ public class PaymentOrder {
      * @param callbackAmountCents 回调金额（分，必须 = 支付单金额）
      */
     public void markPaid(String channelTxnNo, long callbackAmountCents) {
-        throw new UnsupportedOperationException("红阶段契约：markPaid 实现留绿阶段（PaymentOrder 状态迁移）");
+        if (channelTxnNo == null || channelTxnNo.isBlank()) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "渠道流水号不能为空（留痕与唯一约束防线素材）");
+        }
+        if (this.channelTxnNo != null && !this.channelTxnNo.equals(channelTxnNo)) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_CALLBACK_DUPLICATE.code(),
+                    "渠道流水号已占用且异号（渠道事故优先诊断）：已占位 " + this.channelTxnNo
+                            + "，本次 " + channelTxnNo);
+        }
+        if (this.status != PaymentOrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_STATUS_ILLEGAL.code(),
+                    "仅待支付支付单可标记支付成功（同号重复回调幂等命中或终态再迁移）");
+        }
+        if (callbackAmountCents != this.amount) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_AMOUNT_MISMATCH.code(),
+                    "回调金额与支付单金额不符：回调 " + callbackAmountCents + "，支付单 " + this.amount);
+        }
+        this.status = PaymentOrderStatus.PAID;
+        this.channelTxnNo = channelTxnNo;
     }
 
     /**
@@ -192,7 +230,25 @@ public class PaymentOrder {
      * @param callbackAmountCents 回调金额（分，必须 = 支付单金额）
      */
     public void markFailed(String channelTxnNo, long callbackAmountCents) {
-        throw new UnsupportedOperationException("红阶段契约：markFailed 实现留绿阶段（PaymentOrder 状态迁移）");
+        if (channelTxnNo == null || channelTxnNo.isBlank()) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "渠道流水号不能为空（留痕与唯一约束防线素材）");
+        }
+        if (this.channelTxnNo != null && !this.channelTxnNo.equals(channelTxnNo)) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_CALLBACK_DUPLICATE.code(),
+                    "渠道流水号已占用且异号（渠道事故优先诊断）：已占位 " + this.channelTxnNo
+                            + "，本次 " + channelTxnNo);
+        }
+        if (this.status != PaymentOrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_STATUS_ILLEGAL.code(),
+                    "仅待支付支付单可标记支付失败（同号重复回调幂等命中或终态再迁移）");
+        }
+        if (callbackAmountCents != this.amount) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_AMOUNT_MISMATCH.code(),
+                    "回调金额与支付单金额不符：回调 " + callbackAmountCents + "，支付单 " + this.amount);
+        }
+        this.status = PaymentOrderStatus.FAILED;
+        this.channelTxnNo = channelTxnNo;
     }
 
     /**
@@ -205,7 +261,14 @@ public class PaymentOrder {
      * {@code payment.not_found} 呈现。
      */
     public void close() {
-        throw new UnsupportedOperationException("红阶段契约：close 实现留绿阶段（PaymentOrder 状态迁移）");
+        if (this.status == PaymentOrderStatus.CLOSED) {
+            return;
+        }
+        if (this.status == PaymentOrderStatus.PAID) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_STATUS_ILLEGAL.code(),
+                    "已支付支付单不可关单（资金已锁定，关单走退款流）");
+        }
+        this.status = PaymentOrderStatus.CLOSED;
     }
 
     /**
@@ -218,7 +281,11 @@ public class PaymentOrder {
      * @param record 回调留痕记录（必填，形态守卫由记录构造路径承载）
      */
     public void appendCallbackRecord(PaymentCallbackRecord record) {
-        throw new UnsupportedOperationException("红阶段契约：appendCallbackRecord 实现留绿阶段（PaymentOrder 留痕追加）");
+        if (record == null) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_GATEWAY_CALLBACK_INVALID.code(),
+                    "回调留痕记录不能为空");
+        }
+        this.callbacks.add(record);
     }
 
     /**
@@ -227,7 +294,7 @@ public class PaymentOrder {
      * @return 主键
      */
     public Long getId() {
-        throw new UnsupportedOperationException("红阶段契约：getId 实现留绿阶段（PaymentOrder）");
+        return id;
     }
 
     /**
@@ -236,7 +303,7 @@ public class PaymentOrder {
      * @return 支付单号
      */
     public String getPayNo() {
-        throw new UnsupportedOperationException("红阶段契约：getPayNo 实现留绿阶段（PaymentOrder）");
+        return payNo;
     }
 
     /**
@@ -245,7 +312,7 @@ public class PaymentOrder {
      * @return 主单 ID
      */
     public Long getOrderId() {
-        throw new UnsupportedOperationException("红阶段契约：getOrderId 实现留绿阶段（PaymentOrder）");
+        return orderId;
     }
 
     /**
@@ -254,7 +321,7 @@ public class PaymentOrder {
      * @return 金额
      */
     public long getAmount() {
-        throw new UnsupportedOperationException("红阶段契约：getAmount 实现留绿阶段（PaymentOrder）");
+        return amount;
     }
 
     /**
@@ -263,7 +330,7 @@ public class PaymentOrder {
      * @return 渠道
      */
     public String getChannel() {
-        throw new UnsupportedOperationException("红阶段契约：getChannel 实现留绿阶段（PaymentOrder）");
+        return channel;
     }
 
     /**
@@ -272,7 +339,7 @@ public class PaymentOrder {
      * @return 截止时间
      */
     public Instant getTimeoutAt() {
-        throw new UnsupportedOperationException("红阶段契约：getTimeoutAt 实现留绿阶段（PaymentOrder）");
+        return timeoutAt;
     }
 
     /**
@@ -281,7 +348,7 @@ public class PaymentOrder {
      * @return 状态
      */
     public PaymentOrderStatus getStatus() {
-        throw new UnsupportedOperationException("红阶段契约：getStatus 实现留绿阶段（PaymentOrder）");
+        return status;
     }
 
     /**
@@ -290,15 +357,15 @@ public class PaymentOrder {
      * @return 流水号，或 null
      */
     public String getChannelTxnNo() {
-        throw new UnsupportedOperationException("红阶段契约：getChannelTxnNo 实现留绿阶段（PaymentOrder）");
+        return channelTxnNo;
     }
 
     /**
-     * 回调留痕集合（append-only 视图）。
+     * 回调留痕集合（append-only 视图：仅聚合内部可追加，包外只读）。
      *
-     * @return 留痕记录列表
+     * @return 留痕记录列表（不可变视图）
      */
     public List<PaymentCallbackRecord> getCallbacks() {
-        throw new UnsupportedOperationException("红阶段契约：getCallbacks 实现留绿阶段（PaymentOrder）");
+        return Collections.unmodifiableList(callbacks);
     }
 }

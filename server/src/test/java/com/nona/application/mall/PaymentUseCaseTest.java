@@ -12,6 +12,7 @@ import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,10 +53,18 @@ class PaymentUseCaseTest {
     private MasterOrderRepository masterOrderRepository;
 
     /**
-     * 被测用例（直接装配，红阶段不注册 Spring）。
+     * 被测用例（直接装配，红阶段不注册 Spring；mock 注入后于实例构造，
+     * 用例经 setUp 装配）。
      */
-    private final PaymentUseCase useCase =
-            new PaymentUseCase(paymentPort, gateway, masterOrderRepository);
+    private PaymentUseCase useCase;
+
+    /**
+     * 每用例前重建被测用例（依赖均为 mock，无状态跨用例残留）。
+     */
+    @BeforeEach
+    void setUp() {
+        useCase = new PaymentUseCase(paymentPort, gateway, masterOrderRepository);
+    }
 
     /**
      * 待支付主单基线（买家 200，订单 100，实付 10000 分）。

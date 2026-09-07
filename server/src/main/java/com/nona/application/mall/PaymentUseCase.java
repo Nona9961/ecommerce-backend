@@ -1,18 +1,25 @@
 package com.nona.application.mall;
 
+import com.nona.domain.order.entity.MasterOrder;
+import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.repo.MasterOrderRepository;
 import com.nona.domain.payment.ports.AcquireRequest;
 import com.nona.domain.payment.ports.AcquireResult;
 import com.nona.domain.payment.ports.PaymentGateway;
 import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
+import com.nona.exceptions.BusinessException;
+import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.timeout.TimeoutType;
+
+import java.util.Objects;
 
 /**
  * 发起支付用例（B8.1 承载：POST /mall/payments {orderId}）——买家对
  * 已下单主单发起支付：主单校验（C1 历史遗留接线：支付发起前必须校验
  * 主单处于可支付状态）→ 支付单创建/复用 → 渠道受理。
  * <p>
- * 编排语义（红阶段契约声明，方法体 UOE——实现留绿阶段）：
+ * 编排语义（绿阶段已实现，主单校验→创建/复用→渠道受理）：
  * <ol>
  *     <li><b>主单装载与归属</b>：按 orderId 装载主单；不存在或归属买家
  *         不符 → 按不存在呈现（{@code order.master_not_found} 404，防
@@ -76,7 +83,18 @@ public class PaymentUseCase {
      * @return 渠道受理结果（渠道流水 + 收银台参数；支付结果经回调异步到达）
      */
     public AcquireResult initiatePayment(Long buyerId, Long orderId) {
-
-        throw new UnsupportedOperationException("红阶段契约：initiatePayment 实现留绿阶段（PaymentUseCase 主单校验→创建/复用→受理）");
+        final MasterOrder masterOrder = masterOrderRepository.getByID(orderId);
+        if (masterOrder == null || !Objects.equals(buyerId, masterOrder.getBuyerId())) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在或不属于当前买家");
+        }
+        if (masterOrder.getStatus() != MasterOrderStatus.PENDING_PAYMENT) {
+            throw new BusinessException(EcommerceBusinessCode.PAYMENT_ORDER_INVALID.code(),
+                    "主订单处于非可支付状态，不可发起支付");
+        }
+        final long paidAmount = masterOrder.getAmount().getPaidAmount();
+        final PendingPayment pending = paymentPort.createPendingPayment(orderId,
+                paidAmount, TimeoutType.ORDER_PAY.durationMillis());
+        return gateway.acquire(new AcquireRequest(pending.payNo(), pending.amount()));
     }
 }
