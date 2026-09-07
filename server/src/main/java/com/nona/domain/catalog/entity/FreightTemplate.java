@@ -72,14 +72,15 @@ public class FreightTemplate {
 
     /**
      * 默认模板身份标记（店铺兜底回退锚点；创建后不可变）。普通模板恒 false；
-     * 默认模板由 9 参构造路径传入 true（红阶段签名冻结，绿阶段收敛赋值）。
+     * 默认模板由 9 参构造路径传入 true（字段为最终态，包外无变更路径）。
      */
-    private final boolean isDefault = false;
+    private final boolean isDefault;
 
     /**
      * 构造运费模板（新建与加载重建共用）：名称校验、计费参数按规则
      * 归一化与校验（不变量收敛点）。新建路径由工厂生成 ID 并定型初始
-     * 启用状态；加载路径原样恢复持久化状态。
+     * 启用状态；加载路径原样恢复持久化状态。普通模板恒非默认（默认身份
+     * 只经 9 参构造路径进入）。
      *
      * @param id            模板 ID
      * @param shopId        归属店铺 ID
@@ -93,18 +94,15 @@ public class FreightTemplate {
     public FreightTemplate(Long id, Long shopId, String name, FreightRuleType ruleType,
                            Long perItemPrice, Long baseFreight, Long freeThreshold,
                            FreightTemplateStatus status) {
-        this.id = id;
-        this.shopId = shopId;
-        this.name = requireName(name);
-        this.ruleType = requireRuleType(ruleType);
-        applyPriceParams(perItemPrice, baseFreight, freeThreshold);
-        this.status = status;
+        this(id, shopId, name, ruleType, perItemPrice, baseFreight, freeThreshold,
+                status, false);
     }
 
     /**
-     * 构造默认身份模板（新建与加载重建共用；绿阶段实现）：在既有 8 参构造
+     * 构造默认身份模板（新建与加载重建共用）：在既有 8 参构造
      * 校验/归一化路径基础上多收敛一个默认身份字段——{@code isDefault=true}
-     * 标记店铺兜底回退锚点。红阶段签名冻结（实现缺失）。
+     * 标记店铺兜底回退锚点。默认模板与普通模板同构（同表同实体、规则可编辑），
+     * 身份创建后不可变；8 参构造路径恒以 false 委托本构造。
      *
      * @param id            模板 ID
      * @param shopId        归属店铺 ID
@@ -119,19 +117,22 @@ public class FreightTemplate {
     public FreightTemplate(Long id, Long shopId, String name, FreightRuleType ruleType,
                            Long perItemPrice, Long baseFreight, Long freeThreshold,
                            FreightTemplateStatus status, boolean isDefault) {
-        throw new UnsupportedOperationException(
-                "red phase: 9-arg FreightTemplate ctor pending (isDefault 身份收敛)");
+        this.id = id;
+        this.shopId = shopId;
+        this.name = requireName(name);
+        this.ruleType = requireRuleType(ruleType);
+        applyPriceParams(perItemPrice, baseFreight, freeThreshold);
+        this.status = status;
+        this.isDefault = isDefault;
     }
 
     /**
      * 默认模板身份标记：true=店铺兜底回退锚点（开店自动创建、禁停用、禁删除）。
-     * 红阶段签名冻结（实现缺失，绿阶段返回 {@code isDefault} 字段）。
      *
      * @return true 默认模板
      */
     public boolean isDefault() {
-        throw new UnsupportedOperationException(
-                "red phase: isDefault() pending");
+        return isDefault;
     }
 
     /**
@@ -241,15 +242,17 @@ public class FreightTemplate {
 
     /**
      * 停用模板（幂等：已停用保持不变）。停用后新建订单不可用——
-     * 领域守卫由运费计算器承载（对停用模板拒绝计费）。
-     * <p>
-     * 红阶段签名冻结（实现缺失）：绿阶段实现 = 默认模板拒绝停用
+     * 领域守卫由运费计算器承载（对停用模板拒绝计费）。默认模板禁停用
      * （{@code catalog.freight_default_template_frozen} 400——回退锚点
-     * 恒可用守卫）+ 普通模板二态切换（既有幂等语义）。
+     * 恒可用守卫），普通模板二态切换（既有幂等语义）。
      */
     public void disable() {
-        throw new UnsupportedOperationException(
-                "red phase: disable() pending (默认模板冻结守卫)");
+        if (isDefault) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_FREIGHT_DEFAULT_TEMPLATE_FROZEN.code(),
+                    "默认运费模板禁停用");
+        }
+        this.status = FreightTemplateStatus.DISABLED;
     }
 
     /**

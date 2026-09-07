@@ -1,14 +1,22 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.domain.catalog.entity.FreightRuleType;
 import com.nona.domain.catalog.entity.FreightTemplate;
+import com.nona.domain.catalog.entity.FreightTemplateStatus;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.FreightTemplateConvertor;
+import com.nona.inf.persistence.po.catalog.FreightTemplatePO;
 import com.nona.inf.persistence.repository.jpa.FreightTemplateJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * 默认运费模板仓储定位契约测试：findDefaultByShopId 按店铺定位默认
@@ -27,10 +35,18 @@ class FreightTemplateRepositoryDefaultContractTest {
     @Test
     @DisplayName("按店铺定位默认模板非空")
     void findDefaultByShopId_returnsDefaultTemplate() {
+        final FreightTemplateJpaRepository jpaRepository = mock(FreightTemplateJpaRepository.class);
+        final FreightTemplateConvertor convertor = mock(FreightTemplateConvertor.class);
+        final ChangeTrackerProvider changeTrackerProvider = mock(ChangeTrackerProvider.class);
+        final TenantPrivilege tenantPrivilege = mock(TenantPrivilege.class);
+        when(jpaRepository.findByShopIdAndIsDefaultTrue(9001L))
+                .thenReturn(Optional.of(new FreightTemplatePO()));
+        when(convertor.convertToRoot(any(FreightTemplatePO.class), any()))
+                .thenReturn(new FreightTemplate(6001L, 9001L, "默认运费模板",
+                        FreightRuleType.FREE, null, null, null,
+                        FreightTemplateStatus.ENABLED, true));
         final FreightTemplateRepositoryImpl impl = new FreightTemplateRepositoryImpl(
-                mock(FreightTemplateJpaRepository.class),
-                mock(FreightTemplateConvertor.class),
-                mock(ChangeTrackerProvider.class));
+                jpaRepository, convertor, changeTrackerProvider, tenantPrivilege);
 
         final FreightTemplate defaultTemplate = impl.findDefaultByShopId(9001L);
 

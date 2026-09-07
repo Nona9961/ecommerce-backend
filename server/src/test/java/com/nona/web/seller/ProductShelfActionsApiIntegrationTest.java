@@ -495,6 +495,7 @@ class ProductShelfActionsApiIntegrationTest {
             po.setRuleType(FreightRuleType.PER_ITEM);
             po.setPerItemPrice(800L);
             po.setStatus(FreightTemplateStatus.ENABLED);
+            po.setIsDefault(false);
             freightTemplateJpaRepository.save(po);
             return po.getId();
         });

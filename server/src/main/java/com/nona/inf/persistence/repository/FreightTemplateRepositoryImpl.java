@@ -3,6 +3,7 @@ package com.nona.inf.persistence.repository;
 import com.nona.changeTracking.domain.model.changeset.ChangeSet;
 import com.nona.domain.catalog.entity.FreightTemplate;
 import com.nona.domain.catalog.repo.FreightTemplateRepository;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.FreightTemplateConvertor;
 import com.nona.inf.persistence.po.catalog.FreightTemplatePO;
 import com.nona.inf.persistence.repository.jpa.FreightTemplateJpaRepository;
@@ -35,17 +36,26 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
     private final FreightTemplateJpaRepository jpaRepository;
 
     /**
+     * 提权工具（跨租户写路径：平台建默认模板等显式归属定型——
+     * 提权作用域内对根行显式设置 tenantID=shopId，对齐商品仓储先例）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 构造运费模板仓储。
      *
      * @param repository            模板主表 JPA 仓储
      * @param convertor             模板聚合转换器
      * @param changeTrackerProvider 变更追踪器提供者
+     * @param tenantPrivilege       提权工具（显式租户归属定型）
      */
     public FreightTemplateRepositoryImpl(FreightTemplateJpaRepository repository,
                                          FreightTemplateConvertor convertor,
-                                         ChangeTrackerProvider changeTrackerProvider) {
+                                         ChangeTrackerProvider changeTrackerProvider,
+                                         TenantPrivilege tenantPrivilege) {
         super(repository, convertor, changeTrackerProvider);
         this.jpaRepository = repository;
+        this.tenantPrivilege = tenantPrivilege;
     }
 
     /**
@@ -61,11 +71,13 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
     /**
      * {@inheritDoc}
      * <p>
-     * 插入根行（新模板首次落库）。
+     * 插入根行（新模板首次落库）：跨租户写路径（提权作用域）对根行显式
+     * 定型租户归属（tenantID=shopId），普通商家路径由写门禁按请求上下文
+     * 注入——归属定型形态对齐商品仓储先例。
      */
     @Override
     protected void doInsert(FreightTemplate root) {
-        repository.save(convertor.convertToPO(root));
+        repository.save(ownedBy(convertor.convertToPO(root), root));
     }
 
     /**
@@ -74,10 +86,28 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
      * 单表聚合仅有根行字段变更：整行更新主表（JPA merge——不存在时插入、
      * 已存在时字段覆盖，避免逐字段映射漂移）。变更集空判定由模板
      * save 流程完成（isEmpty 提前返回，本方法仅在存在变更时被调用）。
+     * 根行重建后租户归属同样经 {@link #ownedBy} 定型（提权作用域内），
+     * 普通路径由写门禁注入。
      */
     @Override
     protected void doUpdate(FreightTemplate root, ChangeSet changeSet) {
-        repository.save(convertor.convertToPO(root));
+        repository.save(ownedBy(convertor.convertToPO(root), root));
+    }
+
+    /**
+     * 根行租户归属定型：提权作用域内显式设置 tenantID=shopId（跨租户写
+     * 合法化形态，与商品仓储 {@code ownedBy} 先例同构）；非提权路径不
+     * 触碰归属（由写门禁按请求上下文注入/校验）。
+     *
+     * @param po   待写根行
+     * @param root 聚合根（归属来源）
+     * @return 归属定型后的根行
+     */
+    private FreightTemplatePO ownedBy(FreightTemplatePO po, FreightTemplate root) {
+        if (tenantPrivilege.isActive()) {
+            po.setTenantID(String.valueOf(root.getShopId()));
+        }
+        return po;
     }
 
     /**
@@ -121,13 +151,16 @@ public class FreightTemplateRepositoryImpl extends DifferRepository<FreightTempl
     /**
      * {@inheritDoc}
      * <p>
-     * 红阶段签名冻结（实现缺失）：绿阶段实现 = 租户过滤 + is_default 定位
-     * （JPA 派生查询 {@code findByShopIdAndIsDefaultTrue}，转换器透传默认
-     * 标记重建走 9 参构造器）。
+     * 默认模板定位：JPA 派生查询（{@code findByShopIdAndIsDefaultTrue}——
+     * 租户过滤与 shop_id 定位共同生效，fail-closed）→ 转换器透传默认标记
+     * 重建（走 9 参构造器）；行缺失返回 null（消费侧防御拒绝承载，不静默
+     * 降级）。返回对象未登记变更追踪（仅供读取，与 {@link #listByShopId}
+     * 同惯例）。
      */
     @Override
     public FreightTemplate findDefaultByShopId(Long shopId) {
-        throw new UnsupportedOperationException(
-                "red phase: findDefaultByShopId pending");
+        return jpaRepository.findByShopIdAndIsDefaultTrue(shopId)
+                .map(po -> convertor.convertToRoot(po, null))
+                .orElse(null);
     }
 }

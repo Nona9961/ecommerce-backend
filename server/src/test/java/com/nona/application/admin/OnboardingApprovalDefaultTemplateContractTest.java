@@ -1,6 +1,8 @@
 package com.nona.application.admin;
 
+import com.nona.domain.catalog.entity.FreightRuleType;
 import com.nona.domain.catalog.entity.FreightTemplate;
+import com.nona.domain.catalog.entity.FreightTemplateStatus;
 import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.entity.ShopStatus;
 import com.nona.domain.catalog.factory.FreightTemplateFactory;
@@ -13,6 +15,7 @@ import com.nona.domain.identity.repo.MerchantApplicationRepository;
 import com.nona.events.Dispatcher;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.replica.LastWriteMarker;
 import com.nona.inf.security.AuthUserCache;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +24,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import java.util.concurrent.Callable;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -40,7 +49,22 @@ import static org.mockito.Mockito.when;
  * 验证。
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class OnboardingApprovalDefaultTemplateContractTest {
+
+    /**
+     * 提权事务模板直通（契约测试装配）：elevatedInTransaction 在真实链路
+     * 承担事务与提权作用域，契约测试以直通回调代替——编排调用面验证
+     * 聚焦，事务/提权语义由既有集成测试以真实链路覆盖。
+     *
+     * @param invocation mock 调用点
+     * @return 回调执行结果
+     * @throws Exception 回调异常透传
+     */
+    private static Object passthroughElevatedCallback(InvocationOnMock invocation) throws Exception {
+        final Callable<?> callable = invocation.getArgument(1);
+        return callable.call();
+    }
 
     /**
      * 测试申请 ID（mock 聚合，无库内落点）
@@ -91,23 +115,39 @@ class OnboardingApprovalDefaultTemplateContractTest {
     @Mock
     private LastWriteMarker lastWriteMarker;
 
+    @Mock
+    private TenantPrivilege tenantPrivilege;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     private OnboardingReviewUseCase reviewUseCase;
 
     /**
-     * 装配用例与申请/店铺桩：申请待审、店铺名取自申请资料。
+     * 装配用例与申请/店铺桩：申请待审、店铺名取自申请资料、默认模板工厂
+     * 产出就位、提权事务模板直通回调（elevatedInTransaction 直接执行
+     * 编排主体——契约测试聚焦编排调用面，事务/提权语义由既有集成测试
+     * 以真实链路覆盖）。
      */
     @BeforeEach
-    void setUp() {
+    void setUp() throws Exception {
         reviewUseCase = new OnboardingReviewUseCase(
                 applicationRepository, shopFactory, shopRepository,
                 freightTemplateFactory, freightTemplateRepository,
-                accountShopRelRepository, authUserCache, dispatcher, lastWriteMarker);
+                accountShopRelRepository, authUserCache, dispatcher, lastWriteMarker,
+                tenantPrivilege, transactionTemplate);
+        when(tenantPrivilege.elevatedInTransaction(any(TransactionTemplate.class), any()))
+                .thenAnswer(OnboardingApprovalDefaultTemplateContractTest::passthroughElevatedCallback);
         final MerchantApplication application = org.mockito.Mockito.mock(MerchantApplication.class);
         when(applicationRepository.getByID(APPLICATION_ID)).thenReturn(application);
         when(application.getAccountId()).thenReturn(ACCOUNT_ID);
         when(application.getShopName()).thenReturn("店铺甲");
         when(shopFactory.createShop("店铺甲", null, null))
                 .thenReturn(new Shop(SHOP_ID, "店铺甲", null, null, ShopStatus.NORMAL));
+        when(freightTemplateFactory.createDefaultFreightTemplate(SHOP_ID))
+                .thenReturn(new FreightTemplate(90001L, SHOP_ID, "默认运费模板",
+                        FreightRuleType.FREE, null, null, null,
+                        FreightTemplateStatus.ENABLED, true));
     }
 
     /**

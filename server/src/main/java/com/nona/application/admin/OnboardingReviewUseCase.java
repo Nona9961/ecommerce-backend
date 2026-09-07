@@ -4,21 +4,26 @@ import com.nona.api.admin.OnboardingAuditItem;
 import com.nona.api.common.OnboardingStatus;
 import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
+import com.nona.domain.catalog.entity.FreightTemplate;
+import com.nona.domain.catalog.entity.Shop;
 import com.nona.domain.catalog.factory.FreightTemplateFactory;
 import com.nona.domain.catalog.factory.ShopFactory;
 import com.nona.domain.catalog.repo.FreightTemplateRepository;
 import com.nona.domain.catalog.repo.ShopRepository;
 import com.nona.domain.identity.entity.ApplicationStatus;
 import com.nona.domain.identity.entity.MerchantApplication;
+import com.nona.domain.identity.ports.ApplicationApprovedEvent;
 import com.nona.domain.identity.repo.AccountShopRelRepository;
 import com.nona.domain.identity.repo.MerchantApplicationRepository;
 import com.nona.events.Dispatcher;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.replica.LastWriteMarker;
 import com.nona.inf.security.AuthUserCache;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
@@ -90,6 +95,17 @@ public class OnboardingReviewUseCase {
     private final LastWriteMarker lastWriteMarker;
 
     /**
+     * 提权工具（跨租户写路径提权事务编排：默认模板归新店铺租户，
+     * 平台视角无店铺上下文——提权罩事务铁律，与商品审核用例同形态）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
+     * 事务模板（提权事务编排载体）
+     */
+    private final TransactionTemplate transactionTemplate;
+
+    /**
      * 构造平台审核用例。
      *
      * @param applicationRepository 入驻申请仓储
@@ -101,6 +117,8 @@ public class OnboardingReviewUseCase {
      * @param authUserCache         用户上下文缓存
      * @param dispatcher            事件分发器
      * @param lastWriteMarker       写后窗口埋点（审核通过后标记商家）
+     * @param tenantPrivilege       提权工具（默认模板租户写编排）
+     * @param transactionTemplate   事务模板（提权事务编排载体）
      */
     public OnboardingReviewUseCase(MerchantApplicationRepository applicationRepository,
                                    ShopFactory shopFactory,
@@ -110,7 +128,9 @@ public class OnboardingReviewUseCase {
                                    AccountShopRelRepository accountShopRelRepository,
                                    AuthUserCache authUserCache,
                                    Dispatcher dispatcher,
-                                   LastWriteMarker lastWriteMarker) {
+                                   LastWriteMarker lastWriteMarker,
+                                   TenantPrivilege tenantPrivilege,
+                                   TransactionTemplate transactionTemplate) {
         this.applicationRepository = applicationRepository;
         this.shopFactory = shopFactory;
         this.shopRepository = shopRepository;
@@ -120,6 +140,8 @@ public class OnboardingReviewUseCase {
         this.authUserCache = authUserCache;
         this.dispatcher = dispatcher;
         this.lastWriteMarker = lastWriteMarker;
+        this.tenantPrivilege = tenantPrivilege;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
@@ -148,24 +170,49 @@ public class OnboardingReviewUseCase {
     }
 
     /**
-     * 审核通过（同事务开店编排，红阶段签名冻结——实现缺失）：申请行锁内
-     * 加载聚合 → 状态机迁移（pending → approved）→ 落库 → 创建店铺（名称
-     * 取申请资料，logo/简介恒空）→ 店铺落库 → <b>创建店铺默认运费模板
+     * 审核通过（同事务开店编排，提权事务形态）：申请行锁内加载聚合 →
+     * 状态机迁移（pending → approved）→ 落库 → 创建店铺（名称取申请资料，
+     * logo/简介恒空）→ 店铺落库 → <b>创建店铺默认运费模板
      * （{@link FreightTemplateFactory#createDefaultFreightTemplate} + 落库，
-     * tenant=shopId；顺序在店铺落库之后——契约测试钉死）</b> → 账号-店铺
-     * 关联绑定（首绑；幂等已存在不视为失败）→ 同步发布审核通过领域事件
-     * （通知旁路，既有契约保留）→ 主动失效商家用户上下文缓存（末位；
-     * Redis 不参与本地事务，提前失效无害——miss 回填重建）。任一工序失败 →
-     * 本地事务整体回滚（申请迁移/店铺/默认模板/关联全部撤销）。
+     * tenant=shopId；顺序在店铺落库之后）</b> → 账号-店铺关联绑定（首绑；
+     * 幂等已存在不视为失败）→ 同步发布审核通过领域事件（通知旁路，既有
+     * 契约保留）→ 主动失效商家用户上下文缓存（末位；Redis 不参与本地事务，
+     * 提前失效无害——miss 回填重建）。任一工序失败 → 本地事务整体回滚
+     * （申请迁移/店铺/默认模板/关联全部撤销）。
+     * <p>
+     * 默认模板归新店铺租户（tenant=shopId），平台审核视角无店铺请求上下文
+     * ——跨租户写按既有形态（商品审核同构）以提权事务编排：仓储在提权
+     * 作用域内对默认模板行显式定型租户归属，提权罩事务铁律（
+     * {@code elevatedInTransaction}）。
      *
      * @param applicationId 申请 ID
      * @param reviewerId    审核人账号 ID（认证上下文）
      * @return 新店铺 ID（审核通过即开店成功的结果契约）
      */
-    @Transactional
     public Long approve(Long applicationId, Long reviewerId) {
-        throw new UnsupportedOperationException(
-                "red phase: approve pending (默认模板创建步骤)");
+        try {
+            return tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
+                applicationRepository.lockApplication(applicationId);
+                final MerchantApplication application = require(applicationId);
+                application.approve(reviewerId);
+                applicationRepository.save(application);
+                final Shop shop = shopFactory.createShop(application.getShopName(), null, null);
+                shopRepository.save(shop);
+                final FreightTemplate defaultTemplate =
+                        freightTemplateFactory.createDefaultFreightTemplate(shop.getId());
+                freightTemplateRepository.save(defaultTemplate);
+                accountShopRelRepository.bind(application.getAccountId(), shop.getId());
+                dispatcher.dispatch(new ApplicationApprovedEvent(
+                        application.getId(), application.getAccountId(), application.getShopName()));
+                authUserCache.delete(application.getAccountId());
+                lastWriteMarker.markWrite(application.getAccountId());
+                return shop.getId();
+            });
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("审核通过事务失败", e);
+        }
     }
 
     /**

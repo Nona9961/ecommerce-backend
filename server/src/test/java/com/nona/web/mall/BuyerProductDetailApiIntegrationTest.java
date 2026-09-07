@@ -3,15 +3,19 @@ package com.nona.web.mall;
 import com.nona.api.auth.Portal;
 import com.nona.domain.catalog.entity.CategoryStatus;
 import com.nona.domain.catalog.entity.BrandStatus;
+import com.nona.domain.catalog.entity.FreightRuleType;
+import com.nona.domain.catalog.entity.FreightTemplateStatus;
 import com.nona.domain.catalog.entity.ProductStatus;
 import com.nona.domain.catalog.entity.ShopStatus;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.po.catalog.BrandPO;
+import com.nona.inf.persistence.po.catalog.FreightTemplatePO;
 import com.nona.inf.persistence.po.catalog.PlatformCategoryPO;
 import com.nona.inf.persistence.po.catalog.ProductPO;
 import com.nona.inf.persistence.po.catalog.ShopPO;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.repository.jpa.BrandJpaRepository;
+import com.nona.inf.persistence.repository.jpa.FreightTemplateJpaRepository;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.PlatformCategoryJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductAttributeJpaRepository;
@@ -129,6 +133,9 @@ class BuyerProductDetailApiIntegrationTest {
     @Autowired
     private BrandJpaRepository brandJpaRepository;
 
+    @Autowired
+    private FreightTemplateJpaRepository freightTemplateJpaRepository;
+
     @MockitoBean
     private AuthUserCache authUserCache;
 
@@ -143,12 +150,24 @@ class BuyerProductDetailApiIntegrationTest {
             attributeJpaRepository.deleteAll();
             imageJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
+            freightTemplateJpaRepository.deleteAll();
         });
         categoryJpaRepository.deleteAll();
         brandJpaRepository.deleteAll();
         categoryJpaRepository.save(categoryPo(CATEGORY_ENABLED));
         brandJpaRepository.save(brandPo(BRAND_ENABLED));
         shopJpaRepository.save(shopPo(SHOP_A_ID, "店铺A"));
+        tenantPrivilege.elevated(() -> {
+            final FreightTemplatePO defaultPo = new FreightTemplatePO();
+            defaultPo.setId(IDUtils.generateID());
+            defaultPo.setTenantID(String.valueOf(SHOP_A_ID));
+            defaultPo.setShopId(SHOP_A_ID);
+            defaultPo.setName("默认运费模板");
+            defaultPo.setRuleType(FreightRuleType.FREE);
+            defaultPo.setStatus(FreightTemplateStatus.ENABLED);
+            defaultPo.setIsDefault(true);
+            freightTemplateJpaRepository.save(defaultPo);
+        });
         when(authUserCache.get(anyLong())).thenReturn(Optional.empty());
         when(authUserCache.get(BUYER_UID)).thenReturn(Optional.of(
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("BUYER"), List.of())));
