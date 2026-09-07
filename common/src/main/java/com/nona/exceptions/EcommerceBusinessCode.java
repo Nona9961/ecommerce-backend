@@ -548,6 +548,32 @@ public enum EcommerceBusinessCode {
     PAYMENT_GATEWAY_CALLBACK_INVALID("payment.gateway_callback_invalid", 400),
 
     /**
+     * 支付域：发起支付校验不通过（主单不可支付——已支付/已取消/已关闭等非待支付
+     * 状态再发起；或同主单已存在非待支付支付单不可复用）——支付发起前的
+     * 主单状态防线（C1 历史遗留接线）。
+     */
+    PAYMENT_ORDER_INVALID("payment.order_invalid", 400),
+
+    /**
+     * 支付域：支付单非法状态迁移（TD-11 防线二状态守卫——终态再迁移、已支付
+     * 关单、同号重复回调幂等命中等违例；同号重复回调由编排捕获后按已处理
+     * 应答渠道，B8.2 重复回调只生效一次）。
+     */
+    PAYMENT_STATUS_ILLEGAL("payment.status_illegal", 400),
+
+    /**
+     * 支付域：回调金额与支付单金额不符（回调金额必须 = 支付单金额 = 主单实付；
+     * 渠道事故优先显式拒绝，不做半额/超额入账）。
+     */
+    PAYMENT_AMOUNT_MISMATCH("payment.amount_mismatch", 400),
+
+    /**
+     * 支付域：渠道流水号异号冲突（channel_txn_no 已被占用且与本次回调不同——
+     * 渠道事故，冲突语义 409，优先于状态守卫诊断）。
+     */
+    PAYMENT_CALLBACK_DUPLICATE("payment.callback_duplicate", 409),
+
+    /**
      * 搜索域：价格区间非法（下界或上界为负值，或区间倒挂即上界小于下界；
      * 搜索检索条件校验位拒绝，B5.3 价格筛选入参把关）。
      */

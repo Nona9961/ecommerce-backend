@@ -38,4 +38,23 @@ public interface PaymentPort {
      * @return 待支付支付单视图（含 payNo/金额/截止时间）
      */
     PendingPayment createPendingPayment(Long masterOrderId, long paidAmount, long payTimeoutMillis);
+
+    /**
+     * 待支付支付单关单（关单契约声明，实现接线归支付域落位；消费方 = 主动
+     * 取消与支付超时编排，同事务：order.cancel → 库存回滚 → closePay）。
+     * <p>
+     * 语义（与支付单聚合状态机 {@code close()} 对齐，端口层补装载与不存在
+     * 呈现）：
+     * <ul>
+     *     <li>待支付 / 已失败 → 关闭（失败单显式收口，不仅靠超时）；</li>
+     *     <li>已关闭 → 幂等成功（超时调度与主动取消重放不报错，B8.3 超时
+     *         handler 幂等语义）；</li>
+     *     <li>已支付 → 拒绝（资金已锁定，关单走退款流 退款流；
+     *         {@code payment.status_illegal}）；</li>
+     *     <li>支付单不存在 → {@code payment.not_found}（404）。</li>
+     * </ul>
+     *
+     * @param payNo 支付单号（必填非空）
+     */
+    void closePay(String payNo);
 }
