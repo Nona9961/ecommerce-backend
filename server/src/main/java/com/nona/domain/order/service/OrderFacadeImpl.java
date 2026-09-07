@@ -12,9 +12,9 @@ import com.nona.exceptions.EcommerceBusinessCode;
 import java.util.List;
 
 /**
- * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel；onPaid /
- * markShipped / autoComplete 为其他编排 WU 消费面，本类仅保留冻结签名，
- * 实现体未接线）。
+ * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete；
+ * onPaid / markShipped 为其他编排 WU 消费面，本类仅保留冻结签名，实现体
+ * 未接线）。
  * <p>
  * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约，绿阶段实现依据）：
  * <ul>
@@ -30,8 +30,21 @@ import java.util.List;
  *         已取消订单再取消的幂等成功语义<b>不落本类</b>——由编排层短路
  *         （编排先查主单状态，CANCELLED 直接返回），本类保持「非法状态
  *         拒绝」的契约语义（供防御与独立消费方）；</li>
- *     <li><b>onPaid / markShipped / autoComplete</b>：签名冻结（WU-27），
- *         由对应编排 WU 接线，本类实现体未接线（UOE）。</li>
+ *     <li><b>autoComplete</b>：按 subOrderId 装载子单——不存在 →
+ *         {@code order.sub_not_found}（404，编排层已先短路，此处为契约
+ *         防御）；按子单归属主单装载主单——不存在 →
+ *         {@code order.master_not_found}（404，防御）；按 master_order_id
+ *         装载子单集合——为空 → {@code order.sub_not_found}（防御装配错误）；
+ *         目标子单 {@link SubOrder#markCompleted()}（仅已发货可完成，未发货
+ *         直接完成/重复完成为非法迁移——聚合守卫 {@code order.sub_status_illegal}）；
+ *         全部推进成功后按子单状态投影刷新主单整体状态（全部完成 → 主单
+ *         已完成，多子单部分完成 → 部分发货中间态，派生见
+ *         {@link MasterOrder#deriveStatus}），子单与主单同批保存。已完成
+ *         子单再完成的幂等成功语义<b>不落本类</b>——由编排层短路
+ *         （编排先查目标子单状态，COMPLETED 直接返回），本类保持「非法
+ *         状态拒绝」的契约语义（供防御与独立消费方）；</li>
+ *     <li><b>onPaid / markShipped</b>：签名冻结（WU-27），由对应编排 WU
+ *         接线，本类实现体未接线（UOE）。</li>
  * </ul>
  * 库存回滚编排（取消场景）不落本类——跨域动作按应用层用例承载（编排
  * 用例经 InventoryFacade 逐子单回滚，与预占对称）。
@@ -128,13 +141,45 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     /**
-     * 收货超时自动完成（签名冻结，消费者：收货超时调度；实现随完成用例
-     * WU 接线，本阶段未实现）。
+     * 完成推进——买家确认收货（B9.3）与收货超时自动完成（B9.4③）共用
+     * （订单侧状态推进；事件发布与幂等短路见确认收货用例）。
+     * <p>
+     * 编排语义（绿阶段实现依据，见类 javadoc）：按 subOrderId 装载子单
+     * （不存在 404）→ 按归属主单装载主单（不存在 404）→ 装载子单集合
+     * （空 404 防御）→ 目标子单 markCompleted（聚合守卫仅已发货可完成）
+     * → 主单按子单投影派生（全部完成 → 已完成，部分完成 → 部分发货）
+     * → 子单与主单同批保存。已完成子单重复完成的幂等短路由编排层承载，
+     * 本方法对已完成子单按非法迁移拒绝（防御面）。
      *
-     * @param subOrderId 子订单 ID
+     * @param subOrderId 子订单 ID（已发货 → 已完成 + 主单派生）
      */
     @Override
     public void autoComplete(Long subOrderId) {
-        throw new UnsupportedOperationException("autoComplete 实现随完成编排 WU 接线");
+        final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
+        if (subOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "子订单不存在", 404);
+        }
+        final MasterOrder masterOrder =
+                masterOrderRepository.getByID(subOrder.getMasterOrderId());
+        if (masterOrder == null) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
+                    "主订单不存在", 404);
+        }
+        final List<SubOrder> subOrders =
+                subOrderRepository.getByMasterOrderId(subOrder.getMasterOrderId());
+        if (subOrders == null || subOrders.isEmpty()) {
+            throw new BusinessException(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code(),
+                    "主订单下无子订单（装配异常）", 404);
+        }
+        subOrder.markCompleted();
+        final List<SubOrderStatus> projection = subOrders.stream()
+                .map(SubOrder::getStatus)
+                .toList();
+        masterOrder.deriveStatus(projection);
+        for (final SubOrder item : subOrders) {
+            subOrderRepository.save(item);
+        }
+        masterOrderRepository.save(masterOrder);
     }
 }

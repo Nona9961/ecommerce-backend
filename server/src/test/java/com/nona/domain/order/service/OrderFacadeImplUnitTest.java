@@ -30,17 +30,21 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * OrderFacade 实现侧场景测试（cancel 接线：订单侧状态推进契约，红阶段）。
+ * OrderFacade 实现侧场景测试（cancel 接线 + autoComplete 完成接线：订单
+ * 侧状态推进契约，红阶段）。
  * <p>
- * 覆盖：happy——待支付子单全部取消 + 主单派生已取消 + 子单/主单保存
- * （reason 透传无副作用）；critical——多子单整单取消派生、子单集合为空
- * 防御 404；fail——主单不存在 404、已支付/已发货/已取消子单非法迁移拒绝
- * （B8.6 ②③ 守卫内建，无任何保存）。库存回滚/支付关单不在本类（编排
- * 层承载，见取消用例测试）。
+ * 覆盖：cancel——happy 待支付整单取消 + 主单派生 + 保存（reason 透传
+ * 无副作用）；critical 子单集合为空防御 404；fail 主单不存在 404、已
+ * 支付/已发货/已取消/混态子单非法迁移拒绝（B8.6 ②③ 守卫内建，无任何
+ * 保存）。autoComplete——happy 已发货子单完成 + 主单派生已完成 + 保存；
+ * critical 多子单部分完成中间态派生；fail 子单不存在/主单不存在 404、
+ * 未发货/重复完成守卫拒绝。库存回滚/支付关单不在本类（编排层承载，
+ * 见取消/完成用例测试）；完成事件发布不在本类（编排层承载，见完成
+ * 用例测试）。
  * <p>
  * 依赖装配：仓储以真实对象 + mock 承载装载面（子单/主单为真实聚合，
- * 状态迁移守卫与派生真实执行）；红阶段失败原因 = 实现缺失（cancel 方法
- * 体 UOE）。
+ * 状态迁移守卫与派生真实执行）；红阶段失败原因 = 实现缺失（cancel /
+ * autoComplete 方法体 UOE）。
  *
  * @author nona9961
  */
@@ -288,6 +292,141 @@ class OrderFacadeImplUnitTest {
                 .isInstanceOfSatisfying(BusinessException.class, error -> {
                     assertThat(error.getBusinessCode())
                             .isEqualTo(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code());
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /* ================= autoComplete（完成推进接线，本 WU） ================= */
+
+    /**
+     * happy-3 完成推进全链路：已发货子单标记完成（真实聚合迁移）＋主单
+     * 按全部子单投影派生已完成（单子单主单）＋子单与主单保存（同事务
+     * 编排面）。
+     * <p>
+     * 装配：getByID 与 getByMasterOrderId 桩返回同一真实实例（共享引用
+     * ——推进与投影的一致性由真实聚合状态承载，与 cancel 用例同构）。
+     */
+    @Test
+    @DisplayName("已发货子单完成：markCompleted + 主单派生已完成 + 保存")
+    void autoComplete_shippedSubOrder_completedAndSaved() {
+        final SubOrder shipped = subWithStatus(SubOrderStatus.SHIPPED, 5001L);
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(shipped);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(shipped));
+
+        orderFacade.autoComplete(SUB_A);
+
+        final InOrder inOrder = inOrder(subOrderRepository, masterOrderRepository);
+        inOrder.verify(subOrderRepository).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        inOrder.verify(masterOrderRepository).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+        assertThat(subOrderRepository.getByID(SUB_A).getStatus())
+                .isEqualTo(SubOrderStatus.COMPLETED);
+        assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
+                .isEqualTo(MasterOrderStatus.COMPLETED);
+    }
+
+    /**
+     * critical-2 多子单主单部分完成：SUB_A 完成 + SUB_B 未完成 → 主单
+     * 派生部分发货（中间态正确性——主单完成须全部子单完成，派生钉死）。
+     */
+    @Test
+    @DisplayName("多子单部分完成：主单派生部分发货（中间态）")
+    void autoComplete_multiSubOrder_partialDerived() {
+        final SubOrder shippedA = subWithStatus(SubOrderStatus.SHIPPED, 5001L);
+        final SubOrder shippedB = new SubOrder(SUB_B, MASTER_ID, SHOP_B, "SO202609070002",
+                address(), amount(10000L, 0L, 10000L),
+                List.of(item(3005L, 10000L, 1)), SubOrderStatus.SHIPPED, 5002L);
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(shippedA);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(shippedA, shippedB));
+
+        orderFacade.autoComplete(SUB_A);
+
+        assertThat(subOrderRepository.getByID(SUB_A).getStatus())
+                .isEqualTo(SubOrderStatus.COMPLETED);
+        assertThat(subOrderRepository.getByMasterOrderId(MASTER_ID).get(1).getStatus())
+                .isEqualTo(SubOrderStatus.SHIPPED);
+        assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
+                .isEqualTo(MasterOrderStatus.PARTIALLY_SHIPPED);
+    }
+
+    /**
+     * fail-6 子单不存在：404 order.sub_not_found（完成推进按子单定位，
+     * 防御装配错误），无保存动作。
+     */
+    @Test
+    @DisplayName("子单不存在：404（完成推进防御）")
+    void autoComplete_subNotFound_rejected() {
+        when(subOrderRepository.getByID(999L)).thenReturn(null);
+
+        assertThatThrownBy(() -> orderFacade.autoComplete(999L))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_NOT_FOUND.code());
+                    assertThat(error.getHttpStatus()).isEqualTo(404);
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * fail-7 未发货子单完成（PAID）：非法迁移拒绝（仅已发货可完成——
+     * 未发货直接完成/提前完成为非法，B9.3 ① 语义内建），无保存动作。
+     */
+    @Test
+    @DisplayName("未发货子单完成：非法迁移拒绝")
+    void autoComplete_paidSubOrder_rejected() {
+        final SubOrder paid = subWithStatus(SubOrderStatus.PAID, null);
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(paid);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(paid));
+
+        assertThatThrownBy(() -> orderFacade.autoComplete(SUB_A))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code());
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * fail-8 已完成子单重复完成（契约防御面——编排层幂等短路先行，直接
+     * 消费本实现的路径仍按非法迁移拒绝）。
+     */
+    @Test
+    @DisplayName("已完成子单重复完成：非法迁移拒绝（防御面）")
+    void autoComplete_completedSubOrder_rejected() {
+        final SubOrder completed = subWithStatus(SubOrderStatus.COMPLETED, 5001L);
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(completed);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(completed));
+
+        assertThatThrownBy(() -> orderFacade.autoComplete(SUB_A))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_SUB_STATUS_ILLEGAL.code());
+                });
+        verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
+    }
+
+    /**
+     * fail-9 子单存在但主单缺失：404 order.master_not_found（完成推进
+     * 需主单派生落库，缺失为数据异常防御），无保存动作。
+     */
+    @Test
+    @DisplayName("子单存在但主单缺失：404（防御）")
+    void autoComplete_masterMissing_rejected() {
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(subWithStatus(SubOrderStatus.SHIPPED, 5001L));
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(null);
+
+        assertThatThrownBy(() -> orderFacade.autoComplete(SUB_A))
+                .isInstanceOfSatisfying(BusinessException.class, error -> {
+                    assertThat(error.getBusinessCode())
+                            .isEqualTo(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code());
+                    assertThat(error.getHttpStatus()).isEqualTo(404);
                 });
         verify(subOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
         verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
