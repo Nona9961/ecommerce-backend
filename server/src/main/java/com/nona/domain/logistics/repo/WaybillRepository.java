@@ -3,6 +3,7 @@ package com.nona.domain.logistics.repo;
 import com.nona.domain.logistics.entity.Waybill;
 import com.nona.persistence.BaseRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,4 +31,16 @@ public interface WaybillRepository extends BaseRepository<Long, Waybill> {
      * @return 该子单的在途运单（未签收）；不存在返回空
      */
     Optional<Waybill> findInTransitBySubOrderId(Long subOrderId);
+
+    /**
+     * 在途运单全量扫描面（模拟推进器的扫描锚点）：返回全部未签收运单
+     * （待发货/已发货/运输中——「一子单一在途」语义下每子单至多一条）。
+     * <p>
+     * 数据面/业务面分工：本契约仅承载「在途全量」的数据扫描，到期
+     * 判定（推进节奏/当前状态分派）收敛在模拟推进器（业务面）——查询
+     * 契约不感知节奏配置，避免节奏演进穿过仓储面。
+     *
+     * @return 全部在途运单（不含已签收终态）；无在途返回空列表
+     */
+    List<Waybill> findInTransit();
 }
