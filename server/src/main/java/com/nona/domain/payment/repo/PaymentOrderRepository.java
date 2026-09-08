@@ -1,7 +1,11 @@
 package com.nona.domain.payment.repo;
 
 import com.nona.domain.payment.entity.PaymentOrder;
+import com.nona.domain.payment.entity.PaymentOrderStatus;
 import com.nona.persistence.BaseRepository;
+
+import java.time.Instant;
+import java.util.List;
 
 /**
  * 支付单仓储接口：支付单聚合根的持久化契约（payment_order 主表 +
@@ -47,4 +51,48 @@ public interface PaymentOrderRepository extends BaseRepository<Long, PaymentOrde
      *         处理，order_id 唯一约束兜底并发双建）
      */
     PaymentOrder findByOrderId(Long orderId);
+
+    /**
+     * 支付超时扫描面：返回状态处于预期态（PENDING_PAYMENT）且截止时间
+     * 已到期（timeout_at &lt;= now，含等号边界）的候选，按截止时间升序
+     * 至多返回 limit 条（走 (status, timeout_at) 复合索引）。
+     * <p>
+     * 条件语义（接线 WU 无漂移落地依据）——{@code status = 预期态 AND
+     * timeout_at <= now}；不含 claimed 过滤（引擎事务语义保证无死认领
+     * 行，见引擎契约）；调用方（支付超时数据端口）传入预期态与扫描
+     * 时刻，本接口不写死任何状态值。
+     *
+     * @param status 预期态（支付超时时 = PENDING_PAYMENT，由调用方传入）
+     * @param now    扫描时刻（到期判定边界，含等号）
+     * @param limit  单轮扫描上限（引擎 SCAN_LIMIT 语义透传）
+     * @return 到期候选；无到期返回空列表
+     */
+    List<PaymentOrder> findDueByStatusAndTimeoutAtBefore(PaymentOrderStatus status,
+                                                         Instant now, int limit);
+
+    /**
+     * 乐观锁认领（支付超时数据端口 claim 的条件 UPDATE 落地面）：等价于
+     * {@code UPDATE ... SET claimed = 1 WHERE id = ? AND claimed = 0
+     * AND status = expectedStatus}。
+     * <p>
+     * 认领时刻复查状态条件：候选可能在扫描后被并发路径迁移（买家主动
+     * 支付/取消已同步清除截止时间、或他方调度器已抢先认领），条件不满足
+     * 即认领失败。影响行数 1 → true，0 → false。
+     *
+     * @param id             候选主键（payment_order 主键）
+     * @param expectedStatus 认领复查的预期态（支付超时时 = PENDING_PAYMENT）
+     * @return true = 认领成功；false = 已被认领或状态已迁移
+     */
+    boolean claimTimeout(Long id, PaymentOrderStatus expectedStatus);
+
+    /**
+     * 处理成功后清除截止时间（支付超时数据端口 clearDeadline 的落地面）：
+     * 等价于 {@code UPDATE ... SET timeout_at = NULL, timeout_type = NULL,
+     * claimed = 0 WHERE id = ?}——该行从此不再被扫描命中；成功路径同时
+     * 清除认领位，不残留处理痕迹（无条件幂等：目标不存在/已清除均为
+     * 无操作成功）。
+     *
+     * @param id 候选主键（payment_order 主键）
+     */
+    void clearTimeoutDeadline(Long id);
 }

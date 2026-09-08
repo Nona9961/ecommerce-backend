@@ -950,6 +950,22 @@ class PlaceOrderUseCaseUnitTest {
         }
 
         @Override
+        public List<SubOrder> findDueByStatusAndTimeoutAtBefore(SubOrderStatus status,
+                                                                Instant now, int limit) {
+            throw new UnsupportedOperationException("红阶段占位：超时扫描面非本桩服务范围（归属仓储接线 WU）");
+        }
+
+        @Override
+        public boolean claimTimeout(Long id, SubOrderStatus expectedStatus) {
+            throw new UnsupportedOperationException("红阶段占位：超时认领非本桩服务范围（归属仓储接线 WU）");
+        }
+
+        @Override
+        public void clearTimeoutDeadline(Long id) {
+            throw new UnsupportedOperationException("红阶段占位：超时清除非本桩服务范围（归属仓储接线 WU）");
+        }
+
+        @Override
         public SubOrder getByID(Long id) {
             return null;
         }
