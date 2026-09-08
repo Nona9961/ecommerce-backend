@@ -40,9 +40,9 @@ import static org.assertj.core.api.Assertions.fail;
  * <ul>
  * <li>红阶段红态 = {@link #migrationBaselineAfterV1()} 红（红因 = Flyway V1 未落库，
  *     非连接/权限/语法问题）</li>
- * <li>绿阶段 V1 落库后：基线用例按报告「冒烟清单」改为断言 24 表 + 探针表共存
- *     （精确集：24 张 PO 映射表全部存在且无多余业务表，cdc_probe 保留不受 V1/
- *     Flyway 触碰——探针表不入 V1 的部署位契约），其余用例保持常绿</li>
+ * <li>绿阶段 V1/V2 落库后：基线用例按报告「冒烟清单」改为断言 33 表 + 探针表共存
+ *     （精确集：33 张 PO 映射表全部存在且无多余业务表，cdc_probe 保留不受 V1/V2/
+ *     Flyway 触碰——探针表不入迁移脚本的部署位契约），其余用例保持常绿</li>
  * </ul>
  */
 class MigrationSmokeTest {
@@ -53,7 +53,8 @@ class MigrationSmokeTest {
     private static final String USER = "ecom_app";
     private static final String PASSWORD_ENV = "ECOM_DB_PASSWORD";
 
-    /** PO 映射全集（identity 9 / catalog 11 / inventory 2 / order 2；探针表 cdc_probe 不入 V1） */
+    /** PO 映射全集（identity 9 / catalog 11 / inventory 2 / order 3 / payment 4 /
+     *  logistics 2；探针表 cdc_probe 不入 V1） */
     private static final Set<String> PO_TABLES = Set.of(
             // identity (9)
             "account", "account_shop_rel", "address_book", "address", "assignment",
@@ -64,8 +65,12 @@ class MigrationSmokeTest {
             "shop_category", "shop", "product_sku",
             // inventory (2)
             "inventory_item", "inventory_log",
-            // order (2)
-            "cart", "cart_item");
+            // order (V1 cart 2 + V2 trading 3)
+            "cart", "cart_item", "master_order", "sub_order", "order_item",
+            // payment (4)
+            "payment_order", "payment_callback_log", "refund_order", "refund_callback_log",
+            // logistics (2)
+            "waybill", "waybill_track");
 
     /** 唯一约束全集（@Table/@UniqueConstraint 手审导出；断言名 + 列） */
     private static final List<String> UNIQUE_CONSTRAINTS = List.of(
@@ -75,20 +80,31 @@ class MigrationSmokeTest {
             "uk_brand_name", "uk_platform_category_name", "uk_product_attribute_key",
             "uk_product_edit_version_no", "uk_product_shop_category_rel",
             "uk_product_sku_spec_hash", "uk_inventory_item_sku",
-            "uk_inventory_log_order_sku_type", "uk_cart_buyer", "uk_cart_item_buyer_sku");
+            "uk_inventory_log_order_sku_type", "uk_cart_buyer", "uk_cart_item_buyer_sku",
+            // V2 trading (WU-54)：uk 9
+            "uk_master_order_order_no", "uk_sub_order_sub_order_no", "uk_order_item_sub_sku",
+            "uk_payment_order_pay_no", "uk_payment_order_order_id",
+            "uk_payment_order_channel_txn_no", "uk_refund_order_refund_no",
+            "uk_refund_order_sub_order_id", "uk_waybill_sub_order_in_transit");
 
     /** 索引全集（@Index 手审导出） */
     private static final List<String> INDEXES = List.of(
             "idx_address_book", "idx_freight_template_shop", "idx_product_attribute_product",
             "idx_product_edit_version_product", "idx_product_image_product", "idx_product_shop",
             "idx_product_shop_category_rel_product", "idx_shop_category_shop",
-            "idx_product_sku_product", "idx_inventory_log_sku", "idx_cart_item_cart");
+            "idx_product_sku_product", "idx_inventory_log_sku", "idx_cart_item_cart",
+            // V2 trading (WU-54)：idx 7
+            "idx_sub_order_status_timeout", "idx_sub_order_shop", "idx_order_item_sub_order",
+            "idx_payment_order_status_timeout", "idx_payment_callback_log_payment_order",
+            "idx_refund_callback_log_refund_order", "idx_waybill_track_waybill");
 
-    /** tenant-scoped（@TenantId 归属，TenantScopedBasePO 子类）：10 表含 tenant_id */
+    /** tenant-scoped（@TenantId 归属，TenantScopedBasePO 子类）：12 表含 tenant_id */
     private static final Set<String> TENANT_SCOPED_TABLES = Set.of(
             "freight_template", "product_attribute", "product_edit_version", "product_image",
             "product", "product_shop_category_rel", "shop_category", "product_sku",
-            "inventory_item", "inventory_log");
+            "inventory_item", "inventory_log",
+            // V2 trading (WU-54)：tenant=shopId 仅 order 域主从两表（D1）
+            "sub_order", "order_item");
 
     /**
      * 测试支撑表（test profile 专属 Flyway R 迁移 R__tenant_test_tables.sql 建立）：
@@ -140,9 +156,9 @@ class MigrationSmokeTest {
     }
 
     /**
-     * 迁移基线断言（红阶段红态锚 → 绿阶段基线契约）：V1 落库后 ecommerce 库
-     * schema = 24 张 PO 映射表 + 部署位探针表 cdc_probe + Flyway 元数据表
-     * flyway_schema_history 的必备集——24 表全存在、cdc_probe 仍保留（V1 不管理、
+     * 迁移基线断言（红阶段红态锚 → 绿阶段基线契约）：V1/V2 落库后 ecommerce 库
+     * schema = 33 张 PO 映射表 + 部署位探针表 cdc_probe + Flyway 元数据表
+     * flyway_schema_history 的必备集——33 表全存在、cdc_probe 仍保留（迁移脚本不管理、
      * Flyway migrate 不触碰）；并断言无上述集合与测试支撑表之外的任何多余业务表
      * （测试支撑表随 test profile R 迁移存在与否均可，两种运行形态都绿）。
      */
@@ -151,7 +167,7 @@ class MigrationSmokeTest {
         try (Connection conn = open()) {
             Set<String> tables = baseTables(conn);
             assertThat(tables)
-                    .as("V1 落库后必备集：24 张 PO 映射表 + 探针表 cdc_probe + Flyway 元数据表 flyway_schema_history")
+                    .as("V1/V2 落库后必备集：33 张 PO 映射表 + 探针表 cdc_probe + Flyway 元数据表 flyway_schema_history")
                     .containsAll(PO_TABLES)
                     .contains("cdc_probe", "flyway_schema_history");
             Set<String> extra = new LinkedHashSet<>(tables);
@@ -165,7 +181,7 @@ class MigrationSmokeTest {
         }
     }
 
-    /** 24 张 PO 映射表全部存在（V1 落库后绿；红阶段此处失败 = 迁移缺失的预期红） */
+    /** 33 张 PO 映射表全部存在（V1/V2 落库后绿；红阶段此处失败 = 迁移缺失的预期红） */
     @Test
     void allPoTablesPresent() throws SQLException {
         try (Connection conn = open()) {
@@ -177,7 +193,7 @@ class MigrationSmokeTest {
                 }
             }
             assertThat(missing)
-                    .as("Flyway V1 未落库（当前表=%s）；缺失 PO 映射表=%s", tables, missing)
+                    .as("Flyway V1/V2 未落库（当前表=%s）；缺失 PO 映射表=%s", tables, missing)
                     .isEmpty();
         }
     }
@@ -212,7 +228,7 @@ class MigrationSmokeTest {
             }
             List<String> missing = new ArrayList<>(UNIQUE_CONSTRAINTS);
             missing.removeAll(allUnique);
-            assertThat(missing).as("缺失唯一约束（V1 前必然为空集断言失败）: %s", missing).isEmpty();
+            assertThat(missing).as("缺失唯一约束（迁移未落库时必然缺失）: %s", missing).isEmpty();
         }
     }
 
@@ -226,7 +242,7 @@ class MigrationSmokeTest {
             }
             List<String> missing = new ArrayList<>(INDEXES);
             missing.removeAll(allIndexes);
-            assertThat(missing).as("缺失索引（V1 前必然为空集断言失败）: %s", missing).isEmpty();
+            assertThat(missing).as("缺失索引（迁移未落库时必然缺失）: %s", missing).isEmpty();
         }
     }
 
