@@ -95,6 +95,25 @@
             <artifactId>mysql-connector-j</artifactId>
             <scope>runtime</scope>
         </dependency>
+        <!-- Flyway DDL 版本化（WU-53）：版本由 Boot 4.1 BOM 托管（12.4.0，本地 m2 已缓存）；
+             spring-boot-starter-flyway 提供 Boot 4.1 的自动配置（Boot 4 将 Flyway
+             自动配置模块化为 spring-boot-flyway，不在 autoconfigure 内，缺 starter
+             时 spring.flyway.* 不生效）；flyway-mysql 为 MySQL 方言支持必需；默认启用
+             + classpath:db/migration，不开 baseline-on-migrate（库除部署位探针表外为
+             空库，V1 从零塑造 schema）；Flyway clean 永久禁止（CDC 源库红线，见 V1
+             头注释与 dev/test 配置注释） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
         <!-- replica 读库（PG，WU-41）：装配位在 ReplicaDataSourceConfig，
             驱动依赖（org.postgresql:postgresql）后置为发布准备项——
             本地 m2 离线无该构件，测试/开发走 H2 模拟，见报告决策表② -->

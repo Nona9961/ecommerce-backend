@@ -1,0 +1,73 @@
+# 测试装配（WU-53 D5 形态 A）：-Dspring.profiles.active=test 激活（system property
+# 优先于根配置 active: dev）。
+# 主库 = 与 dev 同源的真实 MySQL（宿主 3306 经 localtunnel 隧道 13306，同一
+# ecommerce 库 + Flyway V1）——验收面从 H2 切换为 MySQL（D3/D5 决策）；
+# replica 读库面保持 H2(PG 模式) 模拟（D7，ProductSearchService 消费面不受主库切换影响）。
+# nona.security / nona.storage 等根 application.yml 段无 profile 依赖，自动继承。
+spring:
+  datasource:
+    url: jdbc:mysql://127.0.0.1:13306/ecommerce?connectTimeout=5000&socketTimeout=8000&useSSL=false&allowPublicKeyRetrieval=true
+    username: ecom_app
+    password: ${ECOM_DB_PASSWORD}
+    hikari:
+      # 池上限 5：宿主 MySQL max_connections=151（实测），-Pfull 全量下多个不同
+      # 配置的 Spring 上下文并存（surefire 单进程顺序跑，上下文缓存直到 JVM 尾）
+      # 各建独立 Hikari 池——池 20 × 并存上下文数 > 151 触顶（Too many connections
+      # 级联失败）；池 5 × ~15 上限 ≈ 75 + 部署位占用，余量充足
+      maximum-pool-size: 5
+      connection-timeout: 30000
+      idle-timeout: 300000
+      connection-test-query: SELECT 1
+  # 不显式声明 driver-class-name：Boot 从 URL 自动推导（jdbc:mysql: →
+  # com.mysql.cj.jdbc.Driver）。显式声明会覆盖并破坏测试内嵌 H2 override 面
+  # （并发判例类自持 jdbc:h2:mem:*-concurrency URL —— 显式 MySQL driver 对 H2 URL
+  # 报 claims to not accept）。
+  flyway:
+    # 与 dev 同源迁移（同 baseline-on-migrate=true + baseline-version=0 语义，
+    # cdc_probe 探针表构成非空 schema）：测试上下文启动即 migrate（已应用则幂等跳过）。
+    # locations 追加测试支撑面 db/test-migration（租户契约测试专属 R 迁移
+    # R__tenant_test_tables.sql：test_global_note / test_tenant_note 两表，
+    # 生产/dev 面不含此目录——测试 @Entity 的 validate 校验面由此补齐）。
+    # 红线同 dev：Flyway clean 永久禁止（CDC 源库），清理一律走 scripts/test-db-reset.sh。
+    enabled: true
+    locations: classpath:db/migration,classpath:db/test-migration
+    baseline-on-migrate: true
+    baseline-version: 0
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 50
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+
+nona:
+  mock-gateway:
+    default-script: SUCCESS
+
+# replica 测试装配（D7 确认不动）：H2(PG 模式) 模拟 product_search_view，
+# 与 dev 语义完全一致
+replica:
+  datasource:
+    url: jdbc:h2:mem:replica;MODE=PostgreSQL
+    username: sa
+    password: ""
+
+change-tracking:
+  identifier-methods:
+    com.nona.domain.identity.entity.Address: getId
+    com.nona.domain.order.entity.CartItem: getId
+    com.nona.domain.catalog.entity.ShopCategory: getId
+    com.nona.domain.catalog.entity.ProductImage: getId
+    com.nona.domain.catalog.entity.ProductAttribute: getId
+    com.nona.domain.catalog.entity.Sku: getId
+    com.nona.domain.catalog.entity.ProductShopCategoryRef: id

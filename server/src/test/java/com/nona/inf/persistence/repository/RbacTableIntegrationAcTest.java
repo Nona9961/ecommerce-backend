@@ -68,12 +68,14 @@ class RbacTableIntegrationAcTest {
 
     /**
      * 表存在：role / permission / assignment 三张表均已由 Hibernate 建出。
+     * 查询按当前连接库适配（WU-53 H2-ism 吸收）：H2 默认 schema 为 PUBLIC，
+     * MySQL 为库名 —— 以 DATABASE() 取当前库，两态兼容。
      */
     @Test
     @DisplayName("RBAC 三表已建出")
     void tables_areCreated() {
         final List<String> tables = jdbcTemplate.queryForList(
-                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'PUBLIC'",
+                "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE()",
                 String.class);
 
         assertThat(tables.stream().map(String::toUpperCase).toList())

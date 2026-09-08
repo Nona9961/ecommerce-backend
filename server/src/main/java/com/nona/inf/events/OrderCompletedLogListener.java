@@ -2,6 +2,7 @@ package com.nona.inf.events;
 
 import com.nona.domain.order.ports.OrderCompleted;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -51,7 +52,7 @@ public class OrderCompletedLogListener {
      * @param orderEventExecutor 事件异步执行器（{@link OrderCompletedEventConfig}
      *                           装配，虚拟线程调度 + 请求上下文传播装饰器）
      */
-    public OrderCompletedLogListener(Executor orderEventExecutor) {
+    public OrderCompletedLogListener(@Qualifier("orderEventExecutor") Executor orderEventExecutor) {
         this.orderEventExecutor = orderEventExecutor;
     }
 

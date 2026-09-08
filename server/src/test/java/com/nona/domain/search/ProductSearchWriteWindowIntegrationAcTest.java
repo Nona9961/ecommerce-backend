@@ -6,6 +6,7 @@ import com.nona.domain.search.ports.ProductCard;
 import com.nona.domain.search.ports.ProductSearchService;
 import com.nona.domain.search.ports.SearchCriteria;
 import com.nona.domain.search.ports.SearchWriteWindow;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -134,6 +135,17 @@ class ProductSearchWriteWindowIntegrationAcTest {
                     category_id    BIGINT,
                     updated_at     TIMESTAMP     NOT NULL
                 )""");
+    }
+
+    /**
+     * 用例后清理主库模拟表（WU-53 基线契约）：product_search_view 是主库上的
+     * 测试自建读模型模拟表（replica 面为 JVM 内 H2 无需清），残留会破坏
+     * MigrationSmokeTest 基线「无多余业务表」精确断言——每用例重建语义不变，
+     * 库面保持干净。
+     */
+    @AfterEach
+    void tearDownPrimaryView() {
+        primaryJdbcTemplate.execute("DROP TABLE IF EXISTS product_search_view");
     }
 
     // ---------- happy path ----------

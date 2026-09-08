@@ -2,6 +2,7 @@ package com.nona.inf.events;
 
 import com.nona.domain.logistics.ports.WaybillDelivered;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -49,7 +50,7 @@ public class WaybillDeliveredLogListener {
      * @param waybillEventExecutor 事件异步执行器（{@link WaybillDeliveredEventConfig}
      *                             装配，虚拟线程调度 + 请求上下文传播装饰器）
      */
-    public WaybillDeliveredLogListener(Executor waybillEventExecutor) {
+    public WaybillDeliveredLogListener(@Qualifier("waybillEventExecutor") Executor waybillEventExecutor) {
         this.waybillEventExecutor = waybillEventExecutor;
     }
 

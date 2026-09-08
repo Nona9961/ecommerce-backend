@@ -7,8 +7,9 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 商品持久化对象（product 表，tenant=shopId）：Product 聚合根主表。
@@ -69,8 +70,11 @@ public class ProductPO extends TenantScopedBasePO {
      * 内值对象（整体替换语义），以 JSON 载体随主表行走——结构序列化/
      * 反序列化由转换器经中间形态完成（specTemplate_json 列与 JSON 扩展
      * 列同形态）。
+     * <p>
+     * WU-53：@Lob → @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json，见
+     * ProductEditVersionPO 注释：@Lob 导出 tinytext 255B 不敷使用）。
      */
-    @Lob
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "spec_template_json")
     private String specTemplateJson;
 
@@ -79,8 +83,10 @@ public class ProductPO extends TenantScopedBasePO {
      * 位（字段级分流承载）——与生效内容分离，审核通过后覆盖正式
      * 内容、驳回后作废；序列化形态与版本快照一致（快照中间形态复用），
      * 由转换器双向转换。
+     * <p>
+     * WU-53：@Lob → @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json）。
      */
-    @Lob
+    @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "pending_draft_json")
     private String pendingDraftJson;
 
