@@ -65,6 +65,6 @@ public class MasterOrderConvertor
                         po.getCity(), po.getDistrict(), po.getDetail()),
                 new AmountDetail(po.getGoodsAmount(), po.getFreightAmount(),
                         po.getDiscount(), po.getPaidAmount()),
-                ids, List.of(), po.getStatus());
+                ids, List.of(), po.getStatus(), po.getCreateTime());
     }
 }

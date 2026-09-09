@@ -5,6 +5,7 @@ import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.repo.MasterOrderRepository;
 import com.nona.domain.payment.ports.AcquireRequest;
 import com.nona.domain.payment.ports.AcquireResult;
+import com.nona.domain.payment.ports.PaymentAcquireView;
 import com.nona.domain.payment.ports.PaymentGateway;
 import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
@@ -98,5 +99,29 @@ public class PaymentUseCase {
         final PendingPayment pending = paymentPort.createPendingPayment(orderId,
                 paidAmount, TimeoutType.ORDER_PAY.durationMillis());
         return gateway.acquire(new AcquireRequest(pending.payNo(), pending.amount()));
+    }
+
+    /**
+     * 买家对主单发起支付并返回受理视图（B8.1 web 端点承载面，WU-59
+     * 冻结契约补充 2——POST /mall/payments 返回 InitiatePaymentResult
+     * 的用例侧源头）。
+     * <p>
+     * 编排语义与 {@link #initiatePayment(Long, Long)} 完全一致（主单
+     * 装载归属 → 可支付状态防线 C1 → 支付单创建/复用 → 渠道受理）；
+     * 差异 = 返回载体为融合视图 {@link PaymentAcquireView}（PendingPayment
+     * + AcquireResult，8 字段——payTimeoutMillis 规则回显仅供校验/装配
+     * 断言，不对外投影）。
+     * <p>
+     * 实现纪律（绿阶段）：提取私有共享编排方法避免与
+     * {@link #initiatePayment(Long, Long)} 逻辑复制；既有
+     * initiatePayment 签名与行为零改动（既有测试零波动）。
+     *
+     * @param buyerId 买家账号 ID（归属校验，必填）
+     * @param orderId 主订单 ID（必填）
+     * @return 受理视图（8 字段：支付单引用/金额/超时 + 受理结果）
+     */
+    public PaymentAcquireView initiatePaymentWithView(Long buyerId, Long orderId) {
+        throw new UnsupportedOperationException(
+                "initiatePaymentWithView 未实现：红阶段契约占位，绿阶段实现（共享编排提取）");
     }
 }

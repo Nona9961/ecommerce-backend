@@ -3,6 +3,7 @@ package com.nona.domain.order.entity;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.util.BusinessAssert;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -77,6 +78,13 @@ public class MasterOrder {
     private MasterOrderStatus status;
 
     /**
+     * 下单时间（审计时间字段，WU-59 冻结契约补充：新建路径为 null——
+     * 「未落库」语义，落库后由满载构造器/转换器回填
+     * master_order.create_time；列表/详情读面永远走装载路径，非 null）
+     */
+    private final LocalDateTime createdAt;
+
+    /**
      * 创建构造器（仅工厂调用）：整体状态定型为待支付（全部子单待支付
      * 的派生结果）；金额恒等式以子单金额投影校验。
      *
@@ -97,13 +105,9 @@ public class MasterOrder {
     }
 
     /**
-     * 装载构造器（仅仓储重建/转换器装载调用）：以持久化状态恢复聚合
-     * （整体状态/子单 id 集合为持久化值；子单 id 集合按
-     * sub_order.master_order_id 反查，为引用 ID 协作）。
-     * <p>
-     * 装载路径守卫形态不变量（必填/非空）防脏数据；金额恒等式为创建期
-     * 锁定的硬不变量（库中异常数据由子单侧自洽守卫兜底暴露）；不执行
-     * 写路径校验（派生属业务写入，装载不适用）。
+     * 带状态构造器（创建委托链中间层：7 参创建构造 → 本构造 → 满载
+     * 9 参构造 {@code createdAt=null}——实体统一不感知落库时间，新建
+     * 路径语义「未落库」，回填由转换器装载路径承载）。
      *
      * @param id            主订单主键
      * @param orderNo       订单号
@@ -118,6 +122,33 @@ public class MasterOrder {
     public MasterOrder(Long id, String orderNo, Long buyerId, AddressSnapshot address,
                        AmountDetail amount, List<Long> subOrderIds,
                        List<AmountDetail> subAmounts, MasterOrderStatus status) {
+        this(id, orderNo, buyerId, address, amount, subOrderIds, subAmounts, status, null);
+    }
+
+    /**
+     * 满载构造器（仓储重建/转换器装载调用，冻结构造委托链：8 参构造
+     * 委托本构造 {@code createdAt=null}——新建路径语义「未落库」；
+     * 转换器装载路径显式回填 {@code master_order.create_time}）。
+     * <p>
+     * 装载路径守卫形态不变量（必填/非空）防脏数据；金额恒等式为创建期
+     * 锁定的硬不变量（库中异常数据由子单侧自洽守卫兜底暴露）；不执行
+     * 写路径校验（派生属业务写入，装载不适用）。
+     *
+     * @param id            主订单主键
+     * @param orderNo       订单号
+     * @param buyerId       归属买家账号 ID
+     * @param address       地址快照
+     * @param amount        金额摘要
+     * @param subOrderIds   子单引用 ID 集合（持久化反查值）
+     * @param subAmounts    子单金额投影（装载校验用：全局恒等式防御，
+     *                      可传空列表表示跳过——持久化行不冗余子单金额）
+     * @param status        整体状态（持久化值）
+     * @param createdAt     下单时间（持久化值；新建路径传 null）
+     */
+    public MasterOrder(Long id, String orderNo, Long buyerId, AddressSnapshot address,
+                       AmountDetail amount, List<Long> subOrderIds,
+                       List<AmountDetail> subAmounts, MasterOrderStatus status,
+                       LocalDateTime createdAt) {
         BusinessAssert.assertNonNull(id, "主订单主键不能为空");
         BusinessAssert.assertTrue(orderNo != null && !orderNo.isBlank(), "订单号不能为空");
         BusinessAssert.assertNonNull(buyerId, "归属买家账号 ID 不能为空");
@@ -137,6 +168,7 @@ public class MasterOrder {
         this.amount = amount;
         this.subOrderIds = List.copyOf(subOrderIds);
         this.status = status;
+        this.createdAt = createdAt;
     }
 
     /**
@@ -219,6 +251,16 @@ public class MasterOrder {
      */
     public MasterOrderStatus getStatus() {
         return status;
+    }
+
+    /**
+     * 下单时间（只读，满载构造器装配——新建路径为 null 即「未落库」
+     * 语义；读面装载后非 null）。
+     *
+     * @return 下单时间；新建未落库路径为 null
+     */
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
     }
 
     /**

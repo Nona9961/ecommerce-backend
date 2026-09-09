@@ -7,6 +7,7 @@ import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.repo.MasterOrderRepository;
 import com.nona.domain.payment.ports.AcquireRequest;
 import com.nona.domain.payment.ports.AcquireResult;
+import com.nona.domain.payment.ports.PaymentAcquireView;
 import com.nona.domain.payment.ports.PaymentGateway;
 import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
@@ -178,5 +179,59 @@ class PaymentUseCaseUnitTest {
                 .extracting(ex -> ((BusinessException) ex).getBusinessCode())
                 .isEqualTo(EcommerceBusinessCode.PAYMENT_ORDER_INVALID.code());
         verify(gateway, never()).acquire(any(AcquireRequest.class));
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* initiatePaymentWithView（WU-59 冻结契约补充 2：additive 新方法，   */
+    /* 既有 initiatePayment 用例零改动）                                  */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    @DisplayName("view-1 受理视图全字段透出：PendingPayment + AcquireResult 融合 8 字段逐一断言")
+    void initiatePaymentWithView_happyPath_allFieldsTransparent() {
+        when(masterOrderRepository.getByID(100L)).thenReturn(pendingMaster);
+        when(paymentPort.createPendingPayment(eq(100L), eq(10000L), any(Long.class)))
+                .thenReturn(pendingPayment);
+        when(gateway.acquire(any(AcquireRequest.class)))
+                .thenReturn(new AcquireResult(true, "PAY202609070001", "CHANNEL-TXN-001", "CASHIER-TOKEN"));
+
+        final PaymentAcquireView view = useCase.initiatePaymentWithView(200L, 100L);
+
+        assertThat(view.paymentOrderId()).isEqualTo(1L);
+        assertThat(view.payNo()).isEqualTo("PAY202609070001");
+        assertThat(view.amount()).isEqualTo(10000L);
+        assertThat(view.payTimeoutMillis()).isEqualTo(1_800_000L);
+        assertThat(view.timeoutAt()).isEqualTo(Instant.parse("2026-09-07T10:30:00Z"));
+        assertThat(view.accepted()).isTrue();
+        assertThat(view.channelTxnNo()).isEqualTo("CHANNEL-TXN-001");
+        assertThat(view.cashierToken()).isEqualTo("CASHIER-TOKEN");
+        verify(paymentPort).createPendingPayment(eq(100L), eq(10000L), any(Long.class));
+        verify(gateway).acquire(any(AcquireRequest.class));
+    }
+
+    @Test
+    @DisplayName("view-2 受理视图主单防线：非可支付主单 → payment.order_invalid（与主方法同码）")
+    void initiatePaymentWithView_masterNotPayable_rejected() {
+        final MasterOrder paidMaster = master(100L, MasterOrderStatus.PAID);
+        when(masterOrderRepository.getByID(100L)).thenReturn(paidMaster);
+
+        assertThatThrownBy(() -> useCase.initiatePaymentWithView(200L, 100L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getBusinessCode())
+                .isEqualTo(EcommerceBusinessCode.PAYMENT_ORDER_INVALID.code());
+        verify(paymentPort, never()).createPendingPayment(any(Long.class), any(Long.class), any(Long.class));
+        verify(gateway, never()).acquire(any(AcquireRequest.class));
+    }
+
+    @Test
+    @DisplayName("view-3 受理视图归属防线：主单不存在/归属不符 → order.master_not_found（与主方法同码）")
+    void initiatePaymentWithView_masterNotFound_rejected() {
+        when(masterOrderRepository.getByID(100L)).thenReturn(null);
+
+        assertThatThrownBy(() -> useCase.initiatePaymentWithView(200L, 100L))
+                .isInstanceOf(BusinessException.class)
+                .extracting(ex -> ((BusinessException) ex).getBusinessCode())
+                .isEqualTo(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code());
+        verify(paymentPort, never()).createPendingPayment(any(Long.class), any(Long.class), any(Long.class));
     }
 }
