@@ -75,7 +75,8 @@ public class SubOrderConvertor
      * <p>
      * 从表行逐个经 {@link OrderItemConvertor} 转换并经装载构造器恢复
      * 聚合（顺序保持加载序；集合空或 null 时由领域构造器以
-     * ORDER_SUB_EMPTY 守卫拒绝脏数据）。
+     * ORDER_SUB_EMPTY 守卫拒绝脏数据）；下单时间从主表审计列回填
+     * 实体（主表 create_time，JPA auditing 填充；装载路径回填）。
      */
     @Override
     protected SubOrder safedConvertToRoot(SubOrderPO po, List<OrderItemPO> itemPOs) {
@@ -87,6 +88,6 @@ public class SubOrderConvertor
                 new AmountDetail(po.getGoodsAmount(), po.getFreightAmount(),
                         po.getDiscount(), po.getPaidAmount()),
                 rows.stream().map(orderItemConvertor::toDomain).toList(),
-                po.getStatus(), po.getWaybillId());
+                po.getStatus(), po.getWaybillId(), po.getCreateTime());
     }
 }

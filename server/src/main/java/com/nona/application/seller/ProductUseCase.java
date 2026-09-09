@@ -514,6 +514,55 @@ public class ProductUseCase {
     }
 
     /**
+     * SKU 集回显（WU-47 前端约定端点，WU-60 接线；只读，仅追加不触碰
+     * ProductAggregate 写面）：编辑页 SKU 矩阵初始值——与写面响应
+     * （configureSpecTemplate/updateSkuPrice/setSkuEnabled 同形状
+     * {@link SkuItem}）。无规格模板商品返回空列表（非空设计：空集合
+     * 而非 null）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return SKU 条目列表（按模板展开序）；未配置模板为空列表
+     */
+    public List<SkuItem> listSkus(Long productId) {
+        final Product product = requireProduct(productId);
+        return product.skusOrdered().stream().map(ProductUseCase::toSkuItem).toList();
+    }
+
+    /**
+     * 规格模板回显（WU-47 前端约定端点，WU-60 接线；只读）：编辑页
+     * 模板编辑区初始值——按聚合规格模板投影响应形状（维度按配置序）。
+     * 未配置模板 = 空维度列表的请求体形态（非空设计：显式空模板而非
+     * null 承载空态，与写面空 dimensions = 空模板语义一致）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 规格模板（维度按配置序；未配置为空维度列表）
+     */
+    public SpecTemplateRequest getSpecTemplate(Long productId) {
+        final Product product = requireProduct(productId);
+        final SpecTemplate template = product.getSpecTemplate().orElse(null);
+        if (template == null || template.isEmpty()) {
+            return new SpecTemplateRequest(List.of());
+        }
+        return new SpecTemplateRequest(template.dimensionsOrdered().stream()
+                .map(dimension -> new SpecDimensionRequest(dimension.getName(),
+                        dimension.valuesOrdered()))
+                .toList());
+    }
+
+    /**
+     * 商品运费模板绑定回显（WU-47 前端约定端点，WU-60 接线；只读）：
+     * 编辑页下拉初始值——投影聚合绑定引用。未绑定 = freightTemplateId
+     * null（null 语义 = 解绑，与写面请求体一致，展示层按未绑定呈现）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 当前绑定模板 ID（null = 未绑定）
+     */
+    public FreightTemplateBindRequest getFreightTemplateBind(Long productId) {
+        final Product product = requireProduct(productId);
+        return new FreightTemplateBindRequest(product.getFreightTemplateId());
+    }
+
+    /**
      * 加载商品所属店铺并断言存在（店铺分类绑定校验/名称映射载体：商品
      * 归属店铺行必在——行缺失为数据不一致异常态，按不存在呈现 404）。
      *

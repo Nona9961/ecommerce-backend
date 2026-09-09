@@ -4,6 +4,7 @@ import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.util.BusinessAssert;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -91,6 +92,18 @@ public class SubOrder {
     private Long waybillId;
 
     /**
+     * 下单时间（主表 create_time 审计时间，LocalDateTime 墙钟语义；
+     * 冻结契约补充：卖家订单列表/详情展示面（WU-47 约定 createTime
+     * 字段必填）消费）。
+     * <p>
+     * 取值纪律（MerchantApplication 先例同构）：创建路径新建实例为 null
+     * （JPA auditing 在持久化时填充主表 create_time，转换器不负责），
+     * 装载路径由 {@code SubOrderConvertor} 从 PO 回填——持久化装载后
+     * 恒非空。只读字段，无任何变更路径。
+     */
+    private final LocalDateTime createTime;
+
+    /**
      * 创建构造器（仅工厂调用）：状态定型为待支付、运单引用为空。
      *
      * @param id            子订单主键
@@ -113,6 +126,9 @@ public class SubOrder {
      * 装载路径同样守卫形态不变量（必填/金额自洽/条目非空）防脏数据——
      * 金额自洽为创建期锁定的硬不变量，库中异常数据立即暴露；
      * 不执行写路径校验（状态迁移守卫属业务写入校验，装载不适用）。
+     * <p>
+     * 下单时间（createTime）由重载装载构造承载（本构造委托传 null）——
+     * 转换器装载路径请使用带 createTime 的装载构造回填主表审计时间。
      *
      * @param id            子订单主键
      * @param masterOrderId 归属主订单 ID
@@ -127,6 +143,28 @@ public class SubOrder {
     public SubOrder(Long id, Long masterOrderId, Long shopId, String subOrderNo,
                     AddressSnapshot address, AmountDetail amount, List<OrderItem> items,
                     SubOrderStatus status, Long waybillId) {
+        this(id, masterOrderId, shopId, subOrderNo, address, amount, items,
+                status, waybillId, null);
+    }
+
+    /**
+     * 装载构造器（仅仓储重建/转换器装载调用，含下单时间回填）：以持久化
+     * 状态恢复聚合（现有装载构造委托本构造，createTime 传 null）。
+     *
+     * @param id            子订单主键
+     * @param masterOrderId 归属主订单 ID
+     * @param shopId        归属店铺 ID
+     * @param subOrderNo    子订单号
+     * @param address       收货地址快照
+     * @param amount        金额明细
+     * @param items         订单项集合
+     * @param status        履约状态（持久化值）
+     * @param waybillId     运单 ID（可空）
+     * @param createTime    下单时间（主表审计时间；创建路径 null，装载路径回填）
+     */
+    public SubOrder(Long id, Long masterOrderId, Long shopId, String subOrderNo,
+                    AddressSnapshot address, AmountDetail amount, List<OrderItem> items,
+                    SubOrderStatus status, Long waybillId, LocalDateTime createTime) {
         BusinessAssert.assertNonNull(id, "子订单主键不能为空");
         BusinessAssert.assertNonNull(masterOrderId, "子订单归属主订单 ID 不能为空");
         BusinessAssert.assertNonNull(shopId, "子订单归属店铺 ID 不能为空");
@@ -151,6 +189,7 @@ public class SubOrder {
         this.items = List.copyOf(items);
         this.status = status;
         this.waybillId = waybillId;
+        this.createTime = createTime;
     }
 
     /**
@@ -232,6 +271,16 @@ public class SubOrder {
      */
     public Long getWaybillId() {
         return waybillId;
+    }
+
+    /**
+     * 下单时间（主表审计时间；创建路径新建实例为 null，持久化装载
+     * 后由转换器回填恒非空）。
+     *
+     * @return 下单时间；未持久化新建实例返回 null
+     */
+    public LocalDateTime getCreateTime() {
+        return createTime;
     }
 
     /**

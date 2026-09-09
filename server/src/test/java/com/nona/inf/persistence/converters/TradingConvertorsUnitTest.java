@@ -120,6 +120,43 @@ class TradingConvertorsUnitTest {
     }
 
     @Test
+    @DisplayName("子单审计时间：装载路径从主表 create_time 回填，写路径不触碰审计位")
+    void subOrder_createTimeAuditRoundTrip() {
+        final LocalDateTime created = LocalDateTime.of(2026, 9, 8, 10, 30, 0);
+        final SubOrderPO po = new SubOrderPO();
+        po.setId(2L);
+        po.setMasterOrderId(1L);
+        po.setShopId(1001L);
+        po.setSubOrderNo("SUB1");
+        po.setRecipient("张三");
+        po.setPhone("13800000000");
+        po.setProvince("上海市");
+        po.setCity("上海市");
+        po.setDistrict("浦东新区");
+        po.setDetail("XX 路 1 号");
+        po.setGoodsAmount(5000L);
+        po.setFreightAmount(600L);
+        po.setDiscount(0L);
+        po.setPaidAmount(5600L);
+        po.setStatus(SubOrderStatus.PAID);
+        po.setWaybillId(7001L);
+        po.setCreateTime(created);
+
+        // 装载路径：主表审计时间回填领域实体（冻结契约补充）
+        final OrderItem itemPo = new OrderItem(42L, 4242L, "经典款 T 恤", 5000L, 1, 5000L,
+                null, null, Map.of(), Map.of());
+        final SubOrder back = SUB.convertToRoot(po, List.of(ITEM.toPO(itemPo)));
+        Assertions.assertEquals(created, back.getCreateTime());
+
+        // 写路径：convertor 不触碰审计位（JPA auditing 落库填充——
+        // MerchantApplication 先例同构，po 侧保持未填充形态）
+        final SubOrder root = new SubOrder(2L, 1L, 1001L, "SUB1", address(), amount(),
+                List.of(itemPo), SubOrderStatus.PAID, 7001L, null);
+        final SubOrderPO toPo = SUB.convertToPO(root);
+        Assertions.assertNull(toPo.getCreateTime(), "convertor 写路径不设置审计时间（JPA auditing 负责）");
+    }
+
+    @Test
     @DisplayName("订单项 JSON：空 Map 序列化为 {}（领域 null 归一为空集合恒非 null），空白列读回按空集合恢复")
     void orderItem_jsonEmptyAndBlank() {
         final OrderItem noSpec = new OrderItem(1L, 2L, "无扩展", 100L, 1, 100L,

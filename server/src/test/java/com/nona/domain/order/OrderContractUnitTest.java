@@ -5,6 +5,9 @@ import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.entity.MasterOrderStatusDeriver;
 import com.nona.domain.order.entity.SubOrder;
 import com.nona.domain.order.entity.SubOrderStatus;
+import com.nona.domain.order.entity.AddressSnapshot;
+import com.nona.domain.order.entity.AmountDetail;
+import com.nona.domain.order.entity.OrderItem;
 import com.nona.domain.order.factory.MasterOrderFactory;
 import com.nona.domain.order.factory.SubOrderFactory;
 import com.nona.domain.order.ports.OrderFacade;
@@ -17,8 +20,10 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -108,6 +113,36 @@ class OrderContractUnitTest {
         assertThat(SubOrder.class.getMethod("getWaybillId").getReturnType()).isEqualTo(Long.class);
         assertThat(SubOrder.class.getMethod("getStatus").getReturnType()).isEqualTo(SubOrderStatus.class);
         assertThat(SubOrder.class.getMethod("getItems").getReturnType().getSimpleName()).isEqualTo("List");
+    }
+
+    // ---------- 下单时间审计字段（冻结契约补充：装载回填 / 创建路径空） ----------
+
+    @Test
+    @DisplayName("子单审计时间字段：getter 签名 LocalDateTime + 装载回填 + 创建路径空（只读）")
+    void subOrder_createTimeAuditField() throws Exception {
+        assertThat(SubOrder.class.getMethod("getCreateTime").getReturnType())
+                .isEqualTo(LocalDateTime.class);
+        // 装载构造（带 createTime）回填持久化值
+        final LocalDateTime created = LocalDateTime.of(2026, 9, 8, 10, 30, 0);
+        assertThat(subAt(created).getCreateTime()).isEqualTo(created);
+        // 现有装载构造委托 null（新建路径新建实例为空——持久化后由转换器回填）
+        assertThat(subAt(null).getCreateTime()).isNull();
+        // 只读：不存在 setter 变更路径（反射断言，字段变更即失败）
+        final var setters = java.util.Arrays.stream(SubOrder.class.getDeclaredMethods())
+                .filter(m -> m.getName().equals("setCreateTime")).toList();
+        assertThat(setters).isEmpty();
+    }
+
+    /**
+     * 合规子单 fixture（装载构造：金额自洽 1000 + 100 + 0 = 1100 恒等）。
+     */
+    private static SubOrder subAt(LocalDateTime createTime) {
+        return new SubOrder(1L, 10L, 100L, "SO1",
+                new AddressSnapshot("张三", "13800000000", "浙江省", "杭州市", "西湖区", "文一西路 1 号"),
+                new AmountDetail(1000L, 100L, 0L, 1100L),
+                List.of(new OrderItem(1L, 11L, "测试商品", 1000L, 1, 1000L,
+                        null, null, Map.of(), Map.of())),
+                SubOrderStatus.PAID, null, createTime);
     }
 
     // ---------- 门面契约（ACL 冻结，0.5 契约表） ----------
