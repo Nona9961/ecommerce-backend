@@ -214,7 +214,7 @@ class BuyerOrderQueryUnitTest {
                 org.mockito.ArgumentMatchers.<java.util.Collection<MasterOrderStatus>>argThat(
                         statuses -> statuses != null && statuses.size() == 1
                                 && statuses.contains(MasterOrderStatus.PAID)),
-                0, 10);
+                eq(0), eq(10));
         verify(masterOrderRepository).countByBuyer(eq(BUYER),
                 org.mockito.ArgumentMatchers.<java.util.Collection<MasterOrderStatus>>argThat(
                         statuses -> statuses != null && statuses.size() == 1
@@ -257,6 +257,7 @@ class BuyerOrderQueryUnitTest {
         final LocalDateTime createdAt = LocalDateTime.now().minusMinutes(30);
         final MasterOrder order = master(100L, MasterOrderStatus.SHIPPED, createdAt);
         final SubOrder sub = subOrder(10L, order, 5001L, SubOrderStatus.SHIPPED, 800L);
+        when(masterOrderRepository.getByID(100L)).thenReturn(order);
         when(subOrderRepository.getByID(10L)).thenReturn(sub);
         when(waybillRepository.findBySubOrderId(10L)).thenReturn(java.util.Optional.of(
                 waybill(800L, 10L)));
@@ -287,7 +288,7 @@ class BuyerOrderQueryUnitTest {
     @Test
     @DisplayName("critical-1 全部 tab：tab=null → 仓储收到 null 过滤（全量语义）+ 分页归一化透传")
     void listPaged_allTab_passesNullFilter() {
-        when(masterOrderRepository.listPagedByBuyer(eq(BUYER), isNull(), eq(20), eq(50)))
+        when(masterOrderRepository.listPagedByBuyer(eq(BUYER), isNull(), eq(100), eq(50)))
                 .thenReturn(List.of());
         when(masterOrderRepository.countByBuyer(eq(BUYER), isNull())).thenReturn(0L);
 
@@ -295,7 +296,7 @@ class BuyerOrderQueryUnitTest {
 
         assertThat(result.records()).isEmpty();
         assertThat(result.total()).isZero();
-        verify(masterOrderRepository).listPagedByBuyer(eq(BUYER), isNull(), eq(20), eq(50));
+        verify(masterOrderRepository).listPagedByBuyer(eq(BUYER), isNull(), eq(100), eq(50));
         verify(masterOrderRepository).countByBuyer(eq(BUYER), isNull());
     }
 
@@ -335,6 +336,7 @@ class BuyerOrderQueryUnitTest {
     void waybill_noWaybill_throwsLogisticsNotFound() {
         final MasterOrder order = master(100L, MasterOrderStatus.PAID,
                 LocalDateTime.now().minusMinutes(30));
+        when(masterOrderRepository.getByID(100L)).thenReturn(order);
         when(subOrderRepository.getByID(10L)).thenReturn(
                 subOrder(10L, order, 5001L, SubOrderStatus.PAID, null));
         when(waybillRepository.findBySubOrderId(10L)).thenReturn(java.util.Optional.empty());
@@ -429,6 +431,7 @@ class BuyerOrderQueryUnitTest {
                 LocalDateTime.now().minusMinutes(30));
         final SubOrder otherSub = subOrder(21L, otherBuyerOrder, 5010L,
                 SubOrderStatus.PAID, null);
+        when(masterOrderRepository.getByID(210L)).thenReturn(otherBuyerOrder);
         when(subOrderRepository.getByID(21L)).thenReturn(otherSub);
 
         assertThatThrownBy(() -> query.waybill(BUYER, 21L))

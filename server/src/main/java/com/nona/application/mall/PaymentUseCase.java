@@ -11,6 +11,7 @@ import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.ports.PendingPayment;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import com.nona.inf.timeout.TimeoutType;
 
 import java.util.Objects;
@@ -21,7 +22,7 @@ import org.springframework.stereotype.Service;
  * 已下单主单发起支付：主单校验（C1 历史遗留接线：支付发起前必须校验
  * 主单处于可支付状态）→ 支付单创建/复用 → 渠道受理。
  * <p>
- * 编排语义（绿阶段已实现，主单校验→创建/复用→渠道受理）：
+ * 编排语义（主单校验→创建/复用→渠道受理，共享编排）：
  * <ol>
  *     <li><b>主单装载与归属</b>：按 orderId 装载主单；不存在或归属买家
  *         不符 → 按不存在呈现（{@code order.master_not_found} 404，防
@@ -40,9 +41,13 @@ import org.springframework.stereotype.Service;
  *         成功，结果经回调异步到达）→ 返回受理结果（渠道流水 + 收银台
  *         标识）。</li>
  * </ol>
- * 装配说明（红阶段）：本类为普通类（不注册 Spring bean——依赖的支付
- * 端口实现与回调链路未接线，注册即装配错误；绿阶段接线后按
- * PlaceOrderUseCase 同构补注册并复验上下文）。
+ * 实现纪律（绿阶段）：两入口差异仅在返回载体（AcquireResult 与
+ * PaymentAcquireView 融合视图），共享编排提取为 {@link #acquirePending}
+ * 私有方法（主单装载归属 → 状态防线 → 支付单创建/复用），避免逻辑复制；
+ * 既有 initiatePayment 签名与行为零改动。
+ * <p>
+ * 装配说明：本类注册为 {@code @Service}（依赖的支付端口实现与回调链路
+ * 已由 WU-55 接线，容器装配复验见上下文 AcTest）。
  *
  * @author nona9961
  */
@@ -85,7 +90,21 @@ public class PaymentUseCase {
      * @param orderId 主订单 ID（必填）
      * @return 渠道受理结果（渠道流水 + 收银台参数；支付结果经回调异步到达）
      */
+    @CrossTenant
     public AcquireResult initiatePayment(Long buyerId, Long orderId) {
+        final PendingPayment pending = acquirePending(buyerId, orderId);
+        return gateway.acquire(new AcquireRequest(pending.payNo(), pending.amount()));
+    }
+
+    /**
+     * 共享编排（两发起入口共用）：主单装载归属 → 可支付状态防线 C1 →
+     * 支付单创建/复用。
+     *
+     * @param buyerId 买家账号 ID（归属校验，必填）
+     * @param orderId 主订单 ID（必填）
+     * @return 待支付支付单视图（创建或复用的支付单引用 + 金额/超时）
+     */
+    private PendingPayment acquirePending(Long buyerId, Long orderId) {
         final MasterOrder masterOrder = masterOrderRepository.getByID(orderId);
         if (masterOrder == null || !Objects.equals(buyerId, masterOrder.getBuyerId())) {
             throw new BusinessException(EcommerceBusinessCode.ORDER_MASTER_NOT_FOUND.code(),
@@ -96,9 +115,8 @@ public class PaymentUseCase {
                     "主订单处于非可支付状态，不可发起支付");
         }
         final long paidAmount = masterOrder.getAmount().getPaidAmount();
-        final PendingPayment pending = paymentPort.createPendingPayment(orderId,
-                paidAmount, TimeoutType.ORDER_PAY.durationMillis());
-        return gateway.acquire(new AcquireRequest(pending.payNo(), pending.amount()));
+        return paymentPort.createPendingPayment(orderId, paidAmount,
+                TimeoutType.ORDER_PAY.durationMillis());
     }
 
     /**
@@ -120,8 +138,13 @@ public class PaymentUseCase {
      * @param orderId 主订单 ID（必填）
      * @return 受理视图（8 字段：支付单引用/金额/超时 + 受理结果）
      */
+    @CrossTenant
     public PaymentAcquireView initiatePaymentWithView(Long buyerId, Long orderId) {
-        throw new UnsupportedOperationException(
-                "initiatePaymentWithView 未实现：红阶段契约占位，绿阶段实现（共享编排提取）");
+        final PendingPayment pending = acquirePending(buyerId, orderId);
+        final AcquireResult result = gateway.acquire(
+                new AcquireRequest(pending.payNo(), pending.amount()));
+        return new PaymentAcquireView(pending.paymentOrderId(), pending.payNo(),
+                pending.amount(), pending.payTimeoutMillis(), pending.timeoutAt(),
+                result.accepted(), result.channelTxnNo(), result.cashierToken());
     }
 }

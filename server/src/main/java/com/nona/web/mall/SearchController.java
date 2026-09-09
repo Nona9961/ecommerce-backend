@@ -1,6 +1,7 @@
 package com.nona.web.mall;
 
 import com.nona.api.HttpResponse;
+import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 import com.nona.api.mall.SearchApi;
 import com.nona.api.mall.SearchCard;
@@ -17,11 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
  * pageNum/pageSize——搜索为 GET 无请求体，全部经 query 参数展开）。
  * <p>
  * 控制器保持薄壳：参数透传 + 委托 {@link ProductSearchUseCase}；当前
- * 买家账号 ID 从跟踪上下文取（写后自读窗口路由锚点）。
- * <p>
- * 红阶段状态：方法体为 {@link UnsupportedOperationException} 契约占位
- * （端点在路由表中注册、参数绑定形态冻结；绿阶段实现为用例委托——
- * 方法体替换，注解与签名零改动）。
+ * 买家账号 ID 从跟踪上下文取（写后自读窗口路由锚点，/mall/** 必
+ * 有身份）。
  *
  * @author nona9961
  */
@@ -51,8 +49,7 @@ public class SearchController implements SearchApi {
     }
 
     /**
-     * {@inheritDoc}——商品搜索；
-     * 红阶段契约占位，绿阶段：{@code searchUseCase.search(...7 参 + PageQuery + uid)}。
+     * {@inheritDoc}——商品搜索（query 参数展开 + 分页归一化委托用例）。
      */
     @Override
     @GetMapping("/mall/search")
@@ -66,8 +63,9 @@ public class SearchController implements SearchApi {
             @RequestParam(value = "sort", required = false) String sort,
             @RequestParam(value = "pageNum", defaultValue = "1") int pageNum,
             @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
-        throw new UnsupportedOperationException(
-                "search 端点未实现：红阶段契约占位，绿阶段委托 searchUseCase.search");
+        return HttpResponse.ok(searchUseCase.search(keyword, categoryId, brandId, shopId,
+                minPrice, maxPrice, sort, new PageQuery(pageNum, pageSize),
+                currentAccountId()));
     }
 
     /**

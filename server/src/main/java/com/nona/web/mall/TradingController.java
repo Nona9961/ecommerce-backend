@@ -1,15 +1,18 @@
 package com.nona.web.mall;
 
 import com.nona.api.HttpResponse;
+import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 import com.nona.api.mall.EstimateRequest;
 import com.nona.api.mall.EstimateResult;
 import com.nona.api.mall.InitiatePaymentRequest;
 import com.nona.api.mall.InitiatePaymentResult;
+import com.nona.api.mall.MallOrderStatus;
 import com.nona.api.mall.OrderResult;
 import com.nona.api.mall.OrderView;
 import com.nona.api.mall.PlaceOrderRequest;
 import com.nona.api.mall.RefundApplyRequest;
+import com.nona.api.mall.RefundStatus;
 import com.nona.api.mall.RefundView;
 import com.nona.api.mall.TradingApi;
 import com.nona.api.mall.WaybillView;
@@ -19,6 +22,9 @@ import com.nona.application.mall.ConfirmReceiptUseCase;
 import com.nona.application.mall.PaymentUseCase;
 import com.nona.application.mall.PlaceOrderUseCase;
 import com.nona.application.mall.RefundUseCase;
+import com.nona.domain.payment.entity.RefundOrderStatus;
+import com.nona.domain.payment.ports.PaymentAcquireView;
+import com.nona.domain.payment.ports.RefundOrderView;
 import com.nona.inf.context.TenantContextAccessor;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,9 +43,11 @@ import org.springframework.web.bind.annotation.RestController;
  * 当前买家账号 ID 从跟踪上下文取（认证过滤器已填充，买家维度由此
  * 锚定——TenantContextAccessor 先例 AddressController 同构）。
  * <p>
- * 红阶段状态：方法体为 {@link UnsupportedOperationException} 契约占位
- * （端点路由/参数绑定/返回类型冻结；绿阶段实现为用例委托——方法体
- * 逐方法替换，注解与签名零改动）。
+ * 委托面（绿阶段接线完成）：下单/取消/支付/确认收货/退款端点委托
+ * 既有用例；列表/详情/运单委托 {@link BuyerOrderQuery}；发起支付返回
+ * 受理视图投影（InitiatePaymentResult 7 字段 = PaymentAcquireView 8
+ * 字段去 payTimeoutMillis 规则回显）；退款视图投影（RefundOrderView →
+ * RefundView，状态枚举逐名映射）。
  *
  * @author nona9961
  */
@@ -109,30 +117,25 @@ public class TradingController implements TradingApi {
     }
 
     /**
-     * {@inheritDoc}——结算试算；
-     * 红阶段契约占位，绿阶段：{@code placeOrderUseCase.estimate(buyerId, request)}。
+     * {@inheritDoc}——结算试算（委托用例）。
      */
     @Override
     @PostMapping("/mall/estimate")
     public HttpResponse<EstimateResult> estimate(@Valid @RequestBody EstimateRequest request) {
-        throw new UnsupportedOperationException(
-                "estimate 端点未实现：红阶段契约占位，绿阶段委托 placeOrderUseCase.estimate");
+        return HttpResponse.ok(placeOrderUseCase.estimate(currentAccountId(), request));
     }
 
     /**
-     * {@inheritDoc}——提交订单；
-     * 红阶段契约占位，绿阶段：{@code placeOrderUseCase.placeOrder(buyerId, request)}。
+     * {@inheritDoc}——提交订单（委托用例）。
      */
     @Override
     @PostMapping("/mall/orders")
     public HttpResponse<OrderResult> placeOrder(@Valid @RequestBody PlaceOrderRequest request) {
-        throw new UnsupportedOperationException(
-                "placeOrder 端点未实现：红阶段契约占位，绿阶段委托 placeOrderUseCase.placeOrder");
+        return HttpResponse.ok(placeOrderUseCase.placeOrder(currentAccountId(), request));
     }
 
     /**
-     * {@inheritDoc}——订单列表；
-     * 红阶段契约占位，绿阶段：{@code buyerOrderQuery.listPaged(buyerId, tab, query)}。
+     * {@inheritDoc}——订单列表（状态 tab 解析 + 分页委托查询用例）。
      */
     @Override
     @GetMapping("/mall/orders")
@@ -140,88 +143,112 @@ public class TradingController implements TradingApi {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "pageNum", defaultValue = "1") int pageNum,
             @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
-        throw new UnsupportedOperationException(
-                "listOrders 端点未实现：红阶段契约占位，绿阶段委托 buyerOrderQuery.listPaged");
+        final MallOrderStatus tab = status == null || status.isBlank()
+                ? null : MallOrderStatus.fromName(status);
+        return HttpResponse.ok(buyerOrderQuery.listPaged(currentAccountId(), tab,
+                new PageQuery(pageNum, pageSize)));
     }
 
     /**
-     * {@inheritDoc}——订单详情；
-     * 红阶段契约占位，绿阶段：{@code buyerOrderQuery.detail(buyerId, masterOrderId)}。
+     * {@inheritDoc}——订单详情（委托查询用例；404 按不存在呈现）。
      */
     @Override
     @GetMapping("/mall/orders/{masterOrderId}")
     public HttpResponse<OrderView> getOrder(@PathVariable("masterOrderId") Long masterOrderId) {
-        throw new UnsupportedOperationException(
-                "getOrder 端点未实现：红阶段契约占位，绿阶段委托 buyerOrderQuery.detail");
+        return HttpResponse.ok(buyerOrderQuery.detail(currentAccountId(), masterOrderId));
     }
 
     /**
-     * {@inheritDoc}——取消订单；
-     * 红阶段契约占位，绿阶段：{@code cancelOrderUseCase.cancelByBuyer(buyerId, id, null)}。
+     * {@inheritDoc}——取消订单（委托用例；无请求体）。
      */
     @Override
     @PostMapping("/mall/orders/{masterOrderId}/cancel")
     public HttpResponse<Void> cancelOrder(@PathVariable("masterOrderId") Long masterOrderId) {
-        throw new UnsupportedOperationException(
-                "cancelOrder 端点未实现：红阶段契约占位，绿阶段委托 cancelOrderUseCase.cancelByBuyer");
+        cancelOrderUseCase.cancelByBuyer(currentAccountId(), masterOrderId, null);
+        return HttpResponse.ok();
     }
 
     /**
-     * {@inheritDoc}——发起支付；
-     * 红阶段契约占位，绿阶段：{@code paymentUseCase.initiatePaymentWithView(buyerId, id)}。
+     * {@inheritDoc}——发起支付（受理视图 8 字段 → 对外 7 字段投影；
+     * payTimeoutMillis 规则回显不对外）。
      */
     @Override
     @PostMapping("/mall/payments")
     public HttpResponse<InitiatePaymentResult> initiatePayment(
             @Valid @RequestBody InitiatePaymentRequest request) {
-        throw new UnsupportedOperationException(
-                "initiatePayment 端点未实现：红阶段契约占位，绿阶段委托 paymentUseCase.initiatePaymentWithView");
+        final PaymentAcquireView view = paymentUseCase.initiatePaymentWithView(
+                currentAccountId(), request.masterOrderId());
+        return HttpResponse.ok(new InitiatePaymentResult(view.accepted(),
+                view.paymentOrderId(), view.payNo(), view.amount(),
+                view.timeoutAt() == null ? null : view.timeoutAt().toString(),
+                view.channelTxnNo(), view.cashierToken()));
     }
 
     /**
-     * {@inheritDoc}——确认收货；
-     * 红阶段契约占位，绿阶段：{@code confirmReceiptUseCase.confirmByBuyer(buyerId, subOrderId)}。
+     * {@inheritDoc}——确认收货（委托用例；无请求体）。
      */
     @Override
     @PostMapping("/mall/sub-orders/{subOrderId}/confirm-receipt")
     public HttpResponse<Void> confirmReceipt(@PathVariable("subOrderId") Long subOrderId) {
-        throw new UnsupportedOperationException(
-                "confirmReceipt 端点未实现：红阶段契约占位，绿阶段委托 confirmReceiptUseCase.confirmByBuyer");
+        confirmReceiptUseCase.confirmByBuyer(currentAccountId(), subOrderId);
+        return HttpResponse.ok();
     }
 
     /**
-     * {@inheritDoc}——申请退款；
-     * 红阶段契约占位，绿阶段：{@code refundUseCase.applyRefundByBuyer(...)}。
+     * {@inheritDoc}——申请退款（委托用例 + 域视图投影）。
      */
     @Override
     @PostMapping("/mall/sub-orders/{subOrderId}/refunds")
     public HttpResponse<RefundView> applyRefund(
             @PathVariable("subOrderId") Long subOrderId,
             @Valid @RequestBody RefundApplyRequest request) {
-        throw new UnsupportedOperationException(
-                "applyRefund 端点未实现：红阶段契约占位，绿阶段委托 refundUseCase.applyRefundByBuyer");
+        return HttpResponse.ok(toRefundView(refundUseCase.applyRefundByBuyer(
+                currentAccountId(), subOrderId, request.reason())));
     }
 
     /**
-     * {@inheritDoc}——退款失败重试；
-     * 红阶段契约占位，绿阶段：{@code refundUseCase.retryRefundByBuyer(...)}。
+     * {@inheritDoc}——退款失败重试（委托用例 + 域视图投影）。
      */
     @Override
     @PostMapping("/mall/refunds/{refundOrderId}/retry")
     public HttpResponse<RefundView> retryRefund(@PathVariable("refundOrderId") Long refundOrderId) {
-        throw new UnsupportedOperationException(
-                "retryRefund 端点未实现：红阶段契约占位，绿阶段委托 refundUseCase.retryRefundByBuyer");
+        return HttpResponse.ok(toRefundView(
+                refundUseCase.retryRefundByBuyer(currentAccountId(), refundOrderId)));
     }
 
     /**
-     * {@inheritDoc}——物流跟踪；
-     * 红阶段契约占位，绿阶段：{@code buyerOrderQuery.waybill(buyerId, subOrderId)}。
+     * {@inheritDoc}——物流跟踪（委托查询用例）。
      */
     @Override
     @GetMapping("/mall/sub-orders/{subOrderId}/waybill")
     public HttpResponse<WaybillView> getWaybill(@PathVariable("subOrderId") Long subOrderId) {
-        throw new UnsupportedOperationException(
-                "getWaybill 端点未实现：红阶段契约占位，绿阶段委托 buyerOrderQuery.waybill");
+        return HttpResponse.ok(buyerOrderQuery.waybill(currentAccountId(), subOrderId));
+    }
+
+    /**
+     * 退款单域视图 → 退款单线上契约视图（4 字段投影 + 状态枚举逐名
+     * 映射；FAILED 可重试语义不改变）。
+     *
+     * @param view 退款单域视图
+     * @return 线上契约视图
+     */
+    private static RefundView toRefundView(RefundOrderView view) {
+        return new RefundView(view.refundOrderId(), view.refundNo(), view.amount(),
+                toRefundStatus(view.status()), view.payNo());
+    }
+
+    /**
+     * 退款单状态 → 线上契约枚举（3 值逐名对应）。
+     *
+     * @param status 退款单状态
+     * @return 线上契约枚举
+     */
+    private static RefundStatus toRefundStatus(RefundOrderStatus status) {
+        return switch (status) {
+            case PENDING -> RefundStatus.PENDING;
+            case SUCCEEDED -> RefundStatus.SUCCEEDED;
+            case FAILED -> RefundStatus.FAILED;
+        };
     }
 
     /**
