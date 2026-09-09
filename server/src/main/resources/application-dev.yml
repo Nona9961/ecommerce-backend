@@ -55,6 +55,12 @@ nona:
   mock-gateway:
     # mock 支付渠道默认剧本（无标记单号走此剧本；SUCCESS/FAIL/NOCALLBACK）
     default-script: SUCCESS
+  scheduling:
+    # 调度激活：推进器/超时引擎按真实节奏走（demo 验收面）
+    enabled: true
+  logistics:
+    # 推进器扫描周期，javadoc 默认 5000ms
+    scan-interval-ms: 5000
 
 # replica 读库（WU-41 双数据源基建，顶层命名空间 replica.datasource.*）：
 # dev 无宿主 PG 直连（沙箱隔离），以 H2 内存库模拟 product_search_view

@@ -9,6 +9,7 @@ import com.nona.domain.logistics.ports.WaybillDeliveredPublisher;
 import com.nona.domain.logistics.repo.WaybillRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -65,11 +66,10 @@ import java.util.List;
  * </ol>
  * <b>调度与装配</b>：定时触发位为
  * {@code @Scheduled(fixedDelayString = "${nona.logistics.scan-interval-ms:5000}")}
- * （每 5 秒一轮，可配置）——调度注解需装配方开启 Spring 调度能力
- * （{@code @EnableScheduling}，装配提示同超时调度引擎）；<b>当前不注册
- * 为容器 bean</b>：物流运单仓储 JPA 实现未接线（先例降级——注册即
- * 装配错误），红/绿阶段以构造器直接装配，Spring 注册与调度注解随
- * 仓储接线阶段落位恢复；节奏可经配置
+ * （每 5 秒一轮，可配置）——调度能力由装配门控 {@code SchedulingGateConfig}
+ * 开启（{@code @EnableScheduling} 挂 {@code nona.scheduling.enabled=true}，
+ * 键缺失/false 即不激活；dev=true 真实滴答、test=false 验收面确定性，
+ * 冒烟手触 {@link #scanAndAdvance}，装配提示同超时调度引擎）；节奏可经配置
  * （{@code nona.logistics.shipped-to-in-transit-ms} /
  * {@code nona.logistics.in-transit-to-delivered-ms}）覆盖，默认
  * 30 秒/60 秒。时间源注入化（默认系统 UTC 时钟，测试注入固定时钟）。
@@ -192,7 +192,7 @@ public class LogisticsSimulator {
     }
 
     /**
-     * 定时扫描推进入口（调度装配位：{@code @Scheduled} 随仓储接线恢复；
+     * 定时扫描推进入口（调度装配位：{@code @Scheduled} 经装配门控激活；
      * 单测直接调用）。
      * <p>
      * 编排序见类 javadoc：全量在途装载 → 逐条按当前状态分派到期推进
@@ -200,6 +200,7 @@ public class LogisticsSimulator {
      * 发布签收事件 / 已签收终态跳过）→ 每条独立事务，单条失败告警后
      * 继续下一条。
      */
+    @Scheduled(fixedDelayString = "${nona.logistics.scan-interval-ms:5000}")
     public void scanAndAdvance() {
         final List<Waybill> inTransit = waybillRepository.findInTransit();
         final Instant now = clock.instant();
