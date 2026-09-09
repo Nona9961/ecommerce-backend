@@ -927,13 +927,34 @@ class PlaceOrderUseCaseUnitTest {
         public int deleteByID(Long id) {
             return 0;
         }
+
+        @Override
+        public List<MasterOrder> listPagedByBuyer(Long buyerId,
+                                                  java.util.Collection<MasterOrderStatus> statuses,
+                                                  int offset, int limit) {
+            return saved.stream()
+                    .filter(order -> order.getBuyerId().equals(buyerId))
+                    .filter(order -> statuses == null || statuses.isEmpty()
+                            || statuses.contains(order.getStatus()))
+                    .skip(offset)
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public long countByBuyer(Long buyerId, java.util.Collection<MasterOrderStatus> statuses) {
+            return saved.stream()
+                    .filter(order -> order.getBuyerId().equals(buyerId))
+                    .filter(order -> statuses == null || statuses.isEmpty()
+                            || statuses.contains(order.getStatus()))
+                    .count();
+        }
     }
 
     /**
      * 子订单仓储内存桩：记录每次落库（拆单断言：店铺/金额/条目快照）。
      */
     private static final class StubSubOrderRepository implements SubOrderRepository {
-
         private final List<SubOrder> saved = new ArrayList<>();
 
         List<SubOrder> savedSubOrders() {
@@ -952,17 +973,38 @@ class PlaceOrderUseCaseUnitTest {
         @Override
         public List<SubOrder> findDueByStatusAndTimeoutAtBefore(SubOrderStatus status,
                                                                 Instant now, int limit) {
-            throw new UnsupportedOperationException("红阶段占位：超时扫描面非本桩服务范围（归属仓储接线 WU）");
+            return List.of();
         }
 
         @Override
         public boolean claimTimeout(Long id, SubOrderStatus expectedStatus) {
-            throw new UnsupportedOperationException("红阶段占位：超时认领非本桩服务范围（归属仓储接线 WU）");
+            return false;
         }
 
         @Override
         public void clearTimeoutDeadline(Long id) {
-            throw new UnsupportedOperationException("红阶段占位：超时清除非本桩服务范围（归属仓储接线 WU）");
+        }
+
+        @Override
+        public List<SubOrder> listPagedByShop(Long shopId,
+                                              java.util.Collection<SubOrderStatus> statuses,
+                                              int offset, int limit) {
+            return saved.stream()
+                    .filter(sub -> sub.getShopId().equals(shopId))
+                    .filter(sub -> statuses == null || statuses.isEmpty()
+                            || statuses.contains(sub.getStatus()))
+                    .skip(offset)
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public long countByShop(Long shopId, java.util.Collection<SubOrderStatus> statuses) {
+            return saved.stream()
+                    .filter(sub -> sub.getShopId().equals(shopId))
+                    .filter(sub -> statuses == null || statuses.isEmpty()
+                            || statuses.contains(sub.getStatus()))
+                    .count();
         }
 
         @Override

@@ -23,6 +23,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.Callable;
+import org.springframework.stereotype.Service;
 
 /**
  * 退款回调编排用例（退款回调接线阶段的核心编排：渠道 REFUND 回调 →
@@ -97,6 +98,7 @@ import java.util.concurrent.Callable;
  *
  * @author nona9961
  */
+@Service
 public class RefundCallbackUseCase implements RefundCallbackPort {
 
     /**

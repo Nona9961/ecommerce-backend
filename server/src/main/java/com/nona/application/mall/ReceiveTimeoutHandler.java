@@ -2,6 +2,7 @@ package com.nona.application.mall;
 
 import com.nona.inf.timeout.TimeoutHandler;
 import com.nona.inf.timeout.TimeoutType;
+import org.springframework.stereotype.Component;
 
 /**
  * 收货超时处理器（ORDER_RECEIVE：已发货子订单 7 天未确认收货自动完成，
@@ -21,6 +22,7 @@ import com.nona.inf.timeout.TimeoutType;
  *
  * @author nona9961
  */
+@Component
 public class ReceiveTimeoutHandler implements TimeoutHandler<Long> {
 
     /**

@@ -9,6 +9,7 @@ import com.nona.inf.timeout.TimeoutType;
 
 import java.time.Instant;
 import java.util.List;
+import org.springframework.stereotype.Component;
 
 /**
  * 收货超时数据端口（ORDER_RECEIVE：sub_order 表 deadline 列承载面）。
@@ -30,6 +31,7 @@ import java.util.List;
  *
  * @author nona9961
  */
+@Component
 public class ReceiveTimeoutStore implements TimeoutTaskStore<Long> {
 
     /**

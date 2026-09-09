@@ -10,6 +10,7 @@ import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
 
 import java.util.List;
+import org.springframework.stereotype.Service;
 
 /**
  * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete +
@@ -79,6 +80,7 @@ import java.util.List;
  *
  * @author nona9961
  */
+@Service
 public class OrderFacadeImpl implements OrderFacade {
 
     /**

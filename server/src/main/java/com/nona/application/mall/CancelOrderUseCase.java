@@ -19,6 +19,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * 取消订单编排用例（买家主动取消 B8.6 ① + 支付超时自动取消 B8.3，
@@ -73,6 +74,7 @@ import java.util.Objects;
  *
  * @author nona9961
  */
+@Service
 public class CancelOrderUseCase {
 
     /**

@@ -5,6 +5,7 @@ import com.nona.domain.order.entity.SubOrderStatus;
 import com.nona.persistence.BaseRepository;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -20,6 +21,11 @@ import java.util.List;
  * <p>
  * 查询契约扩展遵循「契约演进只增不改」：列表/分页/店铺维度查询随消费
  * WU（订单列表/详情查询面）声明，本阶段只冻结创建与主单维度装载。
+ * <p>
+ * <b>商家列表分页面（WU-55 冻结）</b>：WU-47 约定的商家订单列表
+ * 形状（GET /seller/orders?status=&amp;pageNum=&amp;pageSize=，status
+ * 逗号分隔多枚举）——SubOrderStatus 全量 8 枚举透传（本接口不做任何
+ * 枚举值收敛/裁剪，「仅全部 tab 可见」等映射语义收敛在消费编排层）。
  *
  * @author nona9961
  */
@@ -79,4 +85,45 @@ public interface SubOrderRepository extends BaseRepository<Long, SubOrder> {
      * @param id 候选主键（sub_order 主键）
      */
     void clearTimeoutDeadline(Long id);
+
+    /**
+     * 店铺订单分页列表（WU-47 商家列表查询面形状，WU-55 冻结）。
+     * <p>
+     * 定位：店铺维度 = {@code shop_id = shopId} 显式业务条件 + 租户
+     * 过滤（tenant_id=context）双层防线（fail-closed：任意一重不满足
+     * 即无结果——跨店请求按不存在/空呈现，归属不泄露）；状态多值
+     * 条件过滤（{@code status IN (...) }）；排序冻结——创建时间倒序 +
+     * 主键倒序 tie-breaker（同 {@link #listPagedByShop(Long,
+     * java.util.Collection, int, int)} 稳定分页）。
+     * <p>
+     * <b>状态过滤语义</b>：{@code statuses} 为 null 或空集合 = 不过滤
+     * （全量——对应前端「全部」tab 不传 status 参数）；非空 = 多值
+     * IN 过滤（SubOrderStatus 全量 8 枚举透传）。无命中返回空列表
+     * （fail-safe）。
+     * <p>
+     * <b>参数守卫（fail-closed）</b>：{@code offset < 0} 或
+     * {@code limit <= 0} 抛 {@link IllegalArgumentException}。
+     * <p>
+     * 读取面纪律：分页行未登记变更追踪（只读呈现）；如需变更保存
+     * 须经 {@link #getByID} 重新装载建立快照基线。
+     *
+     * @param shopId   归属店铺 ID（必填；与租户过滤共同定位）
+     * @param statuses 状态多值过滤集合；null/空 = 不过滤（全量）
+     * @param offset   首条偏移量（从 0 开始）
+     * @param limit    每页条数（正数）
+     * @return 订单列表（创建时间倒序）；无命中为空列表
+     */
+    List<SubOrder> listPagedByShop(Long shopId,
+                                   Collection<SubOrderStatus> statuses,
+                                   int offset, int limit);
+
+    /**
+     * 店铺订单总数（分页 total 用，过滤语义与 {@link #listPagedByShop}
+     * 完全一致）。
+     *
+     * @param shopId   归属店铺 ID（必填）
+     * @param statuses 状态多值过滤集合；null/空 = 不过滤（全量）
+     * @return 命中订单数
+     */
+    long countByShop(Long shopId, Collection<SubOrderStatus> statuses);
 }

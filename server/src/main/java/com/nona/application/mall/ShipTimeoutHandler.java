@@ -2,6 +2,7 @@ package com.nona.application.mall;
 
 import com.nona.inf.timeout.TimeoutHandler;
 import com.nona.inf.timeout.TimeoutType;
+import org.springframework.stereotype.Component;
 
 /**
  * 发货超时处理器（ORDER_SHIP：已支付子订单 3 天未发货自动关单退款，
@@ -22,6 +23,7 @@ import com.nona.inf.timeout.TimeoutType;
  *
  * @author nona9961
  */
+@Component
 public class ShipTimeoutHandler implements TimeoutHandler<Long> {
 
     /**

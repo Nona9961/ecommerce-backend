@@ -13,6 +13,7 @@ import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.inf.timeout.TimeoutType;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * 发起支付用例（B8.1 承载：POST /mall/payments {orderId}）——买家对
@@ -44,6 +45,7 @@ import java.util.Objects;
  *
  * @author nona9961
  */
+@Service
 public class PaymentUseCase {
 
     /**

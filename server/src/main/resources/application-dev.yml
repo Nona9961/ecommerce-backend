@@ -76,3 +76,6 @@ change-tracking:
     com.nona.domain.catalog.entity.ProductAttribute: getId
     com.nona.domain.catalog.entity.Sku: getId
     com.nona.domain.catalog.entity.ProductShopCategoryRef: id
+    com.nona.domain.payment.entity.PaymentCallbackRecord: getId
+    com.nona.domain.payment.entity.RefundCallbackRecord: getId
+    com.nona.domain.logistics.entity.WaybillTrack: getId

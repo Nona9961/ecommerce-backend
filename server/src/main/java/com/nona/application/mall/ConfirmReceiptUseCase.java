@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * 确认收货编排用例（买家主动确认收货 B9.3 + 收货超时自动完成 B9.4③，
@@ -75,6 +76,7 @@ import java.util.Objects;
  *
  * @author nona9961
  */
+@Service
 public class ConfirmReceiptUseCase {
 
     /**

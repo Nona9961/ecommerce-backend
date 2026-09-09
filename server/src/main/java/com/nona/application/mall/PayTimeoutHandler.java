@@ -2,6 +2,7 @@ package com.nona.application.mall;
 
 import com.nona.inf.timeout.TimeoutHandler;
 import com.nona.inf.timeout.TimeoutType;
+import org.springframework.stereotype.Component;
 
 /**
  * 支付超时处理器（ORDER_PAY：待支付 30 分钟自动关单回滚，B8.3）：
@@ -21,6 +22,7 @@ import com.nona.inf.timeout.TimeoutType;
  *
  * @author nona9961
  */
+@Component
 public class PayTimeoutHandler implements TimeoutHandler<Long> {
 
     /**

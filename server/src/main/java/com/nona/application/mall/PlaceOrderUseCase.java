@@ -50,6 +50,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.stereotype.Service;
 
 /**
  * 下单编排用例（买家端）：结算试算 + 提交订单（跨上下文同事务，应用层
@@ -119,6 +120,7 @@ import java.util.Set;
  *
  * @author nona9961
  */
+@Service
 public class PlaceOrderUseCase {
 
     /**

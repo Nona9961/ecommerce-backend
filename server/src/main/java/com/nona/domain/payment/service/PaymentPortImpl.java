@@ -8,6 +8,7 @@ import com.nona.domain.payment.ports.PendingPayment;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import org.springframework.stereotype.Service;
 
 /**
  * PaymentPort 实现（绿阶段已实现创建/复用与关单签名语义；bean 装配
@@ -33,6 +34,7 @@ import com.nona.exceptions.EcommerceBusinessCode;
  *
  * @author nona9961
  */
+@Service
 public class PaymentPortImpl implements PaymentPort {
 
     /**

@@ -28,4 +28,14 @@ public interface WaybillJpaRepository extends ListCrudRepository<WaybillPO, Long
      * @return 全部在途运单行；无在途返回空列表
      */
     List<WaybillPO> findByInTransitTrue();
+
+    /**
+     * 按子单装载最新运单行（任意状态，含签收终态；WU-55 冻结——
+     * 订单详情/物流展示面锚点）。主键倒序第一条（Snowflake 主键
+     * 单调近似创建序；业务常态一子单一张运单，历史并存行取最新）。
+     *
+     * @param subOrderId 子单 ID
+     * @return 最新运单行；不存在返回空
+     */
+    Optional<WaybillPO> findFirstBySubOrderIdOrderByIdDesc(Long subOrderId);
 }

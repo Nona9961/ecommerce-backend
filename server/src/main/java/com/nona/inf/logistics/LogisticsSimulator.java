@@ -8,6 +8,8 @@ import com.nona.domain.logistics.ports.WaybillDelivered;
 import com.nona.domain.logistics.ports.WaybillDeliveredPublisher;
 import com.nona.domain.logistics.repo.WaybillRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
@@ -78,6 +80,7 @@ import java.util.List;
  *
  * @author nona9961
  */
+@Component
 @Slf4j
 public class LogisticsSimulator {
 
@@ -150,6 +153,7 @@ public class LogisticsSimulator {
      * @param waybillDeliveredPublisher 签收事件发布端口
      * @param transactionTemplate      事务模板（单条推进事务）
      */
+    @Autowired
     public LogisticsSimulator(WaybillRepository waybillRepository,
                               WaybillFactory waybillFactory,
                               WaybillDeliveredPublisher waybillDeliveredPublisher,

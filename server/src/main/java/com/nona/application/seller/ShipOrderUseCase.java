@@ -15,6 +15,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import org.springframework.stereotype.Service;
 
 /**
  * 商家发货编排用例（S10.3 商家标记发货：录入承运公司与运单号，
@@ -79,6 +80,7 @@ import java.util.Objects;
  *
  * @author nona9961
  */
+@Service
 public class ShipOrderUseCase {
 
     /**

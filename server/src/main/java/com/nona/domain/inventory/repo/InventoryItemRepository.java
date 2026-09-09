@@ -3,6 +3,8 @@ package com.nona.domain.inventory.repo;
 import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.persistence.BaseRepository;
 
+import java.util.List;
+
 /**
  * 库存聚合根仓储接口（inventory_item 主表持久化契约，实现在基础设施层）。
  * <p>
@@ -107,4 +109,34 @@ public interface InventoryItemRepository extends BaseRepository<Long, InventoryI
      * @return 受影响行数（1=成功；0=已售不足或行不存在或跨店铺）
      */
     int casRestore(Long itemId, int quantity);
+
+    /**
+     * 店铺库存分页列表（WU-47 商家库存列表页查询面「服务端分页」，
+     * WU-55 冻结；全量分页无业务键过滤——当前店铺全集，租户过滤
+     * fail-closed：跨店铺请求按空呈现，归属不泄露）。
+     * <p>
+     * 排序冻结：主键 ID 升序（创建加载序，稳定分页——与仓储从表装载
+     * 的按加载序 ID 升序同纪律）。
+     * <p>
+     * <b>参数守卫（fail-closed）</b>：{@code offset < 0} 或
+     * {@code limit <= 0} 抛 {@link IllegalArgumentException}；offset
+     * 超出全集返回空列表（fail-safe，不抛异常）。
+     * <p>
+     * 读取面纪律：分页行未登记变更追踪（只读呈现——InventoryLog
+     * 分页先例同款）；如需变更保存须经 {@link #getByID} 重新装载
+     * 建立快照基线。
+     *
+     * @param offset 首条偏移量（从 0 开始）
+     * @param limit  每页条数（正数）
+     * @return 库存行列表（主键升序）；无命中为空列表
+     */
+    List<InventoryItem> listPaged(int offset, int limit);
+
+    /**
+     * 店铺库存总数（分页 total 用，语义与 {@link #listPaged} 一致——
+     * 当前租户店铺全集）。
+     *
+     * @return 命中库存行数
+     */
+    long count();
 }

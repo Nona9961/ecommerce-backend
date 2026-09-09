@@ -24,6 +24,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Objects;
 import java.util.concurrent.Callable;
+import org.springframework.stereotype.Service;
 
 /**
  * 退款编排用例（买家申请退款 B8.4 + 发货超时系统退款 B9.4② + 失败重试，
@@ -108,6 +109,7 @@ import java.util.concurrent.Callable;
  *
  * @author nona9961
  */
+@Service
 public class RefundUseCase {
 
     /**

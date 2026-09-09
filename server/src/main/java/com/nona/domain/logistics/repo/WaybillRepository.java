@@ -43,4 +43,20 @@ public interface WaybillRepository extends BaseRepository<Long, Waybill> {
      * @return 全部在途运单（不含已签收终态）；无在途返回空列表
      */
     List<Waybill> findInTransit();
+
+    /**
+     * 按子单装载运单（订单详情/物流展示面装载锚点，WU-55 冻结）：
+     * 与 {@link #findInTransitBySubOrderId} 互补——后者仅为「一子单
+     * 一在途」不变量锚点（发货编排查重），本方法承载消费面装载
+     * （WU-44 约定 GET /mall/sub-orders/{subOrderId}/waybill、WU-47
+     * 商家订单详情运单概要），含已签收终态行。
+     * <p>
+     * 业务常态一子单一张运单（发货创建 → 推进 → 签收同一行收尾）；
+     * 历史并存行（在途唯一约束只挡在途，不挡签收历史行）取最新一张
+     * （主键倒序第一条——Snowflake 主键单调近似创建序）。
+     *
+     * @param subOrderId 子单 ID
+     * @return 该子单最新运单（任意状态，含签收终态）；不存在返回空
+     */
+    Optional<Waybill> findBySubOrderId(Long subOrderId);
 }

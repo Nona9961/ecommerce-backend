@@ -2,9 +2,12 @@ package com.nona.inf.persistence.repository.jpa;
 
 import com.nona.domain.order.entity.SubOrderStatus;
 import com.nona.inf.persistence.po.order.SubOrderPO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.repository.ListCrudRepository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -33,4 +36,48 @@ public interface SubOrderJpaRepository extends ListCrudRepository<SubOrderPO, Lo
      */
     List<SubOrderPO> findByStatusAndTimeoutAtLessThanEqualOrderByTimeoutAtAsc(
             SubOrderStatus status, LocalDateTime timeoutAt, org.springframework.data.domain.Limit limit);
+
+    /**
+     * 店铺订单分页（全量）：店铺业务条件 + 租户过滤双层定位（WU-55
+     * 冻结），创建时间倒序 + 主键倒序稳定分页。本方法为「全部」tab
+     * 承载面（statuses 为 null/空集合时调用）。
+     *
+     * @param shopId   归属店铺 ID
+     * @param pageable 分页参数
+     * @return 主表行分页结果（租户过滤内，跨店空页）
+     */
+    Page<SubOrderPO> findByShopIdOrderByCreateTimeDescIdDesc(Long shopId,
+                                                             Pageable pageable);
+
+    /**
+     * 店铺订单分页（状态多值过滤）：shop_id 显式条件 + 租户过滤双层
+     * 防线（WU-55 冻结；statuses 非空集合承载面），创建时间倒序 +
+     * 主键倒序稳定分页。
+     *
+     * @param shopId   归属店铺 ID
+     * @param statuses 状态多值集合（非空）
+     * @param pageable 分页参数
+     * @return 主表行分页结果
+     */
+    Page<SubOrderPO> findByShopIdAndStatusInOrderByCreateTimeDescIdDesc(
+            Long shopId, Collection<SubOrderStatus> statuses, Pageable pageable);
+
+    /**
+     * 店铺订单计数（全量，对应
+     * {@link #findByShopIdOrderByCreateTimeDescIdDesc} 条件）。
+     *
+     * @param shopId 归属店铺 ID
+     * @return 命中主表行数
+     */
+    long countByShopId(Long shopId);
+
+    /**
+     * 店铺订单计数（状态多值过滤，对应
+     * {@link #findByShopIdAndStatusInOrderByCreateTimeDescIdDesc} 条件）。
+     *
+     * @param shopId   归属店铺 ID
+     * @param statuses 状态多值集合（非空）
+     * @return 命中主表行数
+     */
+    long countByShopIdAndStatusIn(Long shopId, Collection<SubOrderStatus> statuses);
 }

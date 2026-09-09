@@ -10,7 +10,11 @@ import com.nona.inf.persistence.converters.InventoryItemConvertor;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * 库存仓储落地：继承 {@link DifferRepository}（主表快照 + 变更追踪），
@@ -211,5 +215,36 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
         return jpaRepository.findBySkuId(skuId)
                 .map(po -> convertor.convertToRoot(po, null))
                 .orElse(null);
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 店铺库存分页（WU-47 商家库存列表页查询面，WU-55 冻结）：当前
+     * 租户店铺全集，主键 ID 升序稳定分页；参数守卫 offset&lt;0 /
+     * limit&lt;=0 拒绝；分页行未登记变更追踪（只读呈现）。
+     */
+    @Override
+    public List<InventoryItem> listPaged(int offset, int limit) {
+        if (offset < 0) {
+            throw new IllegalArgumentException("offset 不能为负：" + offset);
+        }
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit 必须为正：" + limit);
+        }
+        return jpaRepository.findAll(PageRequest.of(offset / limit, limit, Sort.by("id")))
+                .map(po -> convertor.convertToRoot(po, null))
+                .stream()
+                .toList();
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 店铺库存总数（分页 total 用，当前租户店铺全集）。
+     */
+    @Override
+    public long count() {
+        return jpaRepository.count();
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.concurrent.Executor;
+import org.springframework.stereotype.Service;
 
 /**
  * 签收自动完成消费方（logistics 签收事件 → order 自动完成联动）：
@@ -74,6 +75,7 @@ import java.util.concurrent.Executor;
  *
  * @author nona9961
  */
+@Service
 @Slf4j
 public class WaybillDeliveredReceiptListener {
 

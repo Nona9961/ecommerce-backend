@@ -7,6 +7,7 @@ import com.nona.util.IDUtils;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import org.springframework.stereotype.Component;
 
 /**
  * 退款单聚合根工厂：退款单的创建入口（ID 生成 + refundNo 生成 + 创建
@@ -35,6 +36,7 @@ import java.time.format.DateTimeFormatter;
  *
  * @author nona9961
  */
+@Component
 public class RefundOrderFactory {
 
     /**
