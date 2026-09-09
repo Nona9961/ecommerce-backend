@@ -99,7 +99,6 @@
                 <configuration>
                     <argLine>--add-opens java.base/java.lang=ALL-UNNAMED -XX:+EnableDynamicAgentLoading -javaagent:/opt/code/.m2/repository/net/bytebuddy/byte-buddy-agent/${byte-buddy.version}/byte-buddy-agent-${byte-buddy.version}.jar</argLine>
                     <excludes>
-                        <exclude>**/*SmokeTest</exclude>
                         <exclude>**/*AcTest</exclude>
                     </excludes>
                 </configuration>
@@ -134,7 +133,7 @@
     <profiles>
         <profile>
             <id>full</id>
-            <!-- 全量执行：去除 surefire 默认的两条分类排除（冒烟/AC 一并跑），验收期使用 -->
+            <!-- 全量执行：去除 surefire 默认的一条分类排除（AC 一并跑），验收期使用 -->
             <build>
                 <plugins>
                     <plugin>

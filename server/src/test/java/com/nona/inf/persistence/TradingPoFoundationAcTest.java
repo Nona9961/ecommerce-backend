@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * validate 失败（9 表缺失）整体红 = 契约闸门生效；绿阶段 V2 落库 +
  * 9 个新 PO 进入 validate 校验面后本类直接转绿，无需改方法体。
  * 运行命令模板见红阶段报告（localtunnel + ECOM_DB_PASSWORD +
- * -Pfull -Dtest=TradingPoFoundationSmokeTest）。
+ * -Pfull -Dtest=TradingPoFoundationAcTest）。
  * <p>
  * 装配纪律：注入面 = 9 个 JPA 接口（Spring Data 自动实现，无领域仓储
  * bean——WU-55 前 5 个 DifferRepository 实现不存在）；租户面以
@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author nona9961
  */
 @SpringBootTest
-class TradingPoFoundationSmokeTest {
+class TradingPoFoundationAcTest {
 
     /**
      * 测试主键种子（自增，避开 Snowflake 面）

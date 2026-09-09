@@ -15,7 +15,7 @@ import java.util.List;
  * <p>
  * 语义：
  * <ul>
- * <li>{@code information_schema} 动态枚举 ecommerce 库 BASE TABLE，排除部署位探针表
+ * <li>{@code information_schema} 动态枚举 ecommerce_test 库 BASE TABLE，排除部署位探针表
  *     {@code cdc_probe} 与 Flyway 元数据表 {@code flyway_schema_history}——未来 V2+ 新表
  *     自动纳入，无表清单硬编码；</li>
  * <li>{@code SET FOREIGN_KEY_CHECKS=0} 双保险（PO 零关联注解、库中本无 FK，属过防御）；
@@ -37,7 +37,7 @@ public final class TestDbReset {
         }
         String host = envOr("ECOM_DB_HOST", "127.0.0.1");
         String port = envOr("ECOM_DB_PORT", "13306");
-        String db = envOr("ECOM_DB_NAME", "ecommerce");
+        String db = envOr("ECOM_DB_NAME", "ecommerce_test");
         String user = envOr("ECOM_DB_USER", "ecom_app");
         String url = "jdbc:mysql://" + host + ":" + port + "/" + db
                 + "?connectTimeout=5000&socketTimeout=8000&useSSL=false&allowPublicKeyRetrieval=true";

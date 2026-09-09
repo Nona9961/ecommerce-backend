@@ -32,9 +32,9 @@ import static org.assertj.core.api.Assertions.fail;
  * set -a; . /opt/data-stack/.env; set +a
  * export ECOM_DB_PASSWORD="$MYSQL_ECOM_PW"
  * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend \
- *   &amp;&amp; mvn -o -llr -s /opt/code/.m2/settings.xml -Pfull -Dtest=MigrationSmokeTest test'
+ *   &amp;&amp; mvn -o -llr -s /opt/code/.m2/settings.xml -Pfull -Dtest=MigrationAcTest test'
  * </pre>
- * 测试分类：SmokeTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行；命名合规见 WU-52 后缀表）。
+ * 测试分类：AcTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行；命名合规见 WU-52 后缀表）。
  * <p>
  * <b>生命周期声明</b>：
  * <ul>
@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.fail;
  *     Flyway 触碰——探针表不入迁移脚本的部署位契约），其余用例保持常绿</li>
  * </ul>
  */
-class MigrationSmokeTest {
+class MigrationAcTest {
 
     private static final String HOST = "127.0.0.1";
     private static final int PORT = 13306;

@@ -12,8 +12,8 @@ import org.springframework.boot.test.context.SpringBootTest;
  * 写段真实面 / 幂等重放真实面 / 失败回调链 / 仓储链路 + 留痕从表装载
  * / 仓储降级规则。
  * <p>
- * <b>降级声明（red 已定义规则，同 WU-029 CancelOrderSmokeTest /
- * WU-030 ConfirmReceiptSmokeTest 先例）</b>：本类当前 {@code @Disabled}
+ * <b>降级声明（red 已定义规则，同 WU-029 CancelOrderAcTest /
+ * WU-030 ConfirmReceiptAcTest 先例）</b>：本类当前 {@code @Disabled}
  * ——其真实事务链依赖 PaymentOrder/SubOrder/MasterOrder 仓储 JPA 实现
  * + PaymentCallbackUseCase/OrderFacadeImpl 的 Spring 注册，而 order/
  * payment 域仓储当前均无实现类（red 装配声明：用例不注册 bean，注册
@@ -30,7 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：PaymentOrder/SubOrder/MasterOrder 仓储 JPA 实现未落地，" +
         "真实事务链无法装配（red 降级规则，见类 javadoc）")
-class PaymentCallbackSmokeTest {
+class PaymentCallbackAcTest {
 
     /**
      * 冒烟-1 真实事务三域原子（核心）：真实 Spring 事务下成功回调全链

@@ -9,9 +9,10 @@
 # 可选覆盖：ECOM_DB_HOST / ECOM_DB_PORT / ECOM_DB_NAME / ECOM_DB_USER
 # 依赖：JDK 25（JEP 330 单文件源码模式，零编译）+ 本地 m2 的 mysql-connector-j
 #       （无 mysql CLI 依赖）。
-# 行为：information_schema 动态枚举 ecommerce 库 BASE TABLE（排除 cdc_probe /
+# 行为：information_schema 动态枚举 ecommerce_test 库 BASE TABLE（排除 cdc_probe /
 #       flyway_schema_history）逐表 DELETE；SET FOREIGN_KEY_CHECKS=0 双保险；
 #       清理后逐表 COUNT(*) 断言表空（非 0 → 非零退出码）。
+# 默认库：ecommerce_test（ECOM_DB_NAME 可覆盖指向其他库）。
 # =============================================================================
 set -euo pipefail
 

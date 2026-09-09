@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * 6 条——真实事务双入口 / 完成事件真实投递 / 提权事务边界 / 幂等重放
  * 真实面 / 归属过滤 + 仓储链路 / 仓储降级规则。
  * <p>
- * <b>降级声明（red 已定义规则，同 WU-029 CancelOrderSmokeTest 先例）</b>：
+ * <b>降级声明（red 已定义规则，同 WU-029 CancelOrderAcTest 先例）</b>：
  * 本类当前 {@code @Disabled}——其真实事务链依赖 MasterOrder/SubOrder
  * 仓储 JPA 实现 + ConfirmReceiptUseCase/OrderFacadeImpl/
  * SpringOrderCompletedEventPublisher 的 Spring 注册，而 MasterOrder/
@@ -32,7 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：MasterOrder/SubOrder 仓储 JPA 实现未落地，" +
         "真实事务链无法装配（red 降级规则，见类 javadoc）")
-class ConfirmReceiptSmokeTest {
+class ConfirmReceiptAcTest {
 
     /**
      * 冒烟-1 真实事务双入口（核心）：真实 Spring 事务下

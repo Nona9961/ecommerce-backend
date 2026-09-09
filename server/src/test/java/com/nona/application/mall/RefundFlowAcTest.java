@@ -11,8 +11,8 @@ import org.springframework.boot.test.context.SpringBootTest;
  * 全链 + 回调成功全链 + 失败链 + 编排回滚实测）/ 提权写段真实面 / 幂等
  * 重放真实面 / 发货超时复用链 / 仓储链路 + 留痕从表装载。
  * <p>
- * <b>降级声明（red 已定义规则，同 CancelOrderSmokeTest /
- * PaymentCallbackSmokeTest 先例）</b>：本类当前 {@code @Disabled}
+ * <b>降级声明（red 已定义规则，同 CancelOrderAcTest /
+ * PaymentCallbackAcTest 先例）</b>：本类当前 {@code @Disabled}
  * ——其真实事务链依赖 RefundOrder/SubOrder/MasterOrder/PaymentOrder
  * 仓储 JPA 实现 + RefundUseCase/RefundCallbackUseCase/OrderFacadeImpl
  * 的 Spring 注册，而 order/payment 域仓储当前均无实现类（red 装配声
@@ -30,7 +30,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：RefundOrder/SubOrder/MasterOrder/PaymentOrder 仓储 JPA 实现未落地，" +
         "真实事务链无法装配（red 降级规则，见类 javadoc）")
-class RefundFlowSmokeTest {
+class RefundFlowAcTest {
 
     /**
      * 冒烟-1 申请全链真实事务（核心）：真实 Spring 事务下买家申请退款全链

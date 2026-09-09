@@ -114,9 +114,15 @@
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-mysql</artifactId>
         </dependency>
-        <!-- replica 读库（PG，WU-41）：装配位在 ReplicaDataSourceConfig，
-            驱动依赖（org.postgresql:postgresql）后置为发布准备项——
-            本地 m2 离线无该构件，测试/开发走 H2 模拟，见报告决策表② -->
+        <!-- replica 读库（PG）：装配位在 ReplicaDataSourceConfig；test profile
+            replica 段经 jdbc:postgresql://127.0.0.1:15432/ecommerce_test 真链，
+            版本由 Boot 4.1 BOM 管理（42.7.11）；dev 面保持 H2 模拟。test scope：
+            仅测试链使用，运行面不打包 PG 驱动 -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents.client5/httpclient5 -->
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>

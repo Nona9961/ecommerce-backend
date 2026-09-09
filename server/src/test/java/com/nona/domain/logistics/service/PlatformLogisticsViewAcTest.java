@@ -25,7 +25,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：PlatformLogisticsViewRepositoryImpl 实现未接线，" +
         "真实 replica 查询链无法跑通（红阶段降级规则，见类 javadoc）")
-class PlatformLogisticsViewSmokeTest {
+class PlatformLogisticsViewAcTest {
 
     /**
      * 冒烟-1 真实 replica 查询链路（核心）：fixture 在 replica 数据源

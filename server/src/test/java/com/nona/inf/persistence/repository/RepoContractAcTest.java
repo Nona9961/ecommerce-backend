@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * 4) 差异追踪链路（装载→变更→save→重载一致、从表插行）；5) 查询契约
  * 分页形状（排序/多值过滤/count/空集=全量）；6) waybill 终态装载面。
  * <p>
- * 装配纪律：断言对齐 TradingPoFoundationSmokeTest 先例——TrackingContext
+ * 装配纪律：断言对齐 TradingPoFoundationAcTest 先例——TrackingContext
  * withScope（租户 fail-closed 由 Hibernate @TenantId 过滤器承载）、
  * AtomicLong 主键种子（避开既有数据面）、领域构造器 + 仓储 save（变更
  * 追踪全链路）为主、JPA PO 直写为辅（超时 SQL 面三列领域不承载，仓库
@@ -66,10 +66,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author nona9961
  */
 @SpringBootTest
-class RepoContractSmokeTest {
+class RepoContractAcTest {
 
     /**
-     * 测试主键种子（自增，避开 TradingPoFoundationSmokeTest 的 100 万段）
+     * 测试主键种子（自增，避开 TradingPoFoundationAcTest 的 100 万段）
      */
     private static final AtomicLong IDS = new AtomicLong(2_000_000L);
 

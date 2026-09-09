@@ -29,7 +29,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：Waybill/SubOrder 仓储 JPA 实现未落地，" +
         "真实推进链与事件消费装配无法成立（红阶段降级规则，见类 javadoc）")
-class LogisticsSimulatorSmokeTest {
+class LogisticsSimulatorAcTest {
 
     /**
      * 冒烟-1 真实推进链路（核心）：真实 Spring 事务下扫描推进跑一次

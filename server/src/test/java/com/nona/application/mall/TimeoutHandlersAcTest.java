@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
  * 清单见红设计报告 §冒烟清单——支付超时关单链路 / 发货超时退款链路 /
  * 收货超时自动完成链路。
  * <p>
- * <b>降级声明（红阶段已定义规则，同 ShipOrderSmokeTest 等先例）</b>：
+ * <b>降级声明（红阶段已定义规则，同 ShipOrderAcTest 等先例）</b>：
  * 本类当前 {@code @Disabled}——真实事务链依赖 PaymentOrder/SubOrder/
  * MasterOrder/RefundOrder 仓储 JPA 实现与三个用例、三个 handler、三个
  * store 的 Spring 注册，而仓储当前均无实现类（红阶段装配声明：用例与
@@ -29,7 +29,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：PaymentOrder/SubOrder/MasterOrder/RefundOrder 仓储 JPA 实现" +
         "未落地，真实事务链无法装配（红阶段降级规则，见类 javadoc）")
-class TimeoutHandlersSmokeTest {
+class TimeoutHandlersAcTest {
 
     /**
      * 冒烟-1 支付超时真实链路（核心）：真实 Spring 事务下到期候选经

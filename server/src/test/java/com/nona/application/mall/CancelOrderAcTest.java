@@ -28,7 +28,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @Disabled("仓储接线后启用：MasterOrder/SubOrder/PaymentOrder 仓储 JPA 实现未落地，" +
         "真实事务链无法装配（red 降级规则，见类 javadoc）")
-class CancelOrderSmokeTest {
+class CancelOrderAcTest {
 
     /**
      * 冒烟-1 真实事务三联动（核心）：真实 Spring 事务下调用

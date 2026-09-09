@@ -140,7 +140,7 @@ class ProductSearchWriteWindowIntegrationAcTest {
     /**
      * 用例后清理主库模拟表（WU-53 基线契约）：product_search_view 是主库上的
      * 测试自建读模型模拟表（replica 面为 JVM 内 H2 无需清），残留会破坏
-     * MigrationSmokeTest 基线「无多余业务表」精确断言——每用例重建语义不变，
+     * MigrationAcTest 基线「无多余业务表」精确断言——每用例重建语义不变，
      * 库面保持干净。
      */
     @AfterEach
