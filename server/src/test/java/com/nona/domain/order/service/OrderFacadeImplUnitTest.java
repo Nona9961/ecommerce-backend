@@ -318,10 +318,36 @@ class OrderFacadeImplUnitTest {
         orderFacade.autoComplete(SUB_A);
 
         final InOrder inOrder = inOrder(subOrderRepository, masterOrderRepository);
-        inOrder.verify(subOrderRepository).save(org.mockito.ArgumentMatchers.any(SubOrder.class));
+        // 保存的是被修改的 getByID 实例（引用同一性断言，非任意参数）
+        inOrder.verify(subOrderRepository).save(shipped);
         inOrder.verify(masterOrderRepository).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
         assertThat(subOrderRepository.getByID(SUB_A).getStatus())
                 .isEqualTo(SubOrderStatus.COMPLETED);
+        assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
+                .isEqualTo(MasterOrderStatus.COMPLETED);
+    }
+
+    /**
+     * critical-3 <b>引用不一致回归</b>：getByID 装载的目标实例 X 与会话列表
+     * （getByMasterOrderId）装载的实例 Y 非同一引用——保存段必须保存被
+     * 修改的 X（而非列表项 Y），主单投影按 X 的状态派生（否则目标子单
+     * 状态迁移丢失、主单派生错误）。修复前行为：保存 Y（无变更）、投影
+     * 用 Y 旧状态——本用例锁死修复语义。
+     */
+    @Test
+    @DisplayName("会话列表与目标实例不同引用：保存被修改实例 + 投影按被修改实例派生")
+    void autoComplete_distinctListInstance_savesModifiedTarget() {
+        final SubOrder shippedX = subWithStatus(SubOrderStatus.SHIPPED, 5001L);
+        final SubOrder listY = subWithStatus(SubOrderStatus.SHIPPED, 5001L);
+        when(subOrderRepository.getByID(SUB_A)).thenReturn(shippedX);
+        when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
+        when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(listY));
+
+        orderFacade.autoComplete(SUB_A);
+
+        verify(subOrderRepository).save(shippedX);
+        verify(subOrderRepository, never()).save(listY);
+        assertThat(shippedX.getStatus()).isEqualTo(SubOrderStatus.COMPLETED);
         assertThat(masterOrderRepository.getByID(MASTER_ID).getStatus())
                 .isEqualTo(MasterOrderStatus.COMPLETED);
     }

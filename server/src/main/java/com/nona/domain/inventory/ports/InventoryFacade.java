@@ -10,12 +10,14 @@ import java.util.List;
  *         列值，缺行按 0 呈现、跨店铺 fail-closed 不可见）；</li>
  *     <li>{@link #preoccupy} / {@link #confirmDeduct} / {@link #rollback}——
  *         订单驱动三动作（下单预占 / 支付确认扣减 / 取消与超时回滚），
- *         签名随冻结声明、门面动作面未接线（防超卖唯一机制为数据库条件
- *         更新；域内编排由应用层用例承载）；</li>
+ *         签名随冻结声明、动作面已接线（委托库存域服务
+ *         {@link com.nona.domain.inventory.service.InventoryReservationService}，
+ *         防超卖唯一机制为数据库条件更新；域内编排由应用层用例承载）；</li>
  *     <li>{@link #adjust}——商家手工调整可售（仅可售变动，调整后 ≥ 0），
- *         签名随冻结声明、门面动作面未接线（域内编排由商家端用例承载）；</li>
+ *         签名随冻结声明、保持契约冻结占位（操作人来源待契约演进，域内
+ *         编排由商家端用例承载）；</li>
  *     <li>{@link #restore}——退款回补（已售回补可售），签名随冻结声明、
- *         门面动作面未接线（域内编排由应用层回补用例承载）。</li>
+ *         动作面已接线（委托库存域服务，域内编排由应用层回补用例承载）。</li>
  * </ul>
  * 并发一致性：跨域编排（下单/支付/取消用例）在应用层事务内调用本门面与
  * 订单聚合推进，任一失败整体回滚。租户语义：域内读写
@@ -36,8 +38,9 @@ public interface InventoryFacade {
     List<InventoryAvailable> queryAvailable(List<Long> skuIds);
 
     /**
-     * 下单预占（订单驱动，签名冻结；门面动作面未接线，域内编排由应用
-     * 层用例承载）。
+     * 下单预占（订单驱动，签名冻结；动作面已接线——委托库存域服务
+     * {@link com.nona.domain.inventory.service.InventoryReservationService}，
+     * 域内编排由应用层用例承载）。
      *
      * @param orderId 订单 ID
      * @param items   预占明细（SKU + 数量）
@@ -45,8 +48,8 @@ public interface InventoryFacade {
     void preoccupy(Long orderId, List<StockChangeItem> items);
 
     /**
-     * 支付成功确认扣减（订单驱动，签名冻结；门面动作面未接线，域内编
-     * 排由应用层用例承载）。
+     * 支付成功确认扣减（订单驱动，签名冻结；动作面已接线，域内编排由
+     * 应用层用例承载）。
      *
      * @param orderId 订单 ID
      * @param items   扣减明细（SKU + 数量）
@@ -54,8 +57,8 @@ public interface InventoryFacade {
     void confirmDeduct(Long orderId, List<StockChangeItem> items);
 
     /**
-     * 预占回滚（取消/超时释放，订单驱动，签名冻结；门面动作面未接线，
-     * 域内编排由应用层用例承载）。
+     * 预占回滚（取消/超时释放，订单驱动，签名冻结；动作面已接线，域内
+     * 编排由应用层用例承载）。
      *
      * @param orderId 订单 ID
      * @param items   回滚明细（SKU + 数量）
@@ -63,8 +66,8 @@ public interface InventoryFacade {
     void rollback(Long orderId, List<StockChangeItem> items);
 
     /**
-     * 商家手工调整可售（签名冻结；门面动作面未接线，域内编排由商家端
-     * 用例承载）。
+     * 商家手工调整可售（签名冻结；保持契约冻结占位——操作人来源待契约
+     * 演进，域内编排由商家端用例承载）。
      *
      * @param skuId 目标 SKU ID
      * @param delta 可售调整量（带符号；调整后可售 ≥ 0）
@@ -73,9 +76,9 @@ public interface InventoryFacade {
 
     /**
      * 退款回补（未发货退款/发货超时关单驱动：已售回补可售——订单驱动，
-     * 签名冻结、门面动作面未接线，域内编排由应用层回补用例承载；
-     * 已发货/已完成不回补的语义由编排层按子单状态判定保障——本契约只
-     * 承载域能力）。
+     * 签名冻结、动作面已接线（委托库存域服务），域内编排由应用层回补
+     * 用例承载；已发货/已完成不回补的语义由编排层按子单状态判定保障——
+     * 本契约只承载域能力）。
      * <p>
      * 幂等键 (order_id, sku_id, type) 同预占/确认/回滚复用：同一订单
      * 同一 SKU 的 REFUND_RESTORE 只允许一次（重复退款回调不重复回补）；

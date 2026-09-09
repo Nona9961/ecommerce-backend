@@ -13,9 +13,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * OrderFacade 实现（订单侧状态推进契约，本阶段接线 cancel + autoComplete +
- * onPaid + markShipped 四成员；markShipped 为商家发货编排消费面——运单
- * 创建后子单发货推进 + 运单引用定型 + 主单派生，双参冻结签名）。
+ * OrderFacade 实现（订单侧状态推进契约，七成员全部接线：cancel + onPaid
+ * + markShipped + autoComplete + beginRefund + completeRefund + closeByTimeout；markShipped 为商家发货编排消费面——运单创建后子单发货
+ * 推进 + 运单引用定型 + 主单派生，双参冻结签名）。
  * <p>
  * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约，绿阶段实现依据）：
  * <ul>
@@ -74,9 +74,16 @@ import org.springframework.stereotype.Service;
  * 库存回滚编排（取消场景）不落本类——跨域动作按应用层用例承载（编排
  * 用例经 InventoryFacade 逐子单回滚，与预占对称）。
  * <p>
- * 装配说明（红阶段）：本类为普通类（不注册 Spring bean——依赖的
- * MasterOrder/SubOrder 仓储接口当前无 JPA 实现，注册即装配错误；绿阶段
- * 仓储实现落地后补注解并复验上下文，参照 PaymentPortImpl 同规则）。
+ * 装配说明：本类已注册 Spring bean（@Service）——依赖的 MasterOrder/
+ * SubOrder 仓储接口自接线阶段（仓储实现落地）起有 JPA 实现，注册合法。
+ * <p>
+ * 保存语义（5 个按 subOrderId 定位的方法：markShipped/autoComplete/
+ * beginRefund/completeRefund/closeByTimeout）：目标子单经 {@code getByID}
+ * 装载为独立实例并原地推进状态，会话列表（{@code getByMasterOrderId}）
+ * 为另一次装配（快照基线仅 getByID 路径登记）——保存段将目标被修改
+ * 实例替换进列表后同批保存（保存被修改的实例，且主单投影按替换后列表
+ * 派生，保证目标子单状态迁移落库与主单派生正确）。onPaid/cancel 按主单
+ * 装载路径推进（逐子单同实例修改），无引用区分问题。
  *
  * @author nona9961
  */
@@ -221,11 +228,14 @@ public class OrderFacadeImpl implements OrderFacade {
         // 操作者店铺以子单归属店铺自证：用例层归属校验先行保证二者相等
         // （不符早按不存在 404 呈现），门面签名双参冻结不携带操作者上下文
         subOrder.markShipped(subOrder.getShopId(), waybillId);
-        final List<SubOrderStatus> projection = subOrders.stream()
+        final List<SubOrder> updatedSubOrders = subOrders.stream()
+                .map(item -> item.getId().equals(subOrder.getId()) ? subOrder : item)
+                .toList();
+        final List<SubOrderStatus> projection = updatedSubOrders.stream()
                 .map(SubOrder::getStatus)
                 .toList();
         masterOrder.deriveStatus(projection);
-        for (final SubOrder item : subOrders) {
+        for (final SubOrder item : updatedSubOrders) {
             subOrderRepository.save(item);
         }
         masterOrderRepository.save(masterOrder);
@@ -264,11 +274,14 @@ public class OrderFacadeImpl implements OrderFacade {
                     "主订单下无子订单（装配异常）", 404);
         }
         subOrder.markCompleted();
-        final List<SubOrderStatus> projection = subOrders.stream()
+        final List<SubOrder> updatedSubOrders = subOrders.stream()
+                .map(item -> item.getId().equals(subOrder.getId()) ? subOrder : item)
+                .toList();
+        final List<SubOrderStatus> projection = updatedSubOrders.stream()
                 .map(SubOrder::getStatus)
                 .toList();
         masterOrder.deriveStatus(projection);
-        for (final SubOrder item : subOrders) {
+        for (final SubOrder item : updatedSubOrders) {
             subOrderRepository.save(item);
         }
         masterOrderRepository.save(masterOrder);
@@ -312,11 +325,14 @@ public class OrderFacadeImpl implements OrderFacade {
                     "主订单下无子订单（装配异常）", 404);
         }
         subOrder.markRefunding();
-        final List<SubOrderStatus> projection = subOrders.stream()
+        final List<SubOrder> updatedSubOrders = subOrders.stream()
+                .map(item -> item.getId().equals(subOrder.getId()) ? subOrder : item)
+                .toList();
+        final List<SubOrderStatus> projection = updatedSubOrders.stream()
                 .map(SubOrder::getStatus)
                 .toList();
         masterOrder.deriveStatus(projection);
-        for (final SubOrder item : subOrders) {
+        for (final SubOrder item : updatedSubOrders) {
             subOrderRepository.save(item);
         }
         masterOrderRepository.save(masterOrder);
@@ -365,11 +381,14 @@ public class OrderFacadeImpl implements OrderFacade {
                     "主订单下无子订单（装配异常）", 404);
         }
         subOrder.markRefunded();
-        final List<SubOrderStatus> projection = subOrders.stream()
+        final List<SubOrder> updatedSubOrders = subOrders.stream()
+                .map(item -> item.getId().equals(subOrder.getId()) ? subOrder : item)
+                .toList();
+        final List<SubOrderStatus> projection = updatedSubOrders.stream()
                 .map(SubOrder::getStatus)
                 .toList();
         masterOrder.deriveStatus(projection);
-        for (final SubOrder item : subOrders) {
+        for (final SubOrder item : updatedSubOrders) {
             subOrderRepository.save(item);
         }
         masterOrderRepository.save(masterOrder);
@@ -410,11 +429,14 @@ public class OrderFacadeImpl implements OrderFacade {
                     "主订单下无子订单（装配异常）", 404);
         }
         subOrder.closeByTimeout();
-        final List<SubOrderStatus> projection = subOrders.stream()
+        final List<SubOrder> updatedSubOrders = subOrders.stream()
+                .map(item -> item.getId().equals(subOrder.getId()) ? subOrder : item)
+                .toList();
+        final List<SubOrderStatus> projection = updatedSubOrders.stream()
                 .map(SubOrder::getStatus)
                 .toList();
         masterOrder.deriveStatus(projection);
-        for (final SubOrder item : subOrders) {
+        for (final SubOrder item : updatedSubOrders) {
             subOrderRepository.save(item);
         }
         masterOrderRepository.save(masterOrder);
