@@ -7,6 +7,7 @@ import com.nona.domain.logistics.factory.WaybillFactory;
 import com.nona.domain.logistics.ports.WaybillDelivered;
 import com.nona.domain.logistics.ports.WaybillDeliveredPublisher;
 import com.nona.domain.logistics.repo.WaybillRepository;
+import com.nona.inf.context.TrackingContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -199,19 +200,26 @@ public class LogisticsSimulator {
      * （待发货无延时直推 / 已发货满 30 秒推进 / 运输中满 60 秒推进并
      * 发布签收事件 / 已签收终态跳过）→ 每条独立事务，单条失败告警后
      * 继续下一条。
+     * <p>
+     * 跟踪作用域：本方法是调度面入口（{@code @Scheduled} 线程无入口组件绑定
+     * TRACKING scope，而推进落库（运单/轨迹变更集驱动）要求
+     * {@code TrackingContext.withScope}——fail-closed）→ 方法内绑定系统上下文
+     * （与测试手触 withScope 同形态；嵌套绑定安全）。
      */
     @Scheduled(fixedDelayString = "${nona.logistics.scan-interval-ms:5000}")
     public void scanAndAdvance() {
-        final List<Waybill> inTransit = waybillRepository.findInTransit();
-        final Instant now = clock.instant();
-        for (final Waybill waybill : inTransit) {
-            try {
-                transactionTemplate.execute(status -> advanceOne(waybill, now));
-            } catch (final RuntimeException ex) {
-                log.warn("[logistics-simulator] waybill advance failed, will be retried next scan: waybillId={}, msg={}",
-                        waybill.getId(), ex.getMessage(), ex);
+        TrackingContext.withScope(() -> {
+            final List<Waybill> inTransit = waybillRepository.findInTransit();
+            final Instant now = clock.instant();
+            for (final Waybill waybill : inTransit) {
+                try {
+                    transactionTemplate.execute(status -> advanceOne(waybill, now));
+                } catch (final RuntimeException ex) {
+                    log.warn("[logistics-simulator] waybill advance failed, will be retried next scan: waybillId={}, msg={}",
+                            waybill.getId(), ex.getMessage(), ex);
+                }
             }
-        }
+        });
     }
 
     /**

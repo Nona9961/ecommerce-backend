@@ -9,7 +9,7 @@ package com.nona.api.common;
  * @param pageNum  页码，从 1 开始
  * @param pageSize 每页条数，默认 10，上限 100
  */
-public record PageQuery(int pageNum, int pageSize) {
+public record PageQuery(Integer pageNum, Integer pageSize) {
 
     /**
      * 默认每页条数
@@ -31,16 +31,18 @@ public record PageQuery(int pageNum, int pageSize) {
     }
 
     /**
-     * 紧凑构造器：归一化页码与条数到合法区间。
+     * 紧凑构造器：归一化页码与条数到合法区间（含缺省 {@code null} 回落——
+     * web 层以 {@code PageQuery} 为模型属性绑定时请求缺参不再 400，
+     * 缺省 = 默认值语义）。
      *
-     * @param pageNum  原始页码
-     * @param pageSize 原始条数
+     * @param pageNum  原始页码（缺省/小于 1 → 1）
+     * @param pageSize 原始条数（缺省/小于 1 → 默认值，超出上限 → 上限）
      */
     public PageQuery {
-        if (pageNum < 1) {
+        if (pageNum == null || pageNum < 1) {
             pageNum = 1;
         }
-        if (pageSize < 1) {
+        if (pageSize == null || pageSize < 1) {
             pageSize = DEFAULT_PAGE_SIZE;
         }
         if (pageSize > MAX_PAGE_SIZE) {

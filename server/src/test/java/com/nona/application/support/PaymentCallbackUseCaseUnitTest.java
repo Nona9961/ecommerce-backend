@@ -131,6 +131,13 @@ class PaymentCallbackUseCaseUnitTest {
             lenient().when(tenantPrivilege.elevatedInTransaction(
                             eq(transactionTemplate), any(Callable.class)))
                     .thenAnswer(invocation -> invocation.getArgument(1, Callable.class).call());
+            // 落库律独立事务（被拒回调留痕 save 走 REQUIRES_NEW）：stub execute
+            // 直接执行回调（同 TenantPrivilegeUnitTest mock 形态）
+            lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+                final org.springframework.transaction.support.TransactionCallback<Object> callback =
+                        invocation.getArgument(0);
+                return callback.doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus());
+            });
         } catch (final Exception e) {
             throw new IllegalStateException("提权事务 stub 装配失败", e);
         }

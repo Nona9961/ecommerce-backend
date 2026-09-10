@@ -1,7 +1,13 @@
 package com.nona.inf.timeout;
 
+import com.nona.inf.context.TenantPrivilege;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -34,8 +40,16 @@ class TimeoutSchedulerUnitTest {
 
     private TimeoutScheduler newScheduler(List<TimeoutTaskStore<?>> stores,
                                           TimeoutTestKit.FakeHandler... handlers) {
-        TimeoutTaskProcessor processor =
-                new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handlers));
+        final TransactionTemplate transactionTemplate = Mockito.mock(TransactionTemplate.class);
+        final TransactionStatus status = new SimpleTransactionStatus();
+        Mockito.when(transactionTemplate.execute(Mockito.any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final TransactionCallback<Object> callback = invocation.getArgument(0);
+            return callback.doInTransaction(status);
+        });
+        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(
+                new TimeoutTestKit.FakeRegistry(handlers),
+                new TenantPrivilege(List.of(), null), transactionTemplate);
         return new TimeoutScheduler(stores, processor, Clock.fixed(NOW, ZoneOffset.UTC));
     }
 

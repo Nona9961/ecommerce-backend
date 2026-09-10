@@ -1,7 +1,13 @@
 package com.nona.inf.timeout;
 
+import com.nona.inf.context.TenantPrivilege;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,8 +37,16 @@ class TimeoutSchedulerConcurrencyUnitTest {
         // DB 事务窗口）：两线程同时出发，后者必在先者清除前到达 claim
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_PAY)
                 .fireDelay(100);
-        TimeoutTaskProcessor processor =
-                new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        final TransactionTemplate transactionTemplate = Mockito.mock(TransactionTemplate.class);
+        final TransactionStatus status = new SimpleTransactionStatus();
+        Mockito.when(transactionTemplate.execute(Mockito.any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final TransactionCallback<Object> callback = invocation.getArgument(0);
+            return callback.doInTransaction(status);
+        });
+        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(
+                new TimeoutTestKit.FakeRegistry(handler),
+                new TenantPrivilege(List.of(), null), transactionTemplate);
         TimeoutTask<Long> task = store.findDue(NOW, 10).get(0);
 
         int threads = 2;

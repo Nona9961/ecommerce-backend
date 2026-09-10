@@ -1,5 +1,6 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.changeTracking.domain.model.tracking.ChangeTracker;
 import com.nona.domain.payment.entity.PaymentOrder;
 import com.nona.domain.payment.entity.PaymentOrderStatus;
 import com.nona.inf.persistence.converters.PaymentOrderConvertor;
@@ -117,10 +118,17 @@ class PaymentOrderRepositoryImplUnitTest {
                 .thenReturn(order);
         when(callbackLogJpaRepository.findByPaymentOrderIdOrderByIdAsc(any()))
                 .thenReturn(List.of());
+        // 快照基线登记（模板语义）：装载面需跟踪作用域 + 懒创建追踪器
+        final ChangeTracker tracker = org.mockito.Mockito.mock(ChangeTracker.class);
+        when(changeTrackerProvider.create()).thenReturn(tracker);
 
-        final PaymentOrder result = repository.findByPayNo(PAY_NO);
+        final PaymentOrder[] holder = new PaymentOrder[1];
+        com.nona.inf.context.TrackingContext.withScope(() -> {
+            holder[0] = repository.findByPayNo(PAY_NO);
+        });
 
-        assertThat(result).isSameAs(order);
+        assertThat(holder[0]).isSameAs(order);
+        verify(tracker).track(order);
     }
 
     @Test

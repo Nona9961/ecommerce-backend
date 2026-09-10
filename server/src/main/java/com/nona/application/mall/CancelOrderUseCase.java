@@ -13,6 +13,7 @@ import com.nona.domain.payment.ports.PaymentPort;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -64,8 +65,12 @@ import org.springframework.stereotype.Service;
  * <p>
  * 事务边界 = 用例方法（方法级 {@link Transactional}）；领域方法不做事务。
  * 租户纪律：写放行（elevatedInTransaction）只出现在本类（application
- * 层），domain 内不放行；读放行（{@code @CrossTenant}）本用例不需要
- * （主单/支付单为 global 表，子单/回滚读在提权事务段内）。
+ * 层），domain 内不放行；读放行（{@code @CrossTenant}）只出现在本类
+ * 入口方法——主单装载经 getOther 反查子单 id 集合（tenant-scoped，
+ * 买家/调度上下文无视角时被租户过滤置空 → 聚合守卫 SUB_EMPTY 误报），
+ * 方法级读放行罩住前置装载段（写段保持 elevatedInTransaction 门禁，
+ * 注解不影响写门禁——CrossTenantAspect 语义），PlaceOrderUseCase
+ * 先例同形。
  * <p>
  * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
  * MasterOrder/SubOrder/PaymentOrder 仓储实现未接线（红阶段装配学习，
@@ -165,6 +170,7 @@ public class CancelOrderUseCase {
      * @param reason       取消原因（可空——买家不填原因时传 null，透传
      *                     订单门面）
      */
+    @CrossTenant
     @Transactional
     public void cancelByBuyer(Long buyerId, Long masterOrderId, String reason) {
         final MasterOrder masterOrder = masterOrderRepository.getByID(masterOrderId);
@@ -184,6 +190,7 @@ public class CancelOrderUseCase {
      *
      * @param masterOrderId 主订单 ID（必填）
      */
+    @CrossTenant
     @Transactional
     public void cancelByTimeout(Long masterOrderId) {
         final MasterOrder masterOrder = masterOrderRepository.getByID(masterOrderId);

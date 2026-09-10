@@ -18,6 +18,7 @@ import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.domain.payment.repo.RefundOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -98,8 +99,11 @@ import org.springframework.stereotype.Service;
  * <p>
  * 事务边界 = 用例方法（方法级 {@link Transactional}）；领域方法不做
  * 事务。租户纪律：写放行（elevatedInTransaction）只出现在本类
- * （application 层），domain 内不放行；读放行本用例不需要（主单为
- * global 表，子单读在提权事务段内）。
+ * （application 层），domain 内不放行；读放行（{@code @CrossTenant}）
+ * 只出现在本类入口方法——子单装载面（tenant-scoped 子单在买家/
+ * 调度上下文无视角时被租户过滤置空 → 404 误报），方法级读放行罩住
+ * 前置装载段（写段保持 elevatedInTransaction 门禁，注解不影响写门禁——
+ * CrossTenantAspect 语义），CancelOrderUseCase 先例同形。
  * <p>
  * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
  * MasterOrder/SubOrder/RefundOrder/PaymentOrder 仓储实现未接线（红
@@ -200,6 +204,7 @@ public class RefundUseCase {
      * @return 退款申请结果视图（refundNo/金额/状态/支付单号；状态
      *         PENDING = 已受理等待渠道回调）
      */
+    @CrossTenant
     @Transactional
     public RefundOrderView applyRefundByBuyer(Long buyerId, Long subOrderId, String reason) {
         // ① 子单装载：不存在 → 按不存在呈现（404，无任何编排动作）
@@ -236,7 +241,8 @@ public class RefundUseCase {
         final boolean shippedAtApply = subOrder.getStatus() != SubOrderStatus.PAID;
         // ⑤ 提权写段（TD-12：跨租户写子单 tenant=shopId 必须放行；退款单创建/受理
         //    为 global + 渠道路径）：订单侧推进 → 建单（金额 = 子单实付 B8.5③）→
-        //    渠道受理（异步回调模型：受理成功 ≠ 退款成功）
+        //    渠道受理（异步回调模型：受理成功 ≠ 退款成功）→ 根行落库——编排与落库
+        //    同提权事务（TD-07 三域原子：杜绝「编排已提交而退款单未落库」的半程态）
         final RefundOrder refundOrder;
         try {
             refundOrder = tenantPrivilege.elevatedInTransaction(
@@ -248,6 +254,7 @@ public class RefundUseCase {
                         final RefundResult result = gateway.refund(new RefundRequest(
                                 created.getPayNo(), created.getRefundNo(), created.getAmount()));
                         acceptRefund(created, result);
+                        refundOrderRepository.save(created);
                         return created;
                     });
         } catch (final RuntimeException e) {
@@ -256,9 +263,6 @@ public class RefundUseCase {
         } catch (final Exception e) {
             throw new IllegalStateException("退款申请编排提权事务失败", e);
         }
-        // ⑥ 落库：迁移 + 受理落位与编排同一方法事务（受理异常由方法事务整体
-        //    回滚——不出现「退款单已建但子单未推进」的半程态）
-        refundOrderRepository.save(refundOrder);
         return new RefundOrderView(refundOrder.getId(), refundOrder.getRefundNo(),
                 refundOrder.getAmount(), refundOrder.getStatus(), refundOrder.getPayNo());
     }
@@ -272,6 +276,7 @@ public class RefundUseCase {
      * @return 退款单视图（PENDING = 已受理等待渠道回调；短路成功时
      *         返回 null）
      */
+    @CrossTenant
     @Transactional
     public RefundOrderView refundByShipTimeout(Long subOrderId) {
         // ① 子单装载：不存在同样 404（数据异常防御，不静默）
@@ -299,7 +304,8 @@ public class RefundUseCase {
         }
         // ⑤ 提权写段：发货超时入口与买家申请分支互斥——closeByTimeout（已支付 →
         //    已关闭，履约侧终态定格）→ 建单（shippedAtApply 固定 false：超时前提
-        //    即货未出）→ 渠道受理
+        //    即货未出）→ 渠道受理 → 根行落库——编排与落库同提权事务（TD-07 三域
+        //    原子：杜绝「编排已提交而退款单未落库」的半程态）
         final RefundOrder refundOrder;
         try {
             refundOrder = tenantPrivilege.elevatedInTransaction(
@@ -311,6 +317,7 @@ public class RefundUseCase {
                         final RefundResult result = gateway.refund(new RefundRequest(
                                 created.getPayNo(), created.getRefundNo(), created.getAmount()));
                         acceptRefund(created, result);
+                        refundOrderRepository.save(created);
                         return created;
                     });
         } catch (final RuntimeException e) {
@@ -319,8 +326,6 @@ public class RefundUseCase {
         } catch (final Exception e) {
             throw new IllegalStateException("发货超时退款编排提权事务失败", e);
         }
-        // ⑥ 落库（同一方法事务）
-        refundOrderRepository.save(refundOrder);
         return new RefundOrderView(refundOrder.getId(), refundOrder.getRefundNo(),
                 refundOrder.getAmount(), refundOrder.getStatus(), refundOrder.getPayNo());
     }
@@ -362,7 +367,8 @@ public class RefundUseCase {
         }
         // ④ 提权段内以同一 refundNo 重新受理（渠道幂等键「同一退款单只受理一次」，
         //    重试复用单号）：受理成功 → recordAcceptance（FAILED → 退款中归位 +
-        //    新流水覆盖）；受理拒绝 → 保持 FAILED（无动作）
+        //    新流水覆盖）；受理拒绝 → 保持 FAILED（无动作）→ 根行落库与受理同
+        //    提权事务（TD-07 三域原子：杜绝「受理已提交而落库未达成」的半程态）
         try {
             tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
                 final RefundResult result = gateway.refund(new RefundRequest(
@@ -370,6 +376,7 @@ public class RefundUseCase {
                 if (result.accepted()) {
                     refundOrder.recordAcceptance(result.channelRefundTxnNo());
                 }
+                refundOrderRepository.save(refundOrder);
                 return null;
             });
         } catch (final RuntimeException e) {
@@ -378,8 +385,6 @@ public class RefundUseCase {
         } catch (final Exception e) {
             throw new IllegalStateException("退款重试编排提权事务失败", e);
         }
-        // ⑤ 落库（同一方法事务）
-        refundOrderRepository.save(refundOrder);
         return new RefundOrderView(refundOrder.getId(), refundOrder.getRefundNo(),
                 refundOrder.getAmount(), refundOrder.getStatus(), refundOrder.getPayNo());
     }

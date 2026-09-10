@@ -93,11 +93,13 @@ class AdminLogisticsApiIntegrationAcTest {
         replicaJdbcTemplate.update("DELETE FROM waybill");
         replicaJdbcTemplate.update("DELETE FROM shop");
 
-        // 店铺镜像（店名投影面）
-        replicaJdbcTemplate.update("INSERT INTO shop (id, name) VALUES (?, ?)",
-                SHOP_A_ID, "店铺A");
-        replicaJdbcTemplate.update("INSERT INTO shop (id, name) VALUES (?, ?)",
-                SHOP_B_ID, "店铺B");
+        // 店铺镜像（店名投影面；CDC 镜像结构——时间列 NOT NULL 必填）
+        replicaJdbcTemplate.update(
+                "INSERT INTO shop (id, name, create_time, update_time, status) VALUES (?, ?, now(), now(), ?)",
+                SHOP_A_ID, "店铺A", "NORMAL");
+        replicaJdbcTemplate.update(
+                "INSERT INTO shop (id, name, create_time, update_time, status) VALUES (?, ?, now(), now(), ?)",
+                SHOP_B_ID, "店铺B", "NORMAL");
 
         when(authUserCache.get(ADMIN_UID)).thenReturn(Optional.of(
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("ADMIN"), List.of())));
@@ -203,10 +205,16 @@ class AdminLogisticsApiIntegrationAcTest {
      */
     private void insertSubOrderRow(long id, String no, SubOrderStatus status, long shopId,
                                    Timestamp timeoutAt, Timestamp createdAt) {
+        // 镜像表 NOT NULL 列集全量直插（CDC 镜像结构：时间列/租户列/地址快照
+        // 列/金额列/claimed 均不可空）；timeout_at 随 fixture 语义（超时三态）
         replicaJdbcTemplate.update(
-                "INSERT INTO sub_order (id, sub_order_no, master_order_id, shop_id, status,"
-                        + " timeout_at, create_time) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                id, no, 100L, shopId, status.name(), timeoutAt, createdAt);
+                "INSERT INTO sub_order (id, create_time, update_time, tenant_id, master_order_id,"
+                        + " shop_id, sub_order_no, recipient, phone, province, city, district, detail,"
+                        + " goods_amount, freight_amount, discount, paid_amount, status, timeout_at, claimed)"
+                        + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                id, createdAt, createdAt, String.valueOf(shopId), 100L, shopId, no,
+                "张三", "13800000000", "浙江省", "杭州市", "西湖区", "文一西路 1 号",
+                48000L, 800L, 0L, 48800L, status.name(), timeoutAt, false);
     }
 
     /**
@@ -216,9 +224,10 @@ class AdminLogisticsApiIntegrationAcTest {
      * @param subOrderId  归属子单 ID
      */
     private void insertWaybillRow(long id, long subOrderId) {
+        // 镜像表 NOT NULL 时间列必填
         replicaJdbcTemplate.update(
-                "INSERT INTO waybill (id, sub_order_id, company, tracking_no, status)"
-                        + " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO waybill (id, create_time, update_time, sub_order_id, company,"
+                        + " tracking_no, status) VALUES (?, now(), now(), ?, ?, ?, ?)",
                 id, subOrderId, "顺丰速运", "SF001", "IN_TRANSIT");
     }
 

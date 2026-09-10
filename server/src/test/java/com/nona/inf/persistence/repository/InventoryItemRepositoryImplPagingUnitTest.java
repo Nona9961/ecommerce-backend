@@ -2,6 +2,7 @@ package com.nona.inf.persistence.repository;
 
 import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.inf.context.TenantContextAccessor;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.InventoryItemConvertor;
 import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
@@ -68,7 +69,8 @@ class InventoryItemRepositoryImplPagingUnitTest {
     @BeforeEach
     void setUp() {
         repository = new InventoryItemRepositoryImpl(jpaRepository, convertor,
-                changeTrackerProvider, tenantContextAccessor);
+                changeTrackerProvider, tenantContextAccessor,
+                new TenantPrivilege(java.util.List.of(), null));
     }
 
     @Test

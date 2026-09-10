@@ -4,6 +4,7 @@ import com.nona.api.auth.Portal;
 import com.nona.domain.catalog.entity.ShopStatus;
 import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.domain.logistics.entity.WaybillStatus;
+import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.entity.SubOrderStatus;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.po.catalog.ShopPO;
@@ -11,10 +12,12 @@ import com.nona.inf.persistence.po.inventory.InventoryItemPO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.po.logistics.WaybillPO;
 import com.nona.inf.persistence.po.logistics.WaybillTrackPO;
+import com.nona.inf.persistence.po.order.MasterOrderPO;
 import com.nona.inf.persistence.po.order.OrderItemPO;
 import com.nona.inf.persistence.po.order.SubOrderPO;
 import com.nona.inf.persistence.repository.jpa.InventoryItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
+import com.nona.inf.persistence.repository.jpa.MasterOrderJpaRepository;
 import com.nona.inf.persistence.repository.jpa.OrderItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ProductJpaRepository;
 import com.nona.inf.persistence.repository.jpa.ShopJpaRepository;
@@ -108,6 +111,9 @@ class SellerAdminWireAcTest {
     @Autowired
     private ShopJpaRepository shopJpaRepository;
 
+    @Autowired
+    private MasterOrderJpaRepository masterOrderJpaRepository;
+
     /**
      * 商品主表 JPA（清理——SKU 集经 API 配置后直插库存行）
      */
@@ -189,9 +195,12 @@ class SellerAdminWireAcTest {
             skuJpaRepository.deleteAll();
             productJpaRepository.deleteAll();
             shopJpaRepository.deleteAll();
+            masterOrderJpaRepository.deleteAll();
         });
         shopJpaRepository.save(shopPo(SHOP_A_ID, "店铺A"));
         shopJpaRepository.save(shopPo(SHOP_B_ID, "店铺B"));
+        // 子单挂载的主单行（发货编排/订单查询的 master 装载锚点——自足造数）
+        masterOrderJpaRepository.save(masterPo());
         when(authUserCache.get(SELLER_A_UID)).thenReturn(Optional.of(
                 new AuthUserContext(AccountStatus.ACTIVE, List.of("SELLER"), List.of(SHOP_A_ID))));
         when(authUserCache.get(SELLER_B_UID)).thenReturn(Optional.of(
@@ -419,7 +428,7 @@ class SellerAdminWireAcTest {
 
         });
         mockMvc.perform(get("/seller/inventory").header("Authorization", bearer(SELLER_A_UID)))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("catalog.not_found"));
     }
 
@@ -515,6 +524,29 @@ class SellerAdminWireAcTest {
         po.setId(id);
         po.setName(name);
         po.setStatus(ShopStatus.NORMAL);
+        return po;
+    }
+
+    /**
+     * 构造主单行（子单挂载锚点：发货编排 markShipped/订单查询的 master
+     * 装载依赖——自足造数，地址/金额快照与子单自洽）。
+     */
+    private static MasterOrderPO masterPo() {
+        final MasterOrderPO po = new MasterOrderPO();
+        po.setId(MASTER_ID);
+        po.setOrderNo("ORD-SELLER-49");
+        po.setBuyerId(88001L);
+        po.setRecipient("张三");
+        po.setPhone("13800000000");
+        po.setProvince("浙江省");
+        po.setCity("杭州市");
+        po.setDistrict("西湖区");
+        po.setDetail("文一西路 1 号");
+        po.setGoodsAmount(48000L);
+        po.setFreightAmount(800L);
+        po.setDiscount(0L);
+        po.setPaidAmount(48800L);
+        po.setStatus(MasterOrderStatus.PAID);
         return po;
     }
 
@@ -661,7 +693,7 @@ class SellerAdminWireAcTest {
             po.setBeforeAvailable(12);
             po.setBeforeHeld(2);
             po.setBeforeSold(30);
-            po.setAfterAvailable(12);
+            po.setAfterAvailable(9);
             po.setAfterHeld(5);
             po.setAfterSold(30);
             po.setOperator(null);

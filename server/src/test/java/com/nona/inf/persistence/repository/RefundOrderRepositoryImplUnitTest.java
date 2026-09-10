@@ -1,5 +1,6 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.changeTracking.domain.model.tracking.ChangeTracker;
 import com.nona.domain.payment.entity.RefundOrder;
 import com.nona.inf.persistence.converters.RefundOrderConvertor;
 import com.nona.inf.persistence.po.payment.RefundCallbackLogPO;
@@ -85,10 +86,17 @@ class RefundOrderRepositoryImplUnitTest {
                 .thenReturn(order);
         when(callbackLogJpaRepository.findByRefundOrderIdOrderByIdAsc(any()))
                 .thenReturn(List.of());
+        // 快照基线登记（模板语义）：装载面需跟踪作用域 + 懒创建追踪器
+        final ChangeTracker tracker = org.mockito.Mockito.mock(ChangeTracker.class);
+        when(changeTrackerProvider.create()).thenReturn(tracker);
 
-        final RefundOrder result = repository.findByRefundNo(REFUND_NO);
+        final RefundOrder[] holder = new RefundOrder[1];
+        com.nona.inf.context.TrackingContext.withScope(() -> {
+            holder[0] = repository.findByRefundNo(REFUND_NO);
+        });
 
-        assertThat(result).isSameAs(order);
+        assertThat(holder[0]).isSameAs(order);
+        verify(tracker).track(order);
     }
 
     @Test
@@ -110,10 +118,17 @@ class RefundOrderRepositoryImplUnitTest {
                 .thenReturn(order);
         when(callbackLogJpaRepository.findByRefundOrderIdOrderByIdAsc(any()))
                 .thenReturn(List.of());
+        // 快照基线登记（模板语义）：装载面需跟踪作用域 + 懒创建追踪器
+        final ChangeTracker tracker = org.mockito.Mockito.mock(ChangeTracker.class);
+        when(changeTrackerProvider.create()).thenReturn(tracker);
 
-        final RefundOrder result = repository.findBySubOrderId(SUB_ORDER_ID);
+        final RefundOrder[] holder = new RefundOrder[1];
+        com.nona.inf.context.TrackingContext.withScope(() -> {
+            holder[0] = repository.findBySubOrderId(SUB_ORDER_ID);
+        });
 
-        assertThat(result).isSameAs(order);
+        assertThat(holder[0]).isSameAs(order);
+        verify(tracker).track(order);
     }
 
     @Test

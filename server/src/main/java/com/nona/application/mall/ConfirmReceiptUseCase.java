@@ -10,6 +10,7 @@ import com.nona.domain.order.repo.MasterOrderRepository;
 import com.nona.domain.order.repo.SubOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -66,8 +67,11 @@ import org.springframework.stereotype.Service;
  * <p>
  * 事务边界 = 用例方法（方法级 {@link Transactional}）；领域方法不做
  * 事务。租户纪律：写放行（elevatedInTransaction）只出现在本类
- * （application 层），domain 内不放行；读放行本用例不需要（主单为
- * global 表，子单读在提权事务段内）。
+ * （application 层），domain 内不放行；读放行（{@code @CrossTenant}）
+ * 只出现在本类入口方法——子单/主单装载面（tenant-scoped 子单在买家/
+ * 调度上下文无视角时被租户过滤置空 → 404 误报），方法级读放行罩住
+ * 前置装载段（写段保持 elevatedInTransaction 门禁，注解不影响写门禁——
+ * CrossTenantAspect 语义），CancelOrderUseCase 先例同形。
  * <p>
  * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
  * MasterOrder/SubOrder 仓储实现未接线（红阶段装配学习，同
@@ -145,6 +149,7 @@ public class ConfirmReceiptUseCase {
      * @param buyerId   当前买家账号 ID（认证上下文，归属校验锚点）
      * @param subOrderId 子订单 ID（必填）
      */
+    @CrossTenant
     @Transactional
     public void confirmByBuyer(Long buyerId, Long subOrderId) {
         final SubOrder subOrder = subOrderRepository.getByID(subOrderId);
@@ -171,6 +176,7 @@ public class ConfirmReceiptUseCase {
      *
      * @param subOrderId 子订单 ID（必填）
      */
+    @CrossTenant
     @Transactional
     public void autoCompleteByTimeout(Long subOrderId) {
         final SubOrder subOrder = subOrderRepository.getByID(subOrderId);

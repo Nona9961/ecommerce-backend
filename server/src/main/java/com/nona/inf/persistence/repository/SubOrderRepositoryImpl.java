@@ -5,8 +5,11 @@ import com.nona.domain.order.entity.OrderItem;
 import com.nona.domain.order.entity.SubOrder;
 import com.nona.domain.order.entity.SubOrderStatus;
 import com.nona.domain.order.repo.SubOrderRepository;
+import com.nona.inf.context.TrackingContext;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.OrderItemConvertor;
 import com.nona.inf.persistence.converters.SubOrderConvertor;
+import com.nona.inf.persistence.po.TenantScopedBasePO;
 import com.nona.inf.persistence.po.order.OrderItemPO;
 import com.nona.inf.persistence.po.order.SubOrderPO;
 import com.nona.inf.persistence.repository.jpa.OrderItemJpaRepository;
@@ -35,7 +38,10 @@ import java.util.List;
  * 条目集合——条目集合随聚合内存装配）；主单维度反查（getByMasterOrderId）
  * 与超时扫描面（findDue）为查询面——反查装载语义冻结在接口 javadoc；
  * 分页列表行未登记变更追踪。写：租户列由写门禁按请求上下文注入
- * （商家请求 tenant=当前店铺），读经租户过滤 fail-closed。
+ * （商家请求 tenant=当前店铺）；提权写路径（买家/回调/调度等无请求
+ * 视角上下文推进店铺数据）经 {@link #ownedBy} 显式锚定 tenant=shopId
+ * （TenantWriteGate 提权+空归属 fail-closed 拒绝，商品域仓储同先例
+ * 形态），读经租户过滤 fail-closed。
  * <p>
  * <b>超时 SQL 三件套（WU-55 冻结落地面）</b>——PO 超时 SQL 面三列
  * （timeout_at/timeout_type/claimed）由本仓储维护，转换器不负责
@@ -100,6 +106,15 @@ public class SubOrderRepositoryImpl
     private OrderItemConvertor orderItemConvertor;
 
     /**
+     * 提权工具（提权保存前显式租户归属定型：TenantWriteGate 提权+空归属
+     * fail-closed 拒绝——子单/订单项行 tenant=shopId 归属必得，不依赖请求
+     * 上下文；红阶段冻结的构造器签名不含本依赖——单测不触达落库路径，以
+     * 字段注入补齐装配面，同 orderItemConvertor 形态）。
+     */
+    @Autowired
+    private TenantPrivilege tenantPrivilege;
+
+    /**
      * 构造子订单仓储。
      *
      * @param repository            子订单主表 JPA 仓储
@@ -147,7 +162,7 @@ public class SubOrderRepositoryImpl
      */
     @Override
     protected void doInsert(SubOrder root) {
-        jpaRepository.save(convertor.convertToPO(root));
+        jpaRepository.save(ownedBy(convertor.convertToPO(root), root));
         for (final OrderItem item : root.getItems()) {
             insertItemRow(root, item);
         }
@@ -166,7 +181,7 @@ public class SubOrderRepositoryImpl
         final boolean rootChanged = changeSet.getLeafChanges().stream()
                 .anyMatch(change -> change.collectionFieldName() == null);
         if (rootChanged || !jpaRepository.existsById(root.getId())) {
-            jpaRepository.save(convertor.convertToPO(root));
+            jpaRepository.save(ownedBy(convertor.convertToPO(root), root));
         }
     }
 
@@ -175,11 +190,25 @@ public class SubOrderRepositoryImpl
      * <p>
      * 主单维度反查：经从属主单装载子单集合（保持创建序；每行经转换器
      * 装配从表条目）。
+     * <p>
+     * <b>快照基线登记（变更追踪模板语义）</b>：本面装载的每行聚合登记
+     * 变更追踪快照基线（getByID 路径同款登记）——同批保存消费面
+     * （OrderFacadeImpl 列表保存面）以本面装载实例参与 {\@code save} 时，
+     * 未修改实例变更集空（isEmpty 提前跳过）、已修改实例变更集驱动
+     * {\@link #doUpdate}；不登记则模板按未追踪视作新增走
+     * {\@link #doInsert} 重复插入（uk_order_item_sub_sku 等唯一约束冲突）。
+     * 只读消费面（查询/明细装配）登记无副作用（快照按根隔离，不参与
+     * 其他根变更计算）。
      */
     @Override
     public List<SubOrder> getByMasterOrderId(Long masterOrderId) {
         return jpaRepository.findByMasterOrderIdOrderByIdAsc(masterOrderId).stream()
-                .map(po -> convertor.convertToRoot(po, getOther(po)))
+                .map(po -> {
+                    final SubOrder root = convertor.convertToRoot(po, getOther(po));
+                    getOrCreateChangeTracker().track(root);
+                    TrackingContext.scope().getSnapshots().put(root.getId(), root);
+                    return root;
+                })
                 .toList();
     }
 
@@ -286,7 +315,26 @@ public class SubOrderRepositoryImpl
         final OrderItemPO po = orderItemConvertor.toPO(item);
         po.setId(IDUtils.generateID());
         po.setSubOrderId(root.getId());
-        orderItemJpaRepository.save(po);
+        orderItemJpaRepository.save(ownedBy(po, root));
+    }
+
+    /**
+     * 根行/从表行租户承载：提权写路径（买家/回调/调度等无请求视角上下文
+     * 推进店铺数据）显式锚定 tenant=shopId——归属必得，不依赖请求上下文
+     * （TD-12 提权写门禁语义：TenantWriteGate 提权+空归属 fail-closed 拒绝）；
+     * 非提权商家路径保持既有注入语义（行租户由写门禁按请求上下文注入，
+     * 显式值缺失即放行注入）。商品域仓储 ownedBy 同先例形态。
+     *
+     * @param po   行 PO
+     * @param root 子订单聚合根（租户锚点）
+     * @param <T>  行 PO 类型
+     * @return 承载租户后的 PO
+     */
+    private <T extends TenantScopedBasePO> T ownedBy(T po, SubOrder root) {
+        if (tenantPrivilege.isActive()) {
+            po.setTenantID(String.valueOf(root.getShopId()));
+        }
+        return po;
     }
 
 }

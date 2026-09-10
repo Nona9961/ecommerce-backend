@@ -14,6 +14,7 @@ import com.nona.domain.payment.ports.ValidatedCallback;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.CrossTenant;
 import com.nona.inf.context.TenantPrivilege;
 import com.nona.util.IDUtils;
 import org.springframework.transaction.annotation.Transactional;
@@ -156,11 +157,18 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
      * 异常（迁移成功后 onPaid/confirmDeduct 失败）→ 不单独落库——方法
      * 级 {@link Transactional} 整体回滚，支付单不出现「已支付但订单未
      * 推进」的半程态。
+     * <p>
+     * 读放行：方法级 {@code @CrossTenant} 罩住回调上下文（无买家身份、
+     * tenant 空）下的装载面（onPaid 经主单 getOther 反查 tenant-scoped
+     * 子单 id 集合——无视角时被过滤置空 → 聚合守卫误报）；写段保持
+     * elevatedInTransaction 门禁（注解不影响写门禁——CrossTenantAspect
+     * 语义）。
      *
      * @param callback 渠道回调校验通过后的标准化事件（handleCallback
      *                 返回，必填；type 必须为 PAY）
      */
     @Override
+    @CrossTenant
     @Transactional
     public void handlePayCallback(ValidatedCallback callback) {
         // 1. 入口守卫：null / 非 PAY（REFUND 归退款编排接续）→ 渠道事故防御，无任何动作
@@ -194,16 +202,24 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
             try {
                 order.markPaid(callback.channelTxnNo(), callback.amountCents());
             } catch (final BusinessException e) {
-                repository.save(order);
+                // 落库律（决策 5/6）：被拒回调同样留痕——独立事务提交（REQUIRES_NEW），
+                // 不被方法级 @Transactional 的整体回滚吃掉（对账不依赖迁移成败）
+                transactionTemplate.execute(status -> {
+                    repository.save(order);
+                    return null;
+                });
                 throw e;
             }
-            // 5. 成功编排（首次迁移成功后，同事务）：提权写段（TD-12——回调
-            //    上下文无买家身份、tenant 空，推进店铺数据必须放行）内依序
-            //    onPaid(主单) → 逐子单 confirmDeduct（编排序钉死，决策 2）
+            // 5. 成功编排（首次迁移成功后）：提权写段（TD-12——回调上下文无
+            //    买家身份、tenant 空，推进店铺数据必须放行）内依序 onPaid(主单)
+            //    → 逐子单 confirmDeduct（编排序钉死，决策 2）→ 根行迁移 + 留痕
+            //    落库——编排与落库同提权事务（TD-07 三域原子：杜绝「编排已
+            //    提交而支付单未迁移」的部分提交窗口）
             try {
                 tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
                     orderFacade.onPaid(order.getOrderId());
                     confirmDeductPerSubOrder(order.getOrderId());
+                    repository.save(order);
                     return null;
                 });
             } catch (final RuntimeException e) {
@@ -215,16 +231,21 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
             }
         } else {
             // 7. 失败回调：仅 markFailed——订单停留待支付等待超时关单（B8.3），
-            //    不推进订单/库存
+            //    不推进订单/库存；状态迁移 + 留痕落库同外层方法事务（payment
+            //    global 行无提权需要，无编排段故无部分提交窗口）
             try {
                 order.markFailed(callback.channelTxnNo(), callback.amountCents());
-            } catch (final BusinessException e) {
                 repository.save(order);
+            } catch (final BusinessException e) {
+                // 落库律（决策 5/6）：被拒回调同样留痕——独立事务提交（REQUIRES_NEW），
+                // 不被方法级 @Transactional 的整体回滚吃掉（对账不依赖迁移成败）
+                transactionTemplate.execute(status -> {
+                    repository.save(order);
+                    return null;
+                });
                 throw e;
             }
         }
-        // 6. 落库：迁移 + 留痕经 save 持久化（与成功编排同一方法事务)
-        repository.save(order);
     }
 
     /**

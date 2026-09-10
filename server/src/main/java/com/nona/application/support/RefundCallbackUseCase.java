@@ -202,15 +202,22 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
             try {
                 refundOrder.markSucceeded(callback.channelTxnNo(), callback.amountCents());
             } catch (final BusinessException e) {
-                repository.save(refundOrder);
+                // 落库律（决策 5/6）：被拒回调同样留痕——独立事务提交（REQUIRES_NEW），
+                // 不被方法级 @Transactional 的整体回滚吃掉（对账不依赖迁移成败）
+                transactionTemplate.execute(status -> {
+                    repository.save(refundOrder);
+                    return null;
+                });
                 throw e;
             }
-            // 5. 成功编排（首次迁移成功后，同事务）：提权写段（TD-12——回调上下文
+            // 5. 成功编排（首次迁移成功后）：提权写段（TD-12——回调上下文
             //    无买家身份、tenant 空，推进店铺数据必须放行）内依序 completeRefund
             //    （子单装载与 404 契约防御内建于订单门面：退款中 → 已退款 + 主单派生
             //    / 已关闭幂等跳过 / 其余拒绝）→ 按操作单元装载子单（不存在 404 数据
             //    异常防御）→ 未发货回补（C9 判定：shippedAtApply=false → I7 restore，
-            //    明细 = 子单订单项快照；已发货不回补，退货物流 II 期留接口位）
+            //    明细 = 子单订单项快照；已发货不回补，退货物流 II 期留接口位）→ 根行
+            //    迁移 + 留痕落库——编排与落库同提权事务（TD-07 三域原子：杜绝「编排
+            //    已提交而退款单未迁移」的部分提交窗口）
             try {
                 tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
                     orderFacade.completeRefund(refundOrder.getSubOrderId());
@@ -224,6 +231,7 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
                     if (!refundOrder.isShippedAtApply()) {
                         restoreInventory(subOrder);
                     }
+                    repository.save(refundOrder);
                     return null;
                 });
             } catch (final RuntimeException e) {
@@ -236,16 +244,21 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
             }
         } else {
             // 7. 失败回调：仅 markRefundFailed——订单侧停留退款中（可重试），
-            //    不推进订单/库存
+            //    不推进订单/库存；状态迁移 + 留痕落库同外层方法事务（refund
+            //    global 行无提权需要，无编排段故无部分提交窗口）
             try {
                 refundOrder.markRefundFailed();
-            } catch (final BusinessException e) {
                 repository.save(refundOrder);
+            } catch (final BusinessException e) {
+                // 落库律（决策 5/6）：被拒回调同样留痕——独立事务提交（REQUIRES_NEW），
+                // 不被方法级 @Transactional 的整体回滚吃掉（对账不依赖迁移成败）
+                transactionTemplate.execute(status -> {
+                    repository.save(refundOrder);
+                    return null;
+                });
                 throw e;
             }
         }
-        // 6. 落库：迁移 + 留痕经 save 持久化（与成功编排同一方法事务）
-        repository.save(refundOrder);
     }
 
     /**

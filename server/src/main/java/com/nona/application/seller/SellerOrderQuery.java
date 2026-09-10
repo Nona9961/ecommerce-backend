@@ -9,6 +9,7 @@ import com.nona.api.seller.SellerSubOrderDetail;
 import com.nona.api.seller.SellerSubOrderItem;
 import com.nona.api.seller.SellerWaybillView;
 import com.nona.domain.logistics.entity.Waybill;
+import org.springframework.stereotype.Service;
 import com.nona.domain.logistics.repo.WaybillRepository;
 import com.nona.domain.order.entity.AddressSnapshot;
 import com.nona.domain.order.entity.AmountDetail;
@@ -51,6 +52,7 @@ import java.util.Objects;
  *
  * @author nona9961
  */
+@Service
 public class SellerOrderQuery {
 
     /**

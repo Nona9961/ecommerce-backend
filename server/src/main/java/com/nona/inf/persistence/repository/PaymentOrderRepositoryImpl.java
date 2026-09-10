@@ -10,6 +10,7 @@ import com.nona.domain.payment.entity.PaymentCallbackRecord;
 import com.nona.domain.payment.entity.PaymentOrder;
 import com.nona.domain.payment.entity.PaymentOrderStatus;
 import com.nona.domain.payment.repo.PaymentOrderRepository;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.converters.PaymentCallbackRecordConvertor;
 import com.nona.inf.persistence.converters.PaymentOrderConvertor;
 import com.nona.inf.persistence.po.payment.PaymentCallbackLogPO;
@@ -190,11 +191,22 @@ public class PaymentOrderRepositoryImpl
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 回调装载面（支付回调处理锚点）：按支付单号装载主表行 + 留痕集合；
+     * <b>登记变更追踪快照基线</b>（getByID 路径同款登记）——装载实例后
+     * 续 save（回调迁移 + 留痕追加）走变更集驱动 doUpdate；不登记则模板
+     * 按未追踪视作新增走 doInsert（JPA merge 根行更新但跳过从表变更
+     * 驱动——留痕行丢失，RefundOrder 判例同构）。
      */
     @Override
     public PaymentOrder findByPayNo(String payNo) {
         return jpaRepository.findByPayNo(payNo)
-                .map(po -> convertor.convertToRoot(po, getOther(po)))
+                .map(po -> {
+                    final PaymentOrder root = convertor.convertToRoot(po, getOther(po));
+                    getOrCreateChangeTracker().track(root);
+                    TrackingContext.scope().getSnapshots().put(root.getId(), root);
+                    return root;
+                })
                 .orElse(null);
     }
 

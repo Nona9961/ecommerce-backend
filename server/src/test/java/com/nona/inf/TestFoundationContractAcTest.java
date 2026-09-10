@@ -90,6 +90,10 @@ class TestFoundationContractAcTest {
     /**
      * 含 {@code @Test}/{@code @ParameterizedTest} 注解的测试文件基名（支撑类/
      * fixture/探针无测试方法，不参与分类合规判定——与机械检查口径一致）。
+     * <p>
+     * 识别规则：按行扫描，跳过 javadoc/注释行（{@code *}/{\@code //} 开头）后
+     * 仍含注解字面才计入——支撑类 javadoc 中「本类无 {@code @Test} 方法」等
+     * 字样不误判（WU-49 AcceptanceDbSupport 触发实证）。
      */
     private static List<String> annotatedTestClassBaseNames(Path root) throws IOException {
         Path srcRoot = root.resolve(TEST_SRC_ROOT);
@@ -98,8 +102,10 @@ class TestFoundationContractAcTest {
                     .filter(p -> p.toString().endsWith(".java"))
                     .filter(p -> {
                         try {
-                            String content = Files.readString(p);
-                            return content.contains("@Test") || content.contains("@ParameterizedTest");
+                            return Files.readString(p).lines()
+                                    .anyMatch(line -> !line.stripLeading().startsWith("*")
+                                            && !line.stripLeading().startsWith("//")
+                                            && (line.contains("@Test") || line.contains("@ParameterizedTest")));
                         } catch (IOException e) {
                             return false;
                         }

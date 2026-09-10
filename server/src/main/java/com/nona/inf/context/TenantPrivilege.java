@@ -150,9 +150,17 @@ public class TenantPrivilege {
      *          （缓存随事务消亡，无泄露可清）。真正触发 flush+clear 的是事务内嵌套的
      *          放行/提权作用域（如 {@link #withReadBypass(Runnable)} / {@link #elevated(Runnable)}
      *          内联于事务回调）。
+     *          <p>
+     *          <b>嵌套去重（WU-49）</b>：已在提权作用域内调用（如超时引擎
+     *          processOne 已建提权事务后再 fire 目标用例）→ 直接同事务执行，
+     *          不再开 REQUIRES_NEW 新连接（新连接对当前事务持有行锁的等待会触
+     *          发 MySQL socketTimeout 级联失败）。
      */
     public <T> T elevatedInTransaction(TransactionTemplate transactionTemplate,
                                        Callable<T> action) throws Exception {
+        if (isActive()) {
+            return action.call();
+        }
         return elevated(() -> transactionTemplate.execute(status -> {
             try {
                 return action.call();

@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.springframework.stereotype.Service;
 
 /**
  * 商家端库存查询用例（seller 面，WU-60 冻结；Spring 注册 @Service
@@ -46,6 +47,7 @@ import java.util.stream.Collectors;
  *
  * @author nona9961
  */
+@Service
 public class SellerStockQuery {
 
     /**

@@ -1,5 +1,6 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.changeTracking.domain.model.tracking.ChangeTracker;
 import com.nona.domain.order.entity.OrderItem;
 import com.nona.domain.order.entity.SubOrder;
 import com.nona.domain.order.entity.SubOrderStatus;
@@ -126,11 +127,18 @@ class SubOrderRepositoryImplUnitTest {
                 .thenReturn(child);
         when(orderItemJpaRepository.findBySubOrderIdOrderByIdAsc(any()))
                 .thenReturn(List.of(new OrderItemPO()));
+        // 快照基线登记（模板语义）：装载面需跟踪作用域 + 懒创建追踪器
+        final ChangeTracker tracker = org.mockito.Mockito.mock(ChangeTracker.class);
+        when(changeTrackerProvider.create()).thenReturn(tracker);
 
-        final List<SubOrder> result = repository.getByMasterOrderId(MASTER_ORDER_ID);
+        com.nona.inf.context.TrackingContext.withScope(() -> {
+            final List<SubOrder> result = repository.getByMasterOrderId(MASTER_ORDER_ID);
 
-        assertThat(result).hasSize(2);
+            assertThat(result).hasSize(2);
+        });
         verify(subOrderJpaRepository).findByMasterOrderIdOrderByIdAsc(MASTER_ORDER_ID);
+        // 两行各登记一次快照基线（convertToRoot 对两行返回同一 mock 实例）
+        verify(tracker, org.mockito.Mockito.times(2)).track(child);
     }
 
     @Test

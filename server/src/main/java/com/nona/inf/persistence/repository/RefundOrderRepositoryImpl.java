@@ -9,6 +9,7 @@ import com.nona.changeTracking.domain.model.snapshot.ValueNode;
 import com.nona.domain.payment.entity.RefundCallbackRecord;
 import com.nona.domain.payment.entity.RefundOrder;
 import com.nona.domain.payment.repo.RefundOrderRepository;
+import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.converters.RefundCallbackRecordConvertor;
 import com.nona.inf.persistence.converters.RefundOrderConvertor;
 import com.nona.inf.persistence.po.payment.RefundCallbackLogPO;
@@ -158,21 +159,41 @@ public class RefundOrderRepositoryImpl
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 回调装载面（回调处理锚点）：按退款单号装载主表行 + 留痕集合；
+     * <b>登记变更追踪快照基线</b>（getByID 路径同款登记）——装载实例后
+     * 续 save（回调迁移 + 留痕追加）走变更集驱动 doUpdate；不登记则模板
+     * 按未追踪视作新增走 doInsert（JPA merge 根行更新但跳过从表变更
+     * 驱动——留痕行丢失）。
      */
     @Override
     public RefundOrder findByRefundNo(String refundNo) {
         return jpaRepository.findByRefundNo(refundNo)
-                .map(po -> convertor.convertToRoot(po, getOther(po)))
+                .map(po -> {
+                    final RefundOrder root = convertor.convertToRoot(po, getOther(po));
+                    getOrCreateChangeTracker().track(root);
+                    TrackingContext.scope().getSnapshots().put(root.getId(), root);
+                    return root;
+                })
                 .orElse(null);
     }
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 防重装载面（申请/超时编排锚点）：按子单装载主表行 + 留痕集合；
+     * 快照基线登记同 {@link #findByRefundNo}（装载实例后续 save 走变更
+     * 集驱动，杜绝 doInsert 跳过从表变更）。
      */
     @Override
     public RefundOrder findBySubOrderId(Long subOrderId) {
         return jpaRepository.findBySubOrderId(subOrderId)
-                .map(po -> convertor.convertToRoot(po, getOther(po)))
+                .map(po -> {
+                    final RefundOrder root = convertor.convertToRoot(po, getOther(po));
+                    getOrCreateChangeTracker().track(root);
+                    TrackingContext.scope().getSnapshots().put(root.getId(), root);
+                    return root;
+                })
                 .orElse(null);
     }
 

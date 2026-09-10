@@ -1,7 +1,13 @@
 package com.nona.inf.timeout;
 
+import com.nona.inf.context.TenantPrivilege;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.util.List;
@@ -26,13 +32,30 @@ class TimeoutTaskProcessorUnitTest {
 
     private static final Instant NOW = Instant.parse("2026-09-06T08:00:00Z");
 
+    /**
+     * 装配被测处理器：真实提权工具（空作用域退出处理器）+ mock 事务模板
+     * （stub execute 直接调用回调 doInTransaction，不模拟真实事务管理，
+     * 保留与真实实现一致的异常传播路径——TenantPrivilegeUnitTest 同形态）。
+     */
+    private static TimeoutTaskProcessor newProcessor(TimeoutTestKit.FakeHandler handler) {
+        final TransactionTemplate transactionTemplate = Mockito.mock(TransactionTemplate.class);
+        final TransactionStatus status = new SimpleTransactionStatus();
+        Mockito.when(transactionTemplate.execute(Mockito.any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            final TransactionCallback<Object> callback = invocation.getArgument(0);
+            return callback.doInTransaction(status);
+        });
+        return new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler),
+                new TenantPrivilege(List.of(), null), transactionTemplate);
+    }
+
     @Test
     @DisplayName("happy：认领成功后执行处理并清除截止时间")
     void processOne_claimsFiresAndClears() {
         TimeoutTestKit.FakeStore store = new TimeoutTestKit.FakeStore(TimeoutType.ORDER_PAY)
                 .addRow(1L, Instant.parse("2026-09-01T00:00:00Z"));
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_PAY);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
         TimeoutTask<Long> task = store.findDue(NOW, 10).get(0);
 
         boolean handled = processor.processOne(store, task);
@@ -55,7 +78,7 @@ class TimeoutTaskProcessorUnitTest {
         assertThat(store.claim(task)).isTrue(); // 他方（前一轮/并发）已抢先认领
 
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_PAY);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
 
         boolean handled = processor.processOne(store, task);
 
@@ -73,7 +96,7 @@ class TimeoutTaskProcessorUnitTest {
         store.migrate(1L); // 并发路径（如买家已支付并清除截止时间）迁移状态
 
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_PAY);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
 
         boolean handled = processor.processOne(store, task);
 
@@ -90,7 +113,7 @@ class TimeoutTaskProcessorUnitTest {
         TimeoutTask<Long> task = store.findDue(NOW, 10).get(0);
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_SHIP)
                 .failOn(1L);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
 
         assertThatThrownBy(() -> processor.processOne(store, task))
                 .isInstanceOf(IllegalStateException.class)
@@ -107,7 +130,7 @@ class TimeoutTaskProcessorUnitTest {
                 .addRow(1L, Instant.parse("2026-09-01T00:00:00Z"));
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_RECEIVE)
                 .failOn(1L);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
 
         // 第一轮：认领成功，处理崩溃 → 整体回滚（模拟事务回滚：认领位复位）
         TimeoutTask<Long> firstRound = store.findDue(NOW, 10).get(0);
@@ -140,7 +163,7 @@ class TimeoutTaskProcessorUnitTest {
         TimeoutTask<Long> task = store.findDue(NOW, 10).get(0);
         TimeoutTestKit.FakeHandler handler = new TimeoutTestKit.FakeHandler(TimeoutType.ORDER_PAY)
                 .failOn(1L);
-        TimeoutTaskProcessor processor = new TimeoutTaskProcessor(new TimeoutTestKit.FakeRegistry(handler));
+        TimeoutTaskProcessor processor = newProcessor(handler);
 
         assertThatThrownBy(() -> processor.processOne(store, task)).isInstanceOf(IllegalStateException.class);
         store.rollbackClaim(1L);
