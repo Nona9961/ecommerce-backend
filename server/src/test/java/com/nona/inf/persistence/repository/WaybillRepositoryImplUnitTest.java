@@ -1,6 +1,7 @@
 package com.nona.inf.persistence.repository;
 
 import com.nona.domain.logistics.entity.Waybill;
+import com.nona.exceptions.BusinessException;
 import com.nona.inf.persistence.converters.WaybillConvertor;
 import com.nona.inf.persistence.po.logistics.WaybillPO;
 import com.nona.inf.persistence.po.logistics.WaybillTrackPO;
@@ -20,6 +21,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -29,7 +31,8 @@ import static org.mockito.Mockito.when;
  * <p>
  * happy——findInTransitBySubOrderId 命中在途、findInTransit 在途全量、
  * findBySubOrderId 含签收终态最新行、级联删轨迹先删；critical——
- * 无在途/无装载均空（fail-safe）；fail——删除不存在返回 0。
+ * 无在途/无装载均空（fail-safe）、在途扫描含坏行（无轨迹可装载）时
+ * 逐条容错跳过不毒化整轮；fail——删除不存在返回 0。
  * <p>
  * 装配纪律：依赖全 mock，无容器；被测仓储 @BeforeEach 重建；行为桩
  * lenient 豁免 UOE 挡道（绿实现后收回精确桩）。
@@ -119,6 +122,29 @@ class WaybillRepositoryImplUnitTest {
         when(waybillJpaRepository.findByInTransitTrue()).thenReturn(List.of());
 
         assertThat(repository.findInTransit()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("critical：在途扫描含坏行（无轨迹可装载）时逐条容错跳过，可装载行照常返回——扫描面不被脏数据整体毒化")
+    void findInTransit_unloadableRowSkipped_loadableRowsReturned() {
+        final WaybillPO bad = new WaybillPO();
+        bad.setId(1000012L);
+        final WaybillPO good = new WaybillPO();
+        good.setId(1000013L);
+        when(waybillJpaRepository.findByInTransitTrue()).thenReturn(List.of(bad, good));
+        final Waybill waybill = org.mockito.Mockito.mock(Waybill.class);
+        // 坏行形态：in_transit 位残留但轨迹缺失 → 聚合装载守卫拒绝（BusinessAssert 抛 BusinessException）
+        when(convertor.convertToRoot(eq(bad), any()))
+                .thenThrow(new BusinessException("logistics.waybill_invalid",
+                        "运单轨迹列表不能为空（至少一条初始轨迹）"));
+        when(convertor.convertToRoot(eq(good), any())).thenReturn(waybill);
+        when(trackJpaRepository.findByWaybillIdOrderByIdAsc(any()))
+                .thenReturn(List.of());
+
+        final List<Waybill> result = repository.findInTransit();
+
+        // 坏行被跳过，可装载行不受影响——扫描推进器仍可处理本轮其余运单
+        assertThat(result).containsExactly(waybill);
     }
 
     @Test

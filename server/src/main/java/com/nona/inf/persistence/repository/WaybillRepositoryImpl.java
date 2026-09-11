@@ -16,10 +16,12 @@ import com.nona.inf.persistence.po.logistics.WaybillTrackPO;
 import com.nona.inf.persistence.repository.jpa.WaybillJpaRepository;
 import com.nona.inf.persistence.repository.jpa.WaybillTrackJpaRepository;
 import com.nona.inf.persistence.tracking.ChangeTrackerProvider;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -31,8 +33,10 @@ import java.util.Optional;
  * 行集合，聚合内存装配）；在途锚点（findInTransitBySubOrderId——
  * 「一子单一在途」不变量查询锚点，发货编排重复发货防查）与在途全量
  * 扫描（findInTransit——模拟推进器扫描锚点，业务节奏判定收敛在推进
- * 器不穿透仓储）为 WU-35/36 冻结契约；按子单装载（findBySubOrderId，
- * WU-55 冻结）为订单详情/物流展示面锚点（含签收终态，历史并存行取
+ * 器不穿透仓储）为 WU-35/36 冻结契约；扫描面逐条容错——单行装载
+ * 失败（聚合守卫拒绝/从表装载异常）跳过本轮并告警，下轮扫描重试；
+ * 按子单装载（findBySubOrderId，WU-55 冻结）为订单详情/物流展示面
+ * 锚点（含签收终态，历史并存行取
  * 最新一张）。写：轨迹从表 append-only 追加插行（advance 推进 → 聚合
  * 方法构造轨迹行 → 变更集 ItemAddedChange 插行）。
  * <p>
@@ -42,6 +46,7 @@ import java.util.Optional;
  * @author nona9961
  */
 @Component
+@Slf4j
 public class WaybillRepositoryImpl
         extends DifferRepository<Waybill, WaybillPO, List<WaybillTrackPO>>
         implements WaybillRepository {
@@ -168,11 +173,25 @@ public class WaybillRepositoryImpl
 
     /**
      * {@inheritDoc}
+     * <p>
+     * 在途全量扫描装载面逐条容错：单行装载失败（convertor 守卫拒绝
+     * 或从表查询异常）跳过本轮并告警，下轮扫描重试，不毒化整轮
+     * 扫描；fail-closed 锚点（{@link #findInTransitBySubOrderId} /
+     * {@link #findBySubOrderId}）不受影响。
      */
     @Override
     public List<Waybill> findInTransit() {
         return jpaRepository.findByInTransitTrue().stream()
-                .map(po -> convertor.convertToRoot(po, getOther(po)))
+                .map(po -> {
+                    try {
+                        return convertor.convertToRoot(po, getOther(po));
+                    } catch (final RuntimeException ex) {
+                        log.warn("[waybill-repo] in-transit row skipped, unloadable snapshot, will be retried next scan: waybillId={}, msg={}",
+                                po.getId(), ex.getMessage());
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
                 .toList();
     }
 
