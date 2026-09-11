@@ -22,13 +22,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * PaymentPort 实现侧场景测试（创建/复用 + 关单，红阶段）。
+ * PaymentPort 实现侧场景测试（创建/复用 + 关单）。
  * <p>
  * 覆盖：happy——补建支付单返回视图（payNo/金额/超时回显）、复用待支付
  * 单（一次支付请求一张支付单）、关单（待支付/失败收口、已关闭幂等）；
- * critical——已存在非待支付单拒绝复用（一对一生义，防重复发起）；
- * fail——支付单不存在 404、已支付关单拒绝。红阶段失败原因 = 实现缺失
- * （方法体 UOE），绿阶段按 javadoc 契约实现后按本矩阵转绿。
+ * critical——已存在非待支付单拒绝复用（一对一语义，防重复发起）；
+ * fail——支付单不存在 404、已支付关单拒绝。按 javadoc 契约实现后按本矩阵转绿。
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentPortImplUnitTest {
@@ -37,7 +36,7 @@ class PaymentPortImplUnitTest {
     private PaymentOrderRepository repository;
 
     /**
-     * 被测端口实现（直接装配，红阶段不注册 Spring；mock 注入后于实例构造，
+     * 被测端口实现（直接装配；mock 注入后于实例构造，
      * 端口经 setUp 装配）。
      */
     private PaymentPortImpl port;
@@ -75,7 +74,7 @@ class PaymentPortImplUnitTest {
     }
 
     @Test
-    @DisplayName("happy-2 复用：同主单已存在待支付单 → 复用返回既有视图（不重复创建，B8.1 幂等发起）")
+    @DisplayName("happy-2 复用：同主单已存在待支付单 → 复用返回既有视图（不重复创建，幂等发起）")
     void createPendingPayment_existingPending_reuses() {
         when(repository.findByOrderId(100L)).thenReturn(pending);
         final PendingPayment reused = port.createPendingPayment(100L, 10000L, 1_800_000L);

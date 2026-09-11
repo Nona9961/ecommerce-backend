@@ -30,8 +30,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 平台物流视图查询服务场景测试（P5.1：跨店铺物流列表/筛选/分页/
- * 超时未发货标记，红阶段契约）。
+ * 平台物流视图查询服务场景测试（跨店铺物流列表/筛选/分页/
+ * 超时未发货标记契约）。
  * <p>
  * 覆盖：happy——全链路混合行（已发货行 + 超时未发货行）标记语义与
  * 字段透传、筛选/分页原样透传（同条件两查编序 search→count）、
@@ -40,8 +40,7 @@ import static org.mockito.Mockito.when;
  * 计数两路、失败短路不计数）、仓储违约 null 防御（不 NPE）。
  * <p>
  * 依赖装配：读模型仓储以 mock 承载（服务编排契约断言面），被测服务
- * 每用例前重建；红阶段失败原因 = 服务方法体未接线（UOE），而非语法/
- * 装配错误。
+ * 每用例前重建。
  * <p>
  * 时间断言：全部相对窗口（now ± Duration），零绝对日期魔法值；判定
  * 时刻与服务执行时刻差不超过毫秒级，fixture 余量（2 小时/1 小时）
@@ -69,7 +68,7 @@ class PlatformLogisticsViewServiceUnitTest {
     private PlatformLogisticsViewRepository platformLogisticsViewRepository;
 
     /**
-     * 被测服务（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测服务（不注册 Spring；依赖全 mock，setUp 装配）。
      */
     private PlatformLogisticsViewServiceImpl service;
 

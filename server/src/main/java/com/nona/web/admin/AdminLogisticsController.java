@@ -14,12 +14,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 平台物流总览 REST 控制器（/admin/logistics，ADMIN 角色，WU-60 接线
- * WU-48 约定端点）：平台物流监督列表（跨店铺全集 + shopId/status 可选
+ * 平台物流总览 REST 控制器（/admin/logistics，ADMIN 角色，接线段
+ * 约定端点）：平台物流监督列表（跨店铺全集 + shopId/status 可选
  * 过滤 + 分页）。
  * <p>
  * 控制器保持薄壳：查询参数显式解析 + 委托
- * {@link AdminLogisticsQuery}（应用层查询用例，内部委托 WU-38 冻结的
+ * {@link AdminLogisticsQuery}（应用层查询用例，内部委托冻结的
  * {@code PlatformLogisticsViewService}），不承载业务逻辑。status 为子单
  * 履约状态枚举名（非法值显式解析拒绝 400 generic.validation_failed）；
  * 行映射 = 领域视图行 → api 呈现行（枚举以 name() 字符串承载、
@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminLogisticsController implements AdminLogisticsApi {
 
     /**
-     * 平台物流总览查询用例（委托 WU-38 冻结的物流视图服务）
+     * 平台物流总览查询用例（委托冻结的物流视图服务）
      */
     private final AdminLogisticsQuery logisticsQuery;
 

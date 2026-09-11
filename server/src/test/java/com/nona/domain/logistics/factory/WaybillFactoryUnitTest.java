@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 运单工厂单元测试：运单创建的入口（ID 生成 + 初始轨迹装配 + 形态
  * 校验）与轨迹条目装配（归属绑定 + 节点定型）。
  * <p>
- * 红阶段：工厂为设计物实现（本文件用例绿）；「一子单一在途」重复发货
+ * 工厂为设计物实现（本文件用例绿）；「一子单一在途」重复发货
  * 拒绝属发货编排守卫（编排工作单元落位），不在工厂职责——查询锚点契约钉见
  * LogisticsContractUnitTest。
  *

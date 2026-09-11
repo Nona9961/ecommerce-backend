@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * JWT 签发服务单元测试：签发结果契约（Phase 1 骨架态，预期红）。
+ * JWT 签发服务单元测试：签发结果契约。
  * <p>
  * 断言契约：签发 token 可被现有 {@link JwtTokenProvider} 解析，
  * claim 只含定位信息（uid/portal）且未过期——签发实现必须与现有密钥体系互通。

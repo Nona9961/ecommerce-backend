@@ -42,12 +42,12 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * 买家订单查询用例（B9.1/B9.2/B10.1 承载：GET /mall/orders 列表、
+ * 买家订单查询用例（承载：GET /mall/orders 列表、
  * GET /mall/orders/{masterOrderId} 详情、GET /mall/sub-orders/
- * {subOrderId}/waybill 运单——WU-59 冻结，形状钉死前端 WU-44 约定
- * 清单，消费 WU-55 冻结仓储查询契约，零签名变更）。
+ * {subOrderId}/waybill 运单——契约冻结，形状钉死前端约定
+ * 清单，消费冻结仓储查询契约，零签名变更）。
  * <p>
- * 编排语义（只读面：分页行不登记变更追踪——55 冻结「读取面纪律」）：
+ * 编排语义（只读面：分页行不登记变更追踪——冻结「读取面纪律」）：
  * <ol>
  *     <li><b>列表</b>：状态 tab → 仓储过滤集合映射（见下，前端
  *         ORDER_TABS 语义收敛点）+ 分页（PageQuery 归一化后 offset/
@@ -132,7 +132,7 @@ public class BuyerOrderQuery {
     }
 
     /**
-     * 买家订单分页列表（B9.1；映射语义见类 javadoc，只读编排）。
+     * 买家订单分页列表（映射语义见类 javadoc，只读编排）。
      *
      * @param buyerId 买家账号 ID（必填）
      * @param tab     状态 tab（null = 全部不过滤；已解析枚举）
@@ -154,7 +154,7 @@ public class BuyerOrderQuery {
     }
 
     /**
-     * 买家订单详情（B9.2；不存在或归属不符按不存在呈现 404）。
+     * 买家订单详情（不存在或归属不符按不存在呈现 404）。
      *
      * @param buyerId       买家账号 ID（归属校验）
      * @param masterOrderId 主订单 ID
@@ -174,7 +174,7 @@ public class BuyerOrderQuery {
     }
 
     /**
-     * 买家运单视图（B10.1；子单不存在/归属不符 → order.sub_not_found
+     * 买家运单视图（子单不存在/归属不符 → order.sub_not_found
      * 404；无运单 → logistics.not_found 404）。
      *
      * @param buyerId    买家账号 ID（归属校验）

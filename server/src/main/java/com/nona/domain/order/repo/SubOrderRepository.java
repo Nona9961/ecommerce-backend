@@ -20,9 +20,9 @@ import java.util.List;
  * 下 N 子单）；子单 id 集合在主单侧按此列反查（引用 ID 协作）。
  * <p>
  * 查询契约扩展遵循「契约演进只增不改」：列表/分页/店铺维度查询随消费
- * WU（订单列表/详情查询面）声明，本阶段只冻结创建与主单维度装载。
+ * 编排（订单列表/详情查询面）声明，本阶段只冻结创建与主单维度装载。
  * <p>
- * <b>商家列表分页面（WU-55 冻结）</b>：WU-47 约定的商家订单列表
+ * <b>商家列表分页面（契约冻结）</b>：约定的商家订单列表
  * 形状（GET /seller/orders?status=&amp;pageNum=&amp;pageSize=，status
  * 逗号分隔多枚举）——SubOrderStatus 全量 8 枚举透传（本接口不做任何
  * 枚举值收敛/裁剪，「仅全部 tab 可见」等映射语义收敛在消费编排层）。
@@ -47,7 +47,7 @@ public interface SubOrderRepository extends BaseRepository<Long, SubOrder> {
      * 候选，按截止时间升序至多返回 limit 条（走 (status, timeout_at)
      * 复合索引）。
      * <p>
-     * 条件语义（接线 WU 无漂移落地依据）——{@code status = 预期态 AND
+     * 条件语义（接线无漂移落地依据）——{@code status = 预期态 AND
      * timeout_at <= now}；不含 claimed 过滤（引擎事务语义保证无死认领
      * 行，见引擎契约）；调用方（履约超时数据端口）传入预期态与扫描
      * 时刻，本接口不写死任何状态值。
@@ -87,7 +87,7 @@ public interface SubOrderRepository extends BaseRepository<Long, SubOrder> {
     void clearTimeoutDeadline(Long id);
 
     /**
-     * 店铺订单分页列表（WU-47 商家列表查询面形状，WU-55 冻结）。
+     * 店铺订单分页列表（商家列表查询面形状，契约冻结）。
      * <p>
      * 定位：店铺维度 = {@code shop_id = shopId} 显式业务条件 + 租户
      * 过滤（tenant_id=context）双层防线（fail-closed：任意一重不满足

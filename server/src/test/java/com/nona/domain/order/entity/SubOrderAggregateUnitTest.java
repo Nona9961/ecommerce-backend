@@ -16,11 +16,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 子订单聚合结构测试：装配形态（创建/装载）、金额自洽恒等式（商品总额
- * == Σ 订单项小计）、B7.6 快照冻结语义（地址/金额/订单项创建后不可变）、
+ * == Σ 订单项小计）、快照冻结语义（地址/金额/订单项创建后不可变）、
  * 归属定型（店铺/主单引用创建后不可变）。
  * <p>
- * 结构守卫（构造路径）红阶段即实现（设计物），本类用例绿；状态机行为
- * 属 UOE（见 SubOrderStatusMachineUnitTest 红）。
+ * 结构守卫（构造路径）为设计物实现（本类用例绿）；状态机行为
+ * 契约见 SubOrderStatusMachineUnitTest 矩阵。
  *
  * @author nona9961
  */

@@ -41,7 +41,7 @@ import java.util.List;
  * 层从跟踪上下文取当前账号 ID 传入）；申请表为平台全局数据（global），平台
  * 列表直接查询，无租户过滤语义。
  * <p>
- * 红阶段：approve 为签名冻结（实现缺失）——编排精确顺序由契约测试钉死。
+ * 编排语义（approve 已接线，交易顺序由契约测试钉死）。
  *
  * @author nona9961
  */
@@ -89,7 +89,7 @@ public class OnboardingReviewUseCase {
     private final Dispatcher dispatcher;
 
     /**
-     * 写后自读窗口埋点（TD-08：审核通过 = 商家侧数据生效，标记商家账号
+     * 写后自读窗口埋点（审核通过 = 商家侧数据生效，标记商家账号
      * 使其 3s 内搜索立即可见——主体语义见用例契约）
      */
     private final LastWriteMarker lastWriteMarker;

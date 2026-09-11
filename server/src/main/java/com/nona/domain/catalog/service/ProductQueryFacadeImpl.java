@@ -34,8 +34,8 @@ import java.util.stream.Collectors;
  * 读放行（@CrossTenant）由应用层调用方（mall 详情用例/order 编排）承载；
  * 跨域库存读在同一放行上下文内执行（跨店铺/未初始化 SKU 按可售 0 呈现）。
  * <p>
- * 红阶段：getBuyerView 为签名冻结（实现缺失）；回退装配点
- * （{@link #toFreight}）双参签名冻结。
+ * 装配语义（getBuyerView 已接线；回退装配点
+ * （{@link #toFreight}）双参签名冻结）。
  *
  * @author nona9961
  */

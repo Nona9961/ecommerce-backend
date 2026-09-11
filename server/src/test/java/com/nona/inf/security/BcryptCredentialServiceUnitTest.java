@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * BCrypt 凭证服务单元测试：加密与校验语义（Phase 1 骨架态，预期红）。
+ * BCrypt 凭证服务单元测试：加密与校验语义。
  * <p>
  * 断言对准 BCrypt 契约：摘要非明文、长度 60 含版本前缀；正确密码匹配、
  * 错误密码不匹配；摘要非法时校验返回 false 而非抛出。
@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BcryptCredentialServiceUnitTest {
 
     /**
-     * 被测凭证服务（骨架：Phase 2 以 BCryptPasswordEncoder 落地）
+     * 被测凭证服务（BCryptPasswordEncoder 落地）
      */
     private final BcryptCredentialService service = new BcryptCredentialService();
 

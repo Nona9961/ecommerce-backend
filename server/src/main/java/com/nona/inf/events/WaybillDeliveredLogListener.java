@@ -17,14 +17,14 @@ import java.util.concurrent.Executor;
  * 联动的时序前提），物流推进事务成败与事件消费解耦（消费失败不影响
  * 推进主链路）。
  * <p>
- * <b>接线形态（绿阶段实现依据）</b>：与完成事件日志监听
+ * <b>接线形态</b>：与完成事件日志监听
  * （{@code OrderCompletedLogListener}）同构——监听方法将日志任务
  * 提交到物流事件异步执行器（虚拟线程调度 + 请求上下文传播装饰器，
  * 上下文传播随执行器装配），仅日志留痕（事件类型 + 签收运单/关联
  * 子单引用 ID），不承载业务副作用（自动完成联动由
  * {@code WaybillDeliveredReceiptListener} 承载）。
  * <p>
- * <b>装配声明</b>：红阶段行为方法体未接线（UOE）；执行器 bean
+ * <b>装配声明</b>：行为方法体已接线（日志消费）；执行器 bean
  * （{@code waybillEventExecutor}）由 {@link WaybillDeliveredEventConfig}
  * 装配。
  *

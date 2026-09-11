@@ -165,7 +165,7 @@ public class LogisticsSimulator {
     }
 
     /**
-     * 定制构造（测试注入固定时钟与节奏参数验证推进时间语义；红阶段
+     * 定制构造（测试注入固定时钟与节奏参数验证推进时间语义；
      * 单测装配点）。
      *
      * @param waybillRepository         在途运单数据面

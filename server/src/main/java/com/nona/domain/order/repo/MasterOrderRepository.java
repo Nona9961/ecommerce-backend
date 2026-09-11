@@ -17,11 +17,11 @@ import java.util.List;
  * buyer_id 为业务关联列；子单 id 集合经 sub_order.master_order_id
  * 反查装载（引用 ID 协作，主单不加载子单对象）。
  * <p>
- * 查询契约扩展遵循「契约演进只增不改」：订单列表（B9.1）/详情
- * （B9.2）等买家/商家查询面随消费 WU 声明扩展，本阶段只冻结创建与
+ * 查询契约扩展遵循「契约演进只增不改」：订单列表/详情
+ * 等买家/商家查询面随消费编排声明扩展，本阶段只冻结创建与
  * 按 ID 装载。
  * <p>
- * <b>买家列表分页面（WU-55 冻结）</b>：WU-44 约定的买家订单列表
+ * <b>买家列表分页面（契约冻结）</b>：约定的买家订单列表
  * 形状（GET /mall/orders?status=&amp;pageNum=&amp;pageSize=，7 态 tab）
  * ——状态 tab → 枚举值集合的映射收敛在消费编排层（本接口只承载多值
  * 条件过滤，不感知 tab 语义）。
@@ -31,7 +31,7 @@ import java.util.List;
 public interface MasterOrderRepository extends BaseRepository<Long, MasterOrder> {
 
     /**
-     * 买家订单分页列表（B9.1 买家列表查询面，WU-44 约定形状）。
+     * 买家订单分页列表（买家列表查询面，约定形状）。
      * <p>
      * 定位：master_order 为 global 表（无租户隔离），按 buyer_id 业务
      * 关联列唯一定位买家订单全集；状态多值条件过滤（{@code status IN

@@ -34,8 +34,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /**
- * 商家端商品编辑回显 3 只读方法场景测试（WU-47 前端约定回显 GET：SKU
- * 集 / 规格模板 / 运费模板绑定，WU-60 红阶段契约；ProductUseCase 只读
+ * 商家端商品编辑回显 3 只读方法场景测试（前端约定回显 GET：SKU
+ * 集 / 规格模板 / 运费模板绑定，契约；ProductUseCase 只读
  * 追加，ProductAggregate 零改动）。
  * <p>
  * 覆盖：happy——SKU 集回显（价格分透传 + 启用/规格摘要）、规格模板回显
@@ -45,8 +45,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：ProductUseCase 全部依赖（10 项：仓储/工厂/版本用例/快照
  * 转换器/写后埋点/上下文）以 mock 承载（@BeforeEach 重建被测用例，
- * 桩逐用例布置全部被使用——只读方法零事务零埋点桩）。红阶段失败
- * 原因 = 实现缺失（方法体 UOE），而非语法/装配错误。
+ * 桩逐用例布置全部被使用——只读方法零事务零埋点桩）。
  *
  * @author nona9961
  */
@@ -91,7 +90,7 @@ class ProductUseCaseReadBackUnitTest {
     private TenantContextAccessor tenantContextAccessor;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）
+     * 被测用例（依赖全 mock，setUp 装配）
      */
     private ProductUseCase useCase;
 

@@ -12,7 +12,7 @@ import java.util.List;
  * 主订单聚合根（master_order 主表行，买家维度 global）：买家维度的
  * 订单外壳——订单号/买家/地址快照/金额摘要/整体状态/子单引用集合。
  * <p>
- * 持久化形态（红阶段契约声明）：master_order 主表（global，独立
+ * 持久化形态（契约声明）：master_order 主表（global，独立
  * Snowflake 主键；order_no 唯一；buyer_id 业务关联列；地址六字段 +
  * 金额四字段为冗余快照列）；子单 id 集合不经冗余列承载——以
  * sub_order.master_order_id 业务关联列反查（引用 ID 协作，跨聚合不
@@ -21,10 +21,10 @@ import java.util.List;
  * <p>
  * 关键不变量（全部收敛在本聚合内，包外无直接字段变更路径）：
  * <ol>
- *     <li>快照冻结（B7.6）：订单号/买家/地址/金额摘要创建时定型不可变
+ *     <li>快照冻结：订单号/买家/地址/金额摘要创建时定型不可变
  *         ——字段全 final，无任何变更路径；</li>
  *     <li>金额恒等式：主单金额摘要（商品额/运费/优惠/实付四维）==
- *         Σ 子单金额（TD-10 主单金额=Σ子单商品+运费；收敛在创建构造
+ *         Σ 子单金额（主单金额=Σ子单商品+运费；收敛在创建构造
  *         路径，以子单金额投影校验，不一致无法构造）；</li>
  *     <li>整体状态派生：主单状态 = 子单状态聚合派生（
  *         {@link MasterOrderStatusDeriver} 纯函数）——主单不承载独立
@@ -32,7 +32,7 @@ import java.util.List;
  *         投影，不加载子单对象），由编排在事务内推进子单后调用刷新；
  *         非法投影组合（如待支付与已支付并存）防御性拒绝；</li>
  *     <li>子单引用集合创建时定型：下单拆单完毕后集合固定，无增删路径
- *         （跨店 N 店铺 → N 子单，TD-10）。</li>
+ *         （跨店 N 店铺 → N 子单）。</li>
  * </ol>
  * 创建必须经由 {@link com.nona.domain.order.factory.MasterOrderFactory}
  * + {@link com.nona.util.IDUtils#generateID()}；装载（仓储重建，子单
@@ -48,7 +48,7 @@ public class MasterOrder {
     private final Long id;
 
     /**
-     * 订单号（TD-13：ORD + 日期 + snowflake 后段，order_no 唯一）
+     * 订单号（ORD + 日期 + snowflake 后段，order_no 唯一）
      */
     private final String orderNo;
 
@@ -78,7 +78,7 @@ public class MasterOrder {
     private MasterOrderStatus status;
 
     /**
-     * 下单时间（审计时间字段，WU-59 冻结契约补充：新建路径为 null——
+     * 下单时间（审计时间字段，冻结契约补充：新建路径为 null——
      * 「未落库」语义，落库后由满载构造器/转换器回填
      * master_order.create_time；列表/详情读面永远走装载路径，非 null）
      */

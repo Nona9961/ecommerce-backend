@@ -22,8 +22,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 退款编排真实链验收测试（退款流真实装配面——PO 映射/租户过滤/上下文
- * 传播逐一验证；WU-49 按 javadoc 启用契约改写，红阶段降级声明已解除——
- * WU-55 RefundOrder/SubOrder/MasterOrder/PaymentOrder 仓储 JPA 实现 +
+ * 传播逐一验证；按 javadoc 启用契约改写——
+ * RefundOrder/SubOrder/MasterOrder/PaymentOrder 仓储 JPA 实现 +
  * RefundUseCase/RefundCallbackUseCase/OrderFacadeImpl Spring 注册落地）。
  * <p>
  * 装配面清单见红设计报告——真实事务三域原子（申请全链 + 回调成功全链 +

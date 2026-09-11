@@ -8,9 +8,9 @@ import com.nona.domain.logistics.ports.PlatformLogisticsViewService;
 import org.springframework.stereotype.Service;
 
 /**
- * 平台物流总览查询用例（admin 面，WU-60 接线 WU-48 约定端点）。
+ * 平台物流总览查询用例（admin 面，约定端点）。
  * <p>
- * 编排面：薄委托 WU-38 冻结的 {@link PlatformLogisticsViewService}
+ * 编排面：薄委托冻结的 {@link PlatformLogisticsViewService}
  * （读 PG 镜像表跨店铺全集，平台级无租户过滤；超时未发货标记判定收敛
  * 在领域服务内）——查询编排收敛在应用层（web → application → domain
  * 依赖纪律），web 层仅做行呈现适配（枚举/时间字符串化）。
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 public class AdminLogisticsQuery {
 
     /**
-     * 平台物流视图查询服务（WU-38 冻结契约）
+     * 平台物流视图查询服务（冻结契约）
      */
     private final PlatformLogisticsViewService logisticsViewService;
 

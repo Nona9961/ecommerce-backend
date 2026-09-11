@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 /**
  * 运单聚合根工厂：运单与轨迹条目的创建入口（ID 生成 + 装配形态校验）。
  * <p>
- * 创建语义（S10.3 商家发货录入承运公司与运单号）：发货编排
+ * 创建语义（商家发货录入承运公司与运单号）：发货编排
  * （logistics.createWaybill + order.markShipped 同事务）先按子单在途
  * 运单查询（{@code findInTransitBySubOrderId}）守卫「一子单一在途」
  * 不变量（重复发货拒绝，logistics.sub_order_conflict），命中不再创建；
@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * <p>
  * 校验分层：工厂只校验装配形态（子单引用/公司/单号/时间必填）；状态机
  * 迁移守卫与轨迹时间线一致性收敛在聚合构造与聚合方法；「一子单一在途」
- * 的完整拒绝在发货编排 + 数据库在途唯一约束（绿阶段落位）。
+ * 的完整拒绝在发货编排 + 数据库在途唯一约束（既定落位）。
  *
  * @author nona9961
  */

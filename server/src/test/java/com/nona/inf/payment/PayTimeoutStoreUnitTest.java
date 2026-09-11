@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 支付超时数据端口场景测试（ORDER_PAY：payment_order 表 deadline 列
- * 承载面，红阶段契约）：
+ * 承载面，契约）：
  * <p>
  * happy——findDue 经仓储超时扫描面按预期态 PENDING_PAYMENT 过滤并映射
  * 候选（id=payment_order 主键 / target=主订单 ID）；claim 条件性认领
@@ -32,9 +32,9 @@ import static org.mockito.Mockito.when;
  * critical——claim 条件不满足（他方已认领/状态已迁移）false 透传、目标
  * id/target 参数透传正确；fail——仓储扫描/认领异常原样透传。
  * <p>
- * 装配纪律：端口为普通类（红阶段不注册 Spring，WU-032 决策 9 降级先例），
- * 构造器注入仓储 mock（@BeforeEach 重建，禁字段初始化）；桩纪律——红阶段
- * 以 lenient 豁免 UOE 挡道面，绿实现后已按本文件断言面逐桩收回精确桩
+ * 装配纪律：端口为普通类（既定装配纪律：
+ * 构造器注入仓储 mock（@BeforeEach 重建，禁字段初始化）；桩纪律——
+ * 以 lenient 豁免 UOE 挡道面，已按本文件断言面逐桩收回精确桩
  * （零豁免）。
  * <p>
  * 时间断言：now 为测试固定时刻（fixture 输入，非断言魔法值）；全部断言

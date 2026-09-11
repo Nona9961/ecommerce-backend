@@ -11,12 +11,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 回调留痕记录形态测试（TD-11 防线三：payment_callback_log 从表行的
- * 领域契约，红阶段）。
+ * 回调留痕记录形态测试（防线三：payment_callback_log 从表行的
+ * 领域契约）。
  * <p>
  * 覆盖：回调原文全字段留痕定型（happy）、append-only 不可变（无 setter/
- * 变更路径）、形态守卫位（构造路径必填字段与配套约束——红阶段守卫未
- * 实现，期待 BusinessException 断言红；绿阶段实现守卫后转绿）。
+ * 变更路径）、形态守卫位（构造路径必填字段与配套约束，守卫已实现）。
  */
 class PaymentCallbackRecordUnitTest {
 

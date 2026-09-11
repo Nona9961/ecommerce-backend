@@ -18,12 +18,12 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
- * 商家发货编排用例（S10.3 商家标记发货：录入承运公司与运单号，
+ * 商家发货编排用例（商家标记发货：录入承运公司与运单号，
  * 跨上下文同事务：物流运单创建 + 订单子单发货推进——order/logistics
  * 两域原子，与取消/完成/退款编排共享「归属校验 → 幂等短路 → 提权写段」
  * 形态，为第五个同构编排）。
  * <p>
- * <b>编排序</b>（设计 4.5 钉死：logistics.createWaybill + order.markShipped
+ * <b>编排序</b>（logistics.createWaybill + order.markShipped
  * 同事务；发货不涉及库存动作——预占扣减已由支付回调整单完成，
  * {@code confirmDeduct} 无需本编排参与）：
  * <ol>
@@ -46,9 +46,9 @@ import org.springframework.stereotype.Service;
  *         子单一在途」不变量拒绝重复发货）——短路之外的第二道在途防线
  *         （子单正常路径下「发货」与「子单 SHIPPED」同事务原子，重放命
  *         中短路；命中本守卫属数据异常/并发窗口防御）；并发窗口由
- *         waybill.sub_order_id 在途唯一约束（数据库兜底，绿阶段落位）；</li>
+ *         waybill.sub_order_id 在途唯一约束（数据库兜底，既定落位）；</li>
  *     <li><b>提权写段</b>：跨租户写（子单 tenant=shopId 状态推进 + 运单
- *         global 创建，设计 3.2 下单编排同构——跨上下文写统一收纳在
+ *         global 创建，与下单编排同构——跨上下文写统一收纳在
  *         {@link TenantPrivilege#elevatedInTransaction} 内整体执行）依序：
  *         ① {@link WaybillFactory#createWaybill}（承运公司/运单号非空
  *         守卫 + 状态定型待发货 + 初始轨迹装配，时间 = 编排当前时刻）；
@@ -67,16 +67,15 @@ import org.springframework.stereotype.Service;
  * 层），domain 内不放行；读放行本用例不需要（子单读在商家租户过滤面，
  * 运单/在途查询为 global 表无需放行，均处于方法事务内）。
  * <p>
- * 承载位依据：S10.3 为商家视角故事，归属校验以商家店铺为锚点（与
+ * 承载位依据：商家视角故事，归属校验以商家店铺为锚点（与
  * 买家视角编排的 buyerId 归属校验对称），故落 application.seller；
  * 跨上下文协作全经各域端口（WaybillFactory/WaybillRepository/OrderFacade）
- * 与仓储契约，应用层承载事务边界与提权写段（TD-12 写放行只允许出现在
+ * 与仓储契约，应用层承载事务边界与提权写段（写放行只允许出现在
  * application 层用例方法上）。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——Waybill 仓储 JPA 实现与
- * 订单侧端口/仓储实现未接线（红阶段装配学习，同取消/完成/退款编排
- * 用例先例）；以构造器注入声明装配契约，Spring 注册（{@code @Service}）
- * 随接线阶段落位恢复；单测以构造器直接装配。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——Waybill 仓储
+ * JPA 实现与订单侧端口/仓储实现已接线；以构造器注入声明装配契约，
+ * 单测以构造器直接装配。
  *
  * @author nona9961
  */
@@ -138,7 +137,7 @@ public class ShipOrderUseCase {
     }
 
     /**
-     * 商家标记发货（S10.3：已支付子单 → 已发货 + 运单创建，跨上下文
+     * 商家标记发货（已支付子单 → 已发货 + 运单创建，跨上下文
      * 同事务；编排序见类 javadoc——归属校验 → 幂等短路 → 在途守卫 →
      * 提权写段内建单 + 落库 + 订单推进）。
      * <p>

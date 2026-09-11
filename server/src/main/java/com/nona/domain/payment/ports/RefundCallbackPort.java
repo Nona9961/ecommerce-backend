@@ -2,11 +2,11 @@ package com.nona.domain.payment.ports;
 
 /**
  * 退款回调处理端口（payment 跨上下文契约，本阶段冻结）：REFUND 类型
- * 回调的业务侧处理入口（TD-11 三层幂等防线在退款面的编排消费面）——
+ * 回调的业务侧处理入口（三层幂等防线在退款面的编排消费面）——
  * 渠道回调经 web 挂点 → {@link PaymentGateway#handleCallback} 标准化
  * 校验 → 本端口装载退款单并执行留痕与状态迁移。
  * <p>
- * 语义契约（实现接线 = 端口实现 + 退款回调编排，红阶段冻结签名，
+ * 语义契约（实现接线 = 端口实现 + 退款回调编排，签名冻结，
  * 回调编排补订单/库存同事务）：
  * <ol>
  *     <li><b>装载</b>：按回调 refundNo 装载退款单，不存在 →
@@ -17,13 +17,13 @@ package com.nona.domain.payment.ports;
  *     <li><b>防线二状态迁移</b>：按回调结果 markSucceeded /
  *         markRefundFailed（守卫判定顺序见 RefundOrder 类 javadoc）——
  *         同号重复回调命中 {@code payment.refund_status_illegal}，本端口
- *         捕获后按「已处理应答」返回（B8.5 重复回调只生效一次，不重放
+ *         捕获后按「已处理应答」返回（重复回调只生效一次，不重放
  *         订单/库存编排）；异号冲突与金额不符原样透传（渠道事故告警
  *         日志由编排落位）；</li>
  *     <li><b>成功编排挂点</b>：首次迁移成功后，同事务推进
  *         OrderFacade.completeRefund（子单已退款 + 主单派生；发货超时
  *         关单路径子单 CLOSED 幂等跳过）与未发货库存回补
- *         （InventoryFacade.restore，I7 幂等键 (order_id, sku_id, type)
+ *         （InventoryFacade.restore，幂等键 (order_id, sku_id, type)
  *         兜底）——编排接线随退款回调编排接线落地，本端口只承载处理
  *         入口签名。</li>
  * </ol>

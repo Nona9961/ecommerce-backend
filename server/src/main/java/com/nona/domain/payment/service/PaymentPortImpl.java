@@ -11,10 +11,10 @@ import com.nona.exceptions.EcommerceBusinessCode;
 import org.springframework.stereotype.Service;
 
 /**
- * PaymentPort 实现（绿阶段已实现创建/复用与关单签名语义；bean 装配
- * 与事务注解随仓储实现落地后接线，属编排接线阶段）。
+ * PaymentPort 实现（创建/复用与关单签名语义；bean 装配
+ * 与事务注解已接线）。
  * <p>
- * 接线语义（按 PaymentPort 接口 javadoc + 聚合契约，绿阶段实现依据）：
+ * 接线语义（按 PaymentPort 接口 javadoc + 聚合契约）：
  * <ul>
  *     <li><b>createPendingPayment</b>（历史遗留契约，实现接线归支付域落位）：
  *         按 orderId 装载（findByOrderId）——已存在待支付支付单 → <b>复用</b>
@@ -28,9 +28,8 @@ import org.springframework.stereotype.Service;
  *         （404）；待支付/已失败 → close() 迁移 + 落库；已关闭 → 幂等成功
  *         （无需落库）；已支付 → {@code payment.status_illegal}。</li>
  * </ul>
- * 装配说明（红阶段）：本类为普通类（不注册 Spring bean——依赖的仓储
- * 接口当前无实现，注册即装配错误；绿阶段仓储实现落地后补注解并复验
- * 上下文）。
+ * 装配说明：本类已注册 Spring bean（{@code @Service}）——依赖的支付单
+ * 仓储接口已有 JPA 实现接线。
  *
  * @author nona9961
  */
@@ -38,7 +37,7 @@ import org.springframework.stereotype.Service;
 public class PaymentPortImpl implements PaymentPort {
 
     /**
-     * 一期唯一支付渠道（真实渠道扩展位：字段保留，单据创建时定型）。
+     * 当前唯一支付渠道（真实渠道扩展位：字段保留，单据创建时定型）。
      */
     private static final String MOCK_CHANNEL = "MOCK";
 

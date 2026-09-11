@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * 回调留痕记录（payment_callback_log 从表行，TD-11 防线三的落库形态）：
+ * 回调留痕记录（payment_callback_log 从表行，防线三的落库形态）：
  * 渠道回调原文的字段化快照，append-only 追加、创建后不可变（排查与对账
  * 依据，重复/失败回调同样留痕——对账不依赖迁移成败）。
  * <p>
@@ -21,10 +21,10 @@ import java.util.List;
  * Snowflake 主键（id），无生命周期变更（append-only 实体——InventoryLog
  * 判例）。
  * <p>
- * 「回调原文」定义（一期 mock 渠道载荷即标准化结构，字段化落库零信息
+ * 「回调原文」定义（mock 渠道载荷即标准化结构，字段化落库零信息
  * 损失）：{@code callbackType/payNo/refundNo/result/channelTxnNo/
  * amountCents} 六字段与渠道回调载荷同构 + {@code paymentOrderId} 归属 +
- * {@code occurredAt} 收到时间。真实渠道原始报文（raw JSON）为二期扩展位
+ * {@code occurredAt} 收到时间。真实渠道原始报文（raw JSON）为扩展预留位
  * （接真实渠道时仅需向本实体追加一列，契约演进只增不改）。
  * <p>
  * 形态不变式（守卫已收敛在构造路径实现）：
@@ -32,7 +32,7 @@ import java.util.List;
  *     <li>必填字段（id/paymentOrderId/callbackType/payNo/result/
  *         channelTxnNo/occurredAt）缺失即非法形态，构造拒绝；</li>
  *     <li>类型与字段配套（CallbackType 配套约束）：PAY 回调 refundNo 必空、
- *         REFUND 回调 refundNo 必填（一期支付回调场景，退款流 退款流 接续
+ *         REFUND 回调 refundNo 必填（支付回调场景，退款流接续
  *         消费）；</li>
  *     <li>金额为正整数分（渠道回调金额已过正数校验，留痕原样保存）；</li>
  *     <li>不可变：无任何 setter/变更方法（测试反射钉死），追加与持久化
@@ -89,8 +89,8 @@ public class PaymentCallbackRecord {
     private final Instant occurredAt;
 
     /**
-     * 创建构造器（回调编排留痕第一位调用；形态守卫由绿阶段实现，红阶段
-     * 仅字段定型）。
+     * 创建构造器（回调编排留痕第一位调用；形态守卫已收敛在构造路径
+     * 实现）。
      *
      * @param id            留痕记录主键（Snowflake，必填）
      * @param paymentOrderId 归属支付单 ID（rootId，必填）

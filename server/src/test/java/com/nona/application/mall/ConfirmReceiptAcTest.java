@@ -22,9 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 确认收货编排真实链验收测试（WU-30：真实链装配面——PO 映射/租户过滤/
- * 上下文传播逐一验证；WU-49 按 javadoc 启用契约改写，红阶段降级声明
- * 已解除——WU-55 MasterOrder/SubOrder 仓储 JPA 实现 + 用例/门面/事件
+ * 确认收货编排真实链验收测试（真实链装配面——PO 映射/租户过滤/
+ * 上下文传播逐一验证；按 javadoc 启用契约改写——
+ * MasterOrder/SubOrder 仓储 JPA 实现 + 用例/门面/事件
  * 发布器 Spring 注册落地）。
  * <p>
  * 装配面清单见红设计报告 §装配面清单——真实事务双入口 / 完成事件真实
@@ -84,7 +84,7 @@ class ConfirmReceiptAcTest {
     /**
      * 完成事件日志捕获（logback ListAppender 直收——不依赖 System.out
      * 捕获：多测试类同 JVM 下 OutputCapture 对非首个 context 类失效，
-     * WU-49 实测；每方法挂载/卸载，方法级隔离）
+     * 实测；每方法挂载/卸载，方法级隔离）
      */
     private ListLogAppender orderLogAppender;
 
@@ -309,7 +309,7 @@ class ConfirmReceiptAcTest {
     /**
      * 冒烟-4 幂等重放真实面：已完成子单再确认（confirmByBuyer）与再超时
      * （autoCompleteByTimeout）→ 幂等短路（无二次状态变更、无二次事件
-     * 发布——Phase-II 消费方不收重复完成）。
+     * 发布——消费方不收重复完成）。
      * <p>
      * 断言面：先完整完成一次，再重放两个入口，断言子单/主单无二次
      * 变更且事件日志无重复留痕（日志计数不变）。

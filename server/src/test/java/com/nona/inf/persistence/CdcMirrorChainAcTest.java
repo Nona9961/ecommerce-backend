@@ -14,8 +14,8 @@ import java.time.ZoneOffset;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * CDC 真链验收测试（WU-49 新建）：写 MySQL ecommerce_test 业务表 →
- * poll-until 断言 PG ecommerce_test 镜像基表行一致（WU-61 三库同步链路
+ * CDC 真链验收测试：写 MySQL ecommerce_test 业务表 →
+ * poll-until 断言 PG ecommerce_test 镜像基表行一致（三库同步链路
  * 已就绪后的写后读一致性自动化载体）。
  * <p>
  * 装配面：<b>纯 JDBC</b>（DriverManager 双连 MySQL 13306 → MySQL test、
@@ -33,14 +33,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 测试分类：AcTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行）。
  * 幂等清理：测试结束时 DELETE 自造行（幂等覆盖）。
  * <p>
- * <b>红阶段红态</b>：若 CDC 链路未就绪（61 未部署），poll 超时即为红因；
- * 若链路已就绪（61 已部署），本测试应绿——这正是 WU-61 就绪信号，
- * 不属于「红因不明」。报告登记红态判定：poll 超时/断言不满足 = 红（链路未就绪），
+ * <b>链路就绪信号</b>：若 CDC 链路未就绪，poll 超时即为红因；
+ * 若链路已就绪，本测试应绿——这正是链路就绪信号，
+ * 不属于「红因不明」。红态判定：poll 超时/断言不满足 = 红（链路未就绪），
  * 全绿 = 链路就绪实证。
  * <p>
  * 运行（需 localtunnel 隧道，worktree 目录下执行）：
  * <pre>
- * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend-wu49
+ * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend
  *   && set -a && . /opt/data-stack/.env && set +a
  *   && export ECOM_DB_PASSWORD="$MYSQL_ECOM_PW"
  *   && export ECOM_PG_PASSWORD="$ECOM_PG_PASSWORD"

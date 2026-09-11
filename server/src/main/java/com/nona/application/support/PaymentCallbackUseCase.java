@@ -33,7 +33,7 @@ import org.springframework.stereotype.Service;
  * payment/order/inventory 三域且含跨租户写（子单/库存 tenant=shopId）
  * ——按设计「跨端共用编排」落 application.support；跨上下文协作全经
  * 各域端口（OrderFacade/InventoryFacade）与仓储契约，应用层承载事务
- * 边界（方法级 {@link Transactional}）与提权写段（TD-12 写放行只允许
+ * 边界（方法级 {@link Transactional}）与提权写段（写放行只允许
  * 出现在 application 层用例方法上）。
  * <p>
  * <b>编排语义</b>（实现接线依据，按 PaymentCallbackPort 接口 javadoc +
@@ -54,7 +54,7 @@ import org.springframework.stereotype.Service;
  *     <li><b>防线二状态迁移</b>：result=SUCCESS → {@code markPaid}；
  *         result=FAIL → {@code markFailed}（金额/流水/状态守卫判定顺序
  *         见 PaymentOrder 类 javadoc）——<b>迁移守卫被拒的落库律</b>：
- *         同号重复回调（{@code payment.status_illegal}，B8.2 幂等命中）、
+ *         同号重复回调（{@code payment.status_illegal}，幂等命中）、
  *         异号冲突（{@code payment.callback_duplicate} 409）、金额不符
  *         （{@code payment.amount_mismatch}）一律先
  *         {@code repository.save}（留痕持久化，对账可查）再原样透传异常
@@ -63,30 +63,29 @@ import org.springframework.stereotype.Service;
  *     <li><b>成功编排（首次迁移成功后，同事务）</b>：提权写段
  *         （{@link TenantPrivilege#elevatedInTransaction}）内依序——
  *         ① {@link OrderFacade#onPaid}（主单下全部子单 待支付→已支付 +
- *         主单状态派生，M9；子单空集合/主单不存在的防御由订单门面
- *         承载）；② 逐子单 {@link InventoryFacade#confirmDeduct}（I4
+ *         主单状态派生；子单空集合/主单不存在的防御由订单门面
+ *         承载）；② 逐子单 {@link InventoryFacade#confirmDeduct}（
  *         确认扣减：明细从子单订单项快照装配（SKU + 数量），与下单
  *         预占/取消回滚的 items 装配同源对称；扣减粒度 = 子单，与
  *         preoccupy/rollback 对称）；任一步失败 → 异常透传 → 方法事务
  *         <b>整体回滚</b>（payment → order → inventory 三域原子，
- *         TD-07 同步编排）；</li>
+ *         同步编排）；</li>
  *     <li><b>落库</b>：迁移 + 留痕经 {@code repository.save} 持久化
  *         （与成功编排同一方法事务；编排异常时不单独落库——事务回滚
  *         已保证原子，支付单不出现「已支付但订单未推进」的半程态）；</li>
  *     <li><b>失败回调</b>：仅 markFailed + save——订单停留待支付等待
- *         超时关单（B8.3），不推进订单/库存。</li>
+ *         超时关单，不推进订单/库存。</li>
  * </ol>
  * <p>
- * 幂等语义汇总（B8.2「重复回调不重复处理」）：幂等锚点 = 支付单状态
+ * 幂等语义汇总（「重复回调不重复处理」）：幂等锚点 = 支付单状态
  * 迁移守卫（同号重复回调命中 status_illegal 即已处理应答，编排不重放）；
  * 本用例不做订单侧附加短路（订单侧状态由支付单守卫上游唯一驱动）。
  * <p>
  * 事务边界 = 用例方法（方法级 {@link Transactional}）；领域方法不做
  * 事务；提权写段（跨租户写子单/库存）只出现在本类（application 层）。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——仓储实现（order/payment）
- * 未接线（装配学习，同取消/完成编排用例）；以构造器注入声明装配契约，
- * Spring 注册（{@code @Service}）随接线阶段落位恢复；单测以构造器
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——仓储实现
+ * （order/payment）已接线；以构造器注入声明装配契约，单测以构造器
  * 直接装配。
  *
  * @author nona9961
@@ -110,7 +109,7 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
     private final OrderFacade orderFacade;
 
     /**
-     * 库存门面（成功编排：逐子单确认扣减 I4）
+     * 库存门面（成功编排：逐子单确认扣减）
      */
     private final InventoryFacade inventoryFacade;
 
@@ -197,7 +196,7 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
         order.appendCallbackRecord(record);
         // 4. 防线二状态迁移（守卫判定顺序见 PaymentOrder 类 javadoc）——迁移
         //    守卫被拒（status_illegal/callback_duplicate/amount_mismatch）：
-        //    先落库留痕再原样透传（B8.2 幂等命中不重放编排）
+        //    先落库留痕再原样透传（幂等命中不重放编排）
         if (callback.result() == GatewayResult.SUCCESS) {
             try {
                 order.markPaid(callback.channelTxnNo(), callback.amountCents());
@@ -210,10 +209,10 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
                 });
                 throw e;
             }
-            // 5. 成功编排（首次迁移成功后）：提权写段（TD-12——回调上下文无
+            // 5. 成功编排（首次迁移成功后）：提权写段（回调上下文无
             //    买家身份、tenant 空，推进店铺数据必须放行）内依序 onPaid(主单)
             //    → 逐子单 confirmDeduct（编排序钉死，决策 2）→ 根行迁移 + 留痕
-            //    落库——编排与落库同提权事务（TD-07 三域原子：杜绝「编排已
+            //    落库——编排与落库同提权事务（三域原子：杜绝「编排已
             //    提交而支付单未迁移」的部分提交窗口）
             try {
                 tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
@@ -224,13 +223,13 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
                 });
             } catch (final RuntimeException e) {
                 // 编排异常（聚合守卫/库存扣减失败）原样透传 → 方法事务整体
-                // 回滚（TD-07 三域原子）；不单独落库（决策 6）
+                // 回滚（三域原子）；不单独落库（决策 6）
                 throw e;
             } catch (final Exception e) {
                 throw new IllegalStateException("支付回调编排提权事务失败", e);
             }
         } else {
-            // 7. 失败回调：仅 markFailed——订单停留待支付等待超时关单（B8.3），
+            // 7. 失败回调：仅 markFailed——订单停留待支付等待超时关单，
             //    不推进订单/库存；状态迁移 + 留痕落库同外层方法事务（payment
             //    global 行无提权需要，无编排段故无部分提交窗口）
             try {
@@ -249,7 +248,7 @@ public class PaymentCallbackUseCase implements PaymentCallbackPort {
     }
 
     /**
-     * 逐子单确认扣减（I4）：子单订单项快照装配扣减明细（SKU + 数量，与
+     * 逐子单确认扣减：子单订单项快照装配扣减明细（SKU + 数量，与
      * 下单预占/取消回滚的 items 装配同源对称）→ 逐子单
      * {@link InventoryFacade#confirmDeduct}（幂等键 (order_id, sku_id,
      * type) 操作单元 = 子单）；onPaid 已先行完成全部子单推进（编排序

@@ -30,7 +30,7 @@ public interface WaybillJpaRepository extends ListCrudRepository<WaybillPO, Long
     List<WaybillPO> findByInTransitTrue();
 
     /**
-     * 按子单装载最新运单行（任意状态，含签收终态；WU-55 冻结——
+     * 按子单装载最新运单行（任意状态，含签收终态；契约冻结——
      * 订单详情/物流展示面锚点）。主键倒序第一条（Snowflake 主键
      * 单调近似创建序；业务常态一子单一张运单，历史并存行取最新）。
      *

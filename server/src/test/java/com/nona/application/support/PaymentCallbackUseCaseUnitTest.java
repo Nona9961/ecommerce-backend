@@ -48,18 +48,17 @@ import static org.mockito.Mockito.when;
 
 /**
  * 支付回调编排用例场景测试（支付回调接线阶段契约：payment → order →
- * inventory 同事务编排，红阶段）。
+ * inventory 同事务编排）。
  * <p>
  * 覆盖：happy——成功回调全链路（留痕先行 → markPaid → 提权段内 onPaid
  * + 逐子单扣减明细从订单项快照装配）；失败回调（仅支付单迁移，订单/库
- * 存不动）。critical——同号重复回调幂等（B8.2 只生效一次，留痕仍落库
+ * 存不动）。critical——同号重复回调幂等（只生效一次，留痕仍落库
  * 不重放编排）、异号冲突 409、金额不符 400、多子单编排序。fail——
  * 支付单不存在 404（孤儿回调）、REFUND 回调拒绝、null 回调拒绝、编排
  * 异常整体回滚语义（订单推进异常 → 库存扣减不发生、支付单不落库）。
  * <p>
  * 依赖装配：仓库/门面/提权/事务全部 mock 承载（编排契约断言面）；提权
  * 事务以 mock 直执行（真实事务回滚属应用层注解面，冒烟清单覆盖）。
- * 红阶段失败原因 = 实现缺失（handlePayCallback 方法体 UOE）。
  *
  * @author nona9961
  */
@@ -109,7 +108,7 @@ class PaymentCallbackUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测回调编排用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测回调编排用例（依赖全 mock，setUp 装配）。
      */
     private PaymentCallbackUseCase useCase;
 
@@ -229,8 +228,8 @@ class PaymentCallbackUseCaseUnitTest {
     }
 
     /**
-     * happy-2 失败回调：留痕 + markFailed（订单停留待支付等待超时关单，
-     * B8.3）——不推进订单/库存，支付单落库。
+     * happy-2 失败回调：留痕 + markFailed（订单停留待支付等待超时关单）
+     * ——不推进订单/库存，支付单落库。
      */
     @Test
     @DisplayName("失败回调：留痕+markFailed，订单/库存编排不发生")
@@ -266,12 +265,12 @@ class PaymentCallbackUseCaseUnitTest {
     /* ================= critical path ================= */
 
     /**
-     * critical-1 同号重复回调幂等（B8.2 只生效一次）：首次成功编排重放
+     * critical-1 同号重复回调幂等（只生效一次）：首次成功编排重放
      * 一次；重复回调命中状态守卫（status_illegal）——留痕第二条仍落库
      * （对账不依赖迁移成败），订单/库存编排不重放。
      */
     @Test
-    @DisplayName("同号重复回调：status_illegal 透传 + 留痕落库 + 编排不重放（B8.2 只生效一次）")
+    @DisplayName("同号重复回调：status_illegal 透传 + 留痕落库 + 编排不重放（幂等命中）")
     void handlePayCallback_duplicateSameTxn_noRepeatOrchestration() {
         when(repository.findByPayNo(PAY_NO)).thenReturn(pending);
         when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(List.of(subA(), subB()));
@@ -407,7 +406,7 @@ class PaymentCallbackUseCaseUnitTest {
 
     /**
      * fail-4 编排异常整体回滚语义：迁移成功后订单门面推进异常 → 异常原样
-     * 透传（TD-07 三域原子）——库存扣减不发生、支付单不落库（方法事务
+     * 透传（三域原子）——库存扣减不发生、支付单不落库（方法事务
      * 回滚，支付单不出现「已支付但订单未推进」的半程态）。
      */
     @Test

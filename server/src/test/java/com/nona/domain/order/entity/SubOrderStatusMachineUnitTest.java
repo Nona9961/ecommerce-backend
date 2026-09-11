@@ -16,10 +16,7 @@ import static org.assertj.core.api.Assertions.catchThrowableOfType;
  * 必备/触发源共用迁移）、fail（重复迁移、前置不满足、跨店铺发货、终态
  * 不可逆等非法迁移拒绝）。
  * <p>
- * 红阶段：聚合迁移方法实现体为 UnsupportedOperationException——happy
- * 用例因 UOE 红（Error），fail 用例「期望 BusinessException 实得 UOE」
- * 红（Failure），红因均为实现缺失；测试语义按最终迁移契约书写（绿阶段
- * 实现后无需改写）。状态前置经装载构造器直接装配（装载路径不做写校验）。
+ * 契约语义按最终迁移契约书写（实现后无需改写）。状态前置经装载构造器直接装配（装载路径不做写校验）。
  *
  * @author nona9961
  */
@@ -109,7 +106,7 @@ class SubOrderStatusMachineUnitTest {
     }
 
     @Test
-    @DisplayName("已发货可申请退款（B8.4 部分状态可申请）")
+    @DisplayName("已发货可申请退款（部分状态可申请）")
     void markRefunding_fromShipped_refunding() {
         final SubOrder sub = subOrder(SubOrderStatus.SHIPPED, WAYBILL_ID);
         sub.markRefunding();
@@ -125,7 +122,7 @@ class SubOrderStatusMachineUnitTest {
     }
 
     @Test
-    @DisplayName("发货超时关单：已支付 → 已关闭（B9.4②）")
+    @DisplayName("发货超时关单：已支付 → 已关闭")
     void closeByTimeout_fromPaid_closed() {
         final SubOrder sub = subOrder(SubOrderStatus.PAID, null);
         sub.closeByTimeout();
@@ -202,7 +199,7 @@ class SubOrderStatusMachineUnitTest {
     }
 
     @Test
-    @DisplayName("已发货取消拒绝（B8.6 ③ 已发货后不可取消）")
+    @DisplayName("已发货取消拒绝（已发货后不可取消）")
     void cancel_fromShipped_rejected() {
         final SubOrder sub = subOrder(SubOrderStatus.SHIPPED, WAYBILL_ID);
         assertThatThrownBy(sub::cancel)

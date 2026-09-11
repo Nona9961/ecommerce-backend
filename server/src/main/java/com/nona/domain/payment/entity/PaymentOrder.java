@@ -12,11 +12,11 @@ import java.util.List;
 /**
  * 支付单聚合根（payment_order 主表行，买家维度 global，本阶段冻结）：
  * 一次支付请求的资金侧事实——支付单号/关联主单/金额/渠道/状态机/渠道
- * 流水号/超时截止 + 回调留痕集合（TD-11 三层幂等防线的领域承载）。
+ * 流水号/超时截止 + 回调留痕集合（三层幂等防线的领域承载）。
  * <p>
- * 持久化形态（红阶段契约声明）：payment_order 主表（global，独立
+ * 持久化形态（契约声明）：payment_order 主表（global，独立
  * Snowflake 主键；pay_no 唯一；order_id 唯一——支付单与主单一对一，
- * 防重复发起；channel_txn_no 唯一——TD-11 防线一「重复回调插入即失败」，
+ * 防重复发起；channel_txn_no 唯一——防线一「重复回调插入即失败」，
  * 并发窗口的物理兜底；未回调为 NULL 时唯一约束允许多行，NULL 表达
  * 「尚未发生回调」的时间点语义而非默认值；(status, timeout_at) 复合
  * 索引——超时引擎扫描面）。回调留痕为从表 payment_callback_log，以
@@ -34,24 +34,24 @@ import java.util.List;
  * 关键不变量（全部收敛在本聚合方法内，包外无字段变更路径——除
  * status/channelTxnNo 两个可变位经迁移方法变更外，字段全 final）：
  * <ol>
- *     <li><b>状态机单向（TD-11 防线二）</b>：仅 PENDING_PAYMENT 可出
+ *     <li><b>状态机单向（防线二）</b>：仅 PENDING_PAYMENT 可出
  *         （→ PAID/FAILED/CLOSED），FAILED → CLOSED 收口，CLOSED 幂等，
  *         PAID 终态——非法迁移拒绝并告警（
  *         {@code payment.status_illegal}）；</li>
  *     <li><b>金额一致性</b>：回调金额必须 = 支付单金额（= 主单实付，
  *         创建时固化防中途改价）——不符拒绝（{@code payment.amount_mismatch}），
  *         不做半额/超额入账；</li>
- *     <li><b>渠道流水号占用一致（TD-11 防线一领域位）</b>：流水号已占用
+ *     <li><b>渠道流水号占用一致（防线一领域位）</b>：流水号已占用
  *         且异号即渠道事故，拒绝（{@code payment.callback_duplicate}，
  *         409）；主表唯一约束为并发窗口兜底；</li>
- *     <li><b>回调原文每笔留痕（TD-11 防线三）</b>：回调记录 append-only，
+ *     <li><b>回调原文每笔留痕（防线三）</b>：回调记录 append-only，
  *         先留痕后判迁移（重复/失败回调同样留痕可查），对账不依赖迁移
  *         成败；</li>
  *     <li><b>支付单与主单一对一</b>：order_id 唯一约束 + 发起支付编排列
- *         「复用/拒绝」判定守护（一期不支持分次支付）。</li>
+ *         「复用/拒绝」判定守护（当前不支持分次支付）。</li>
  * </ol>
  * <p>
- * 迁移守卫判定顺序（markPaid 与 markFailed 同构，红阶段钉死契约）：
+ * 迁移守卫判定顺序（markPaid 与 markFailed 同构，钉死契约）：
  * ① 流水号已占用且异号 → {@code payment.callback_duplicate}（渠道事故
  * 优先诊断）；② 状态非待支付 → {@code payment.status_illegal}（同号重复
  * 回调幂等命中同此码，编排捕获按已处理应答）；③ 金额不符 →
@@ -59,8 +59,8 @@ import java.util.List;
  * <p>
  * 创建必须经由 {@link com.nona.domain.payment.factory.PaymentOrderFactory}
  * （ID/payNo 生成收敛工厂一处）；装载（仓储重建：留痕集合按
- * payment_order_id 反查）走装载构造器。两构造器红阶段仅字段定型，
- * 形态守卫（必填/非空/非负）由绿阶段按 javadoc 契约实现。
+ * payment_order_id 反查）走装载构造器。两构造器仅字段定型，
+ * 形态守卫（必填/非空/非负）按 javadoc 契约实现。
  *
  * @author nona9961
  */
@@ -72,7 +72,7 @@ public class PaymentOrder {
     private final Long id;
 
     /**
-     * 支付单号（TD-13：PAY + 日期 + snowflake 后段，pay_no 唯一）
+     * 支付单号（PAY + 日期 + snowflake 后段，pay_no 唯一）
      */
     private final String payNo;
 
@@ -87,12 +87,12 @@ public class PaymentOrder {
     private final long amount;
 
     /**
-     * 支付渠道（一期唯一实现 MOCK，字段保留真实渠道扩展位）
+     * 支付渠道（当前唯一实现 MOCK，字段保留真实渠道扩展位）
      */
     private final String channel;
 
     /**
-     * 支付超时截止时间（B8.3：待支付 30 分钟自动关单；创建时 =
+     * 支付超时截止时间（待支付 30 分钟自动关单；创建时 =
      * 创建时刻 + 超时时长，(status, timeout_at) 复合索引扫描面）
      */
     private final Instant timeoutAt;
@@ -117,7 +117,7 @@ public class PaymentOrder {
      * 创建构造器（仅工厂路径）：待支付定型 + 空留痕集合 + 未回调流水。
      *
      * @param id        支付单主键（Snowflake）
-     * @param payNo     支付单号（TD-13 规则，必填非空）
+     * @param payNo     支付单号（规则，必填非空）
      * @param orderId   关联主单 ID（必填，一对一锚点）
      * @param amount    支付金额（分，= 主单实付）
      * @param channel   支付渠道（必填非空）
@@ -145,8 +145,8 @@ public class PaymentOrder {
     /**
      * 装载构造器（仅仓储重建/转换器装载调用）：以持久化状态恢复聚合
      * （状态/流水/留痕集合为持久化值；留痕集合按 payment_order_id
-     * 反查装载）。形态守卫（必填/非空/金额非负/集合组装防御）由绿阶段
-     * 按 javadoc 契约实现；装载不执行写路径校验。
+     * 反查装载）。形态守卫（必填/非空/金额非负/集合组装防御）按
+     * javadoc 契约实现；装载不执行写路径校验。
      *
      * @param id           支付单主键
      * @param payNo        支付单号
@@ -183,9 +183,9 @@ public class PaymentOrder {
     /**
      * 支付成功回调迁移（PENDING_PAYMENT → PAID）：
      * <p>
-     * TD-11 防线二状态守卫 + 金额一致性与流水号占用守卫（判定顺序见类
+     * 防线二状态守卫 + 金额一致性与流水号占用守卫（判定顺序见类
      * javadoc）：① 异号冲突 409；② 非待支付拒绝（同号重复回调幂等命中
-     * 同此码，编排捕获后按已处理应答——B8.2 重复回调只生效一次，不重放
+     * 同此码，编排捕获后按已处理应答——重复回调只生效一次，不重放
      * 订单/库存编排）；③ 金额不符拒绝；④ 迁移 + 渠道流水落位（唯一约束
      * 并发兜底）。成功回调的订单/库存推进（order.onPaid / 库存确认扣除）
      * 由回调编排同事务接线（回调编排），本方法只收敛资金侧迁移。
@@ -223,7 +223,7 @@ public class PaymentOrder {
      * <p>
      * 与 {@link #markPaid} 同构保证（成功/失败回调均落位渠道流水，唯一
      * 约束同时防并发双成功与双失败）。失败后支付单置 FAILED——订单侧
-     * 停留待支付等待超时关单（B8.3），失败单可经超时编排
+     * 停留待支付等待超时关单，失败单可经超时编排
      * {@link #close()} 显式收口为 CLOSED。
      *
      * @param channelTxnNo      渠道流水号（必填非空）

@@ -50,7 +50,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 买家订单查询用例场景测试（B9.1 列表/B9.2 详情/B10.1 运单，WU-59 红阶段）。
+ * 买家订单查询用例场景测试（列表/详情/运单查询契约）。
  * <p>
  * 覆盖：happy——列表主流程（分页 + 状态过滤 + 子单/店铺名/支付单装配）、
  * 详情（含待支付支付单）、运单（轨迹 + 商品行装配）；critical——tab 全量
@@ -61,7 +61,6 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：五仓储全 mock（查询用例无机械层依赖）；被测用例每用例前
  * 重建（mock 注入后于实例构造——PaymentUseCaseUnitTest 装配先例）。
- * 红阶段失败原因 = 实现缺失（用例方法体 UOE）。
  */
 @ExtendWith(MockitoExtension.class)
 class BuyerOrderQueryUnitTest {
@@ -82,7 +81,7 @@ class BuyerOrderQueryUnitTest {
     private ShopRepository shopRepository;
 
     /**
-     * 被测查询用例（红阶段不注册 Spring；mock 注入后于实例构造）。
+     * 被测查询用例（mock 注入后于实例构造）。
      */
     private BuyerOrderQuery query;
 

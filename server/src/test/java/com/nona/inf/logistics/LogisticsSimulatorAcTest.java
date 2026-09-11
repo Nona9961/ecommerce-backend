@@ -21,11 +21,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 物流模拟推进器 + 签收联动真实链验收测试（真实链装配面——PO 映射/
- * 仓储链路/事件消费装配/调度触发逐一验证；WU-49 按 javadoc 启用契约
- * 改写，红阶段降级声明已解除——WU-55 Waybill/SubOrder 仓储 JPA 实现 +
- * 推进器/消费方 Spring 注册落地，WU-56 调度门控 test=false 手触）。
+ * 仓储链路/事件消费装配/调度触发逐一验证；按 javadoc 启用契约
+ * 改写——Waybill/SubOrder 仓储 JPA 实现 +
+ * 推进器/消费方 Spring 注册落地，调度门控 test=false 手触）。
  * <p>
- * 装配面清单见红设计报告 §装配面清单——真实推进链路（运单主从表落库 +
+ * 装配面清单见装配说明——真实推进链路（运单主从表落库 +
  * 状态推进 + 事件发布 → 子单完成联动）、节奏配置生效、事件消费装配。
  * <p>
  * 执行形态：test=false 调度关闭（无自动滴答），经
@@ -81,7 +81,7 @@ class LogisticsSimulatorAcTest {
     /**
      * 签收事件日志捕获（logback ListAppender 直收——不依赖 System.out
      * 捕获：多测试类同 JVM 下 OutputCapture 对非首个 context 类失效，
-     * WU-49 实测；每方法挂载/卸载，方法级隔离）
+     * 实测；每方法挂载/卸载，方法级隔离）
      */
     private ListLogAppender waybillLogAppender;
 

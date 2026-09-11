@@ -316,7 +316,7 @@ public class ProductController implements ProductApi {
     /**
      * {@inheritDoc}
      * <p>
-     * SKU 集回显端点（WU-47 约定回显 GET，WU-60 接线）。
+     * SKU 集回显端点（约定回显 GET，接线段）。
      */
     @Override
     @GetMapping("/seller/products/{productId}/skus")
@@ -328,7 +328,7 @@ public class ProductController implements ProductApi {
     /**
      * {@inheritDoc}
      * <p>
-     * 规格模板回显端点（WU-47 约定回显 GET，WU-60 接线）。
+     * 规格模板回显端点（约定回显 GET，接线段）。
      */
     @Override
     @GetMapping("/seller/products/{productId}/spec-template")
@@ -340,7 +340,7 @@ public class ProductController implements ProductApi {
     /**
      * {@inheritDoc}
      * <p>
-     * 运费模板绑定回显端点（WU-47 约定回显 GET，WU-60 接线）。
+     * 运费模板绑定回显端点（约定回显 GET，接线段）。
      */
     @Override
     @GetMapping("/seller/products/{productId}/freight-template")

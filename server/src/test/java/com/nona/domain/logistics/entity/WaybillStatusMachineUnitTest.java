@@ -16,10 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 全链推进/轨迹携带时间描述）、critical（轨迹追加后不可变视图）、fail
  * （跳级/重复/回退/终态推进/轨迹归属他单/空轨迹拒绝）。
  * <p>
- * 红阶段：advanceTo 实现体为 UnsupportedOperationException——happy
- * 用例因 UOE 红（Error），fail 用例「期望 BusinessException 实得 UOE」
- * 红（Failure），红因均为实现缺失；测试语义按最终迁移契约书写（绿阶段
- * 实现后无需改写）。状态前置经装载构造器直接装配（装载路径校验形态
+ * 契约语义按最终迁移契约书写（实现后无需改写）。状态前置经装载构造器直接装配（装载路径校验形态
  * 不变量，不做写路径校验）。
  *
  * @author nona9961

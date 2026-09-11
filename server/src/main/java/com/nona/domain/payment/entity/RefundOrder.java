@@ -11,11 +11,11 @@ import java.util.List;
 /**
  * 退款单聚合根（refund_order 主表行，买家维度 global，本阶段冻结）：
  * 一次退款流程的资金侧事实——退款单号/关联支付单号/操作单元子单/
- * 金额/状态机/渠道退款流水/发货时点快照 + 回调留痕集合（TD-11 三层
+ * 金额/状态机/渠道退款流水/发货时点快照 + 回调留痕集合（三层
  * 幂等防线在退款面的同构承载）。
  * <p>
- * 持久化形态（红阶段契约声明）：refund_order 主表（global，独立
- * Snowflake 主键；refund_no 唯一——TD-13 业务退款单号；sub_order_id
+ * 持久化形态（契约声明）：refund_order 主表（global，独立
+ * Snowflake 主键；refund_no 唯一——业务退款单号；sub_order_id
  * 唯一——一子单一生至多一个退款单，防重复申请的 DB 物理兜底；
  * channel_refund_txn_no 无唯一约束——重试受理换渠道流水覆盖更新，
  * 唯一约束会拦覆盖；不建超时索引——退款无超时调度面）。回调留痕为
@@ -43,7 +43,7 @@ import java.util.List;
  *         无出边——非法迁移拒绝（{@code payment.refund_status_illegal}）；
  *         重复受理（PENDING 已落位流水再受理）同为非法迁移拒绝；</li>
  *     <li><b>金额一致性</b>：退款回调金额必须 = 退款单金额（= 子单实付，
- *         创建时固化防中途改价，B8.5③ 退款金额=实付金额）——不符拒绝
+ *         创建时固化防中途改价，退款金额=实付金额）——不符拒绝
  *         （{@code payment.amount_mismatch}），不做半额/超额入账；</li>
  *     <li><b>渠道流水号占用一致（退款面防线一领域位）</b>：退款单流水
  *         已落位且回调异号即渠道事故，拒绝（{@code payment.callback_duplicate}，
@@ -56,7 +56,7 @@ import java.util.List;
  *         {@code payment.refund_duplicate}，重试走既有单）。</li>
  * </ol>
  * <p>
- * 迁移守卫判定顺序（markSucceeded 与 markRefundFailed 同构，红阶段
+ * 迁移守卫判定顺序（markSucceeded 与 markRefundFailed 同构，
  * 钉死契约）：① 流水号已占用且异号 → {@code payment.callback_duplicate}
  * （渠道事故优先诊断）；② 状态非 PENDING → {@code payment.refund_status_illegal}
  * （同号重复回调幂等命中同此码，编排捕获按已处理应答）；③ 金额不符 →
@@ -65,8 +65,8 @@ import java.util.List;
  * <p>
  * 创建必须经由 {@link com.nona.domain.payment.factory.RefundOrderFactory}
  * （ID/refundNo 生成收敛工厂一处）；装载（仓储重建：留痕集合按
- * refund_order_id 反查）走装载构造器。两构造器红阶段仅字段定型，
- * 形态守卫（必填/非空/非负）由绿阶段按 javadoc 契约实现。
+ * refund_order_id 反查）走装载构造器。两构造器仅字段定型，
+ * 形态守卫（必填/非空/非负）按 javadoc 契约实现。
  *
  * @author nona9961
  */
@@ -78,7 +78,7 @@ public class RefundOrder {
     private final Long id;
 
     /**
-     * 退款单号（TD-13：REF + 日期 + snowflake 后段，refund_no 唯一；
+     * 退款单号（REF + 日期 + snowflake 后段，refund_no 唯一；
      * 渠道受理幂等键——同一退款单只受理一次）
      */
     private final String refundNo;
@@ -96,14 +96,14 @@ public class RefundOrder {
     private final Long subOrderId;
 
     /**
-     * 退款金额（分，= 子单实付，创建时固化；B8.5③ 退款金额=实付金额）
+     * 退款金额（分，= 子单实付，创建时固化；退款金额=实付金额）
      */
     private final long amount;
 
     /**
-     * 申请时刻是否已发货快照（C9 回补判定锚点：false = 未发货退款 →
-     * 已售回补可售（I7 restore）；true = 已发货/已完成退款 → 不回补，
-     * 退货物流 II 期售后深化留接口位——快照固化防退款流程中订单状态
+     * 申请时刻是否已发货快照（回补判定锚点：false = 未发货退款 →
+     * 已售回补可售；true = 已发货/已完成退款 → 不回补，
+     * 退货物流售后深化留接口位——快照固化防退款流程中订单状态
      * 再演进污染判定）
      */
     private final boolean shippedAtApply;
@@ -135,7 +135,7 @@ public class RefundOrder {
      * 创建构造器（仅工厂路径）：退款中定型 + 空留痕集合 + 未受理流水。
      *
      * @param id            退款单主键（Snowflake）
-     * @param refundNo      退款单号（TD-13 规则，必填非空）
+     * @param refundNo      退款单号（规则，必填非空）
      * @param payNo         关联支付单号（必填非空）
      * @param subOrderId    操作单元子单 ID（必填）
      * @param amount        退款金额（分，= 子单实付，必为正）
@@ -148,7 +148,7 @@ public class RefundOrder {
         BusinessAssert.assertTrue(refundNo != null && !refundNo.isBlank(), "退款单号不能为空");
         BusinessAssert.assertTrue(payNo != null && !payNo.isBlank(), "关联支付单号不能为空");
         BusinessAssert.assertNonNull(subOrderId, "操作单元子单 ID 不能为空（一子单一退款单锚点）");
-        BusinessAssert.assertTrue(amount > 0, "退款金额必须为正（= 子单实付，B8.5③）");
+        BusinessAssert.assertTrue(amount > 0, "退款金额必须为正（= 子单实付）");
         this.id = id;
         this.refundNo = refundNo;
         this.payNo = payNo;
@@ -164,7 +164,7 @@ public class RefundOrder {
     /**
      * 装载构造器（仅仓储重建/转换器装载调用）：以持久化状态恢复聚合
      * （状态/流水/留痕集合为持久化值；留痕集合按 refund_order_id 反查
-     * 装载）。形态守卫（必填/非空/金额非正/集合组装防御）由绿阶段按
+     * 装载）。形态守卫（必填/非空/金额非正/集合组装防御）按
      * javadoc 契约实现；装载不执行写路径校验。
      *
      * @param id                退款单主键
@@ -186,7 +186,7 @@ public class RefundOrder {
         BusinessAssert.assertTrue(refundNo != null && !refundNo.isBlank(), "退款单号不能为空");
         BusinessAssert.assertTrue(payNo != null && !payNo.isBlank(), "关联支付单号不能为空");
         BusinessAssert.assertNonNull(subOrderId, "操作单元子单 ID 不能为空（一子单一退款单锚点）");
-        BusinessAssert.assertTrue(amount > 0, "退款金额必须为正（= 子单实付，B8.5③）");
+        BusinessAssert.assertTrue(amount > 0, "退款金额必须为正（= 子单实付）");
         BusinessAssert.assertNonNull(status, "退款单状态不能为空");
         BusinessAssert.assertNonNull(callbacks, "回调留痕集合不能为空（装载必填，可为空集合）");
         this.id = id;
@@ -262,8 +262,8 @@ public class RefundOrder {
      * <p>
      * 退款面防线二状态守卫 + 金额一致性与流水号占用守卫（判定顺序见类
      * javadoc）：① 流水号已占用且异号 → 409 渠道事故；② 非 PENDING 拒绝
-     * （同号重复回调幂等命中同此码，编排捕获后按已处理应答——B8.5
-     * 重复回调只生效一次，不重放订单/库存编排）；③ 金额不符拒绝；④
+     * （同号重复回调幂等命中同此码，编排捕获后按已处理应答——重复
+     * 回调只生效一次，不重放订单/库存编排）；③ 金额不符拒绝；④
      * 迁移。成功回调的订单/库存推进（order.completeRefund / 未发货
      * restore）由退款回调编排同事务接线（退款回调编排），本方法只
      * 收敛资金侧迁移。
@@ -359,9 +359,9 @@ public class RefundOrder {
     }
 
     /**
-     * 申请时刻已发货快照（C9 回补判定锚点）。
+     * 申请时刻已发货快照（回补判定锚点）。
      *
-     * @return true = 申请时已发货（不退库存）；false = 未发货（I7 回补）
+     * @return true = 申请时已发货（不退库存）；false = 未发货（回补）
      */
     public boolean isShippedAtApply() {
         return shippedAtApply;

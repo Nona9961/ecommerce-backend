@@ -65,7 +65,7 @@ public class RefundOrderRepositoryImpl
     private final RefundOrderJpaRepository jpaRepository;
 
     /**
-     * 留痕行转换器（从表落库消费面；红阶段冻结的构造器签名不含本
+     * 留痕行转换器（从表落库消费面；构造器签名不含本
      * 依赖——单测不触达落库路径，以字段注入补齐装配面）
      */
     @Autowired

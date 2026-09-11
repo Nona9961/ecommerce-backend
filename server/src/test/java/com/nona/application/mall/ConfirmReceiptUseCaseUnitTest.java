@@ -41,8 +41,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 确认收货编排用例场景测试（B9.3 买家主动确认收货 + B9.4③ 收货超时
- * 自动完成 + 完成事件发布，红阶段契约）。
+ * 确认收货编排用例场景测试（买家主动确认收货 + 收货超时
+ * 自动完成 + 完成事件发布契约）。
  * <p>
  * 覆盖：happy——买家确认全链路（归属校验 → 订单完成推进 → 完成事件
  * 发布，编排序与载荷断言）与超时入口（无身份校验，同一编排）与多子单
@@ -52,10 +52,10 @@ import static org.mockito.Mockito.when;
  * 非法迁移）异常透传且事件不发布、事件发布失败异常透传（同事务回滚）。
  * <p>
  * 依赖装配：全部端口/仓储以 mock 承载（编排契约断言面）；提权事务以
- * mock 直执行（事务边界属应用层，由用例注解与提权包装承载，绿期集成
- * 测试验证真实回滚）。红阶段失败原因 = 实现缺失（用例方法体 UOE）。
+ * mock 直执行（事务边界属应用层，由用例注解与提权包装承载，集成
+ * 测试验证真实回滚）。
  * <p>
- * 时间断言：本 WU 无截止时间逻辑（收货超时 deadline 注册归超时引擎
+ * 时间断言：本用例无截止时间逻辑（收货超时 deadline 注册归超时引擎
  * WU，autoComplete 消费时间戳由引擎侧承载）——零绝对日期魔法值；
  * 事件构造时间戳不在单测断言面（载荷断言为准）。
  *
@@ -95,7 +95,7 @@ class ConfirmReceiptUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测用例（依赖全 mock，setUp 装配）。
      */
     private ConfirmReceiptUseCase useCase;
 
@@ -242,7 +242,7 @@ class ConfirmReceiptUseCaseUnitTest {
 
     /**
      * happy-2 收货超时入口：无买家身份校验（不装载主单），订单完成
-     * 推进 + 完成事件发布与买家入口共用编排（B9.4③ 超时调度复用面）。
+     * 推进 + 完成事件发布与买家入口共用编排（超时调度复用面）。
      */
     @Test
     @DisplayName("收货超时自动完成：无身份校验，推进与事件发布共用编排")
@@ -293,7 +293,7 @@ class ConfirmReceiptUseCaseUnitTest {
 
     /**
      * critical-2 超时重扫命中已完成子单：幂等短路成功且不重复发布事件
-     * （B9.4③ 超时 handler 幂等常态路径——Phase-II 消费方不收重复完成
+     * （超时 handler 幂等常态路径——消费方不收重复完成
      * 事件）。
      */
     @Test
@@ -414,7 +414,7 @@ class ConfirmReceiptUseCaseUnitTest {
     }
 
     /**
-     * fail-5 聚合守卫拒绝（未发货子单确认 = 非法迁移 B9.3 ① 语义内建）：
+     * fail-5 聚合守卫拒绝（未发货子单确认 = 非法迁移语义内建）：
      * 订单侧非法迁移异常原样透传——完成事件不发布（同事务整体回滚，
      * 杜绝半程副作用）。
      */

@@ -39,7 +39,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 子订单仓储实现场景测试（WU-55 红阶段契约：主单维度反查 / 履约超时
+ * 子订单仓储实现场景测试（契约：主单维度反查 / 履约超时
  * 三件套（findDue-claim-clear）/ 商家分页扩展 / 级联删）。
  * <p>
  * happy——主单反查保持创建序、findDue 状态与时刻透传（含等号边界）、
@@ -48,10 +48,10 @@ import static org.mockito.Mockito.when;
  * 状态空集合=全量分支；fail——claim 已被认领/状态迁移 0 行 → false、
  * 分页过滤无命中空列表、删除不存在行返回 0。
  * <p>
- * 装配纪律：依赖全 mock（超时条件更新落地面以 JdbcTemplate mock——红
- * 阶段可完整 stub 的已有契约面，claim/clear SQL 参数化语义绿阶段按其
+ * 装配纪律：依赖全 mock（超时条件更新落地面以 JdbcTemplate mock——
+ * 既有契约面，claim/clear SQL 参数化语义按其
  * 落库），无容器；被测仓储 @BeforeEach 重建。桩纪律同 MasterOrder
- * 判例：行为桩 lenient 豁免 UOE 挡道，绿实现后收回精确桩。时间断言：
+ * 判例：行为桩 lenient 豁免 UOE 挡道，按需收回精确桩。时间断言：
  * now 为测试 fixture 输入（非断言魔法值），JPA 透传断言一律相对
  * {@link #NOW} 派生（UTC 字面，PayTimeoutStore 单元判例同款纪律）。
  *

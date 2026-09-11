@@ -8,7 +8,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 提权事务模板配置（TD-12 多租户写放行的事务边界装配）。
+ * 提权事务模板配置（多租户写放行的事务边界装配）。
  * <p>
  * {@link TransactionTemplate} 以 REQUIRES_NEW 传播装配（覆盖 Spring Boot
  * 自动注册的默认 bean——REQUIRED）：{@code TenantPrivilege#elevatedInTransaction}
@@ -16,7 +16,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * 独立提交——作用域退出时 EM 已解绑，{@link JpaTenantScopeExitHandler}
  * 空转属预期（TenantPrivilege.elevatedInTransaction apiNote 权威依据）。
  * <p>
- * 装配缺口背景（WU-49 修订）：REQUIRED join 外层方法事务时，提权作用域
+ * 装配缺口背景（修订）：REQUIRED join 外层方法事务时，提权作用域
  * 退出后（ScopedValue 已解除）外层事务仍绑定 EM——scope-exit 处理器触发
  * {@code em.flush()}，此时 Hibernate 租户解析回退请求视角（买家/回调/
  * 调度上下文为 MISSING），对 tenant-scoped 待写实体（tenant=shopId）执行

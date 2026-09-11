@@ -11,12 +11,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 退款单工厂场景测试（TD-13 单号规则 + 创建形态契约，红阶段——失败
- * 原因 = 实现缺失（create 方法体 UOE）；绿阶段按本矩阵目标行为实现后
- * 原样转绿）。
+ * 退款单工厂场景测试（单号规则 + 创建形态契约）。
  * <p>
  * 覆盖：happy——创建定型（退款中状态/金额 = 子单实付/未发货快照/原因
- * 透传/空留痕集合）；critical——已发货申请快照定型（C9 判定锚点）；
+ * 透传/空留痕集合）；critical——已发货申请快照定型（回补判定锚点）；
  * fail——形态守卫（子单缺失/退款金额非正/支付单号空白）。
  */
 class RefundOrderFactoryUnitTest {
@@ -48,11 +46,11 @@ class RefundOrderFactoryUnitTest {
     }
 
     /**
-     * happy-2 退款单号规则：TD-13 REF 前缀（REF + 日期段 + snowflake，
+     * happy-2 退款单号规则：REF 前缀（REF + 日期段 + snowflake，
      * refund_no 唯一兜底）。
      */
     @Test
-    @DisplayName("退款单号规则：REF 前缀（TD-13）")
+    @DisplayName("退款单号规则：REF 前缀")
     void create_refundNoRule() {
         final RefundOrder order = factory.create(
                 "PAY202609070001", 101L, 10000L, false, null);
@@ -63,7 +61,7 @@ class RefundOrderFactoryUnitTest {
 
     /**
      * critical-1 已发货申请快照：shippedAtApply = true 定型（已发货退款
-     * 不回补库存——C9 判定锚点固化在申请时刻）。
+     * 不回补库存——回补判定锚点固化在申请时刻）。
      */
     @Test
     @DisplayName("已发货申请：已发货快照定型（不回补判定锚点）")

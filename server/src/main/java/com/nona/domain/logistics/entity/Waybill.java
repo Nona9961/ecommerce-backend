@@ -12,7 +12,7 @@ import java.util.List;
  * 关联订单域子单，不建跨域外键）：子单发货的物流凭据——承运公司/运单
  * 号/状态/轨迹事件列表。
  * <p>
- * 持久化形态（红阶段契约声明）：waybill 主表（global，独立 Snowflake
+ * 持久化形态（契约声明）：waybill 主表（global，独立 Snowflake
  * 主键；subOrderId 业务关联列——在途唯一，重复发货拒绝的数据库防线；
  * company/trackingNo 非空列；status 状态列）+ waybill_track 从表（以
  * waybill_id（rootId）关联聚合根，track append-only——行追加不更新

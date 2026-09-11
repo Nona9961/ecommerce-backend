@@ -115,7 +115,7 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
     /**
      * 根行租户承载：提权写路径（买家取消回滚/支付确认扣减/退款回补等
      * 无请求视角上下文推进店铺数据）显式锚定 tenant=shopId——归属必得，
-     * 不依赖请求上下文（TD-12 提权写门禁语义：TenantWriteGate 提权+空
+     * 不依赖请求上下文（提权写门禁语义：TenantWriteGate 提权+空
      * 归属 fail-closed 拒绝）；非提权商家路径保持既有注入语义（行租户由
      * 写门禁按请求上下文注入）。SubOrderRepositoryImpl ownedBy 同先例
      * 形态。
@@ -224,7 +224,7 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
      * 读取当前请求租户作为条件更新注入值；上下文缺失按 fail-closed
      * 拒绝（不执行更新——跨店铺条件更新与视角缺失同语义拒绝）。
      * <p>
-     * <b>提权豁免（TD-12 无请求视角上下文面）</b>：买家取消回滚/支付
+     * <b>提权豁免（无请求视角上下文面）</b>：买家取消回滚/支付
      * 确认扣减/退款回补/超时调度等提权段内无请求租户——条件更新按
      * 「主键全局唯一」定位（Snowflake 主键跨店无碰撞，不注入租户条件），
      * 跨店语义由用例层归属校验 + 提权写门禁承载；sub_order 超时
@@ -263,7 +263,7 @@ public class InventoryItemRepositoryImpl extends DifferRepository<InventoryItem,
     /**
      * {@inheritDoc}
      * <p>
-     * 店铺库存分页（WU-47 商家库存列表页查询面，WU-55 冻结）：当前
+     * 店铺库存分页（商家库存列表页查询面，契约冻结）：当前
      * 租户店铺全集，主键 ID 升序稳定分页；参数守卫 offset&lt;0 /
      * limit&lt;=0 拒绝；分页行未登记变更追踪（只读呈现）。
      */

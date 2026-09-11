@@ -49,13 +49,12 @@ import static org.mockito.Mockito.when;
 
 /**
  * 退款回调编排用例场景测试（退款回调接线阶段契约：payment → order →
- * inventory 同事务编排——B8.5 退款成功订单置已退款 + I7 未发货回补，
- * 红阶段）。
+ * inventory 同事务编排——退款成功订单置已退款 + 未发货回补）。
  * <p>
  * 覆盖：happy——成功回调全链（留痕先行 → SUCCEEDED → 提权段内
  * completeRefund + 未发货回补（明细从订单项快照装配））；已发货退款
- * 不回补（C9）；失败回调（仅退款单迁移 FAILED，订单/库存不动——可重
- * 试）。critical——同号重复回调幂等（B8.5 只生效一次，留痕仍落库不
+ * 不回补（回补判定）；失败回调（仅退款单迁移 FAILED，订单/库存不动——可重
+ * 试）。critical——同号重复回调幂等（只生效一次，留痕仍落库不
  * 重放）、异号流水冲突 409、金额不符 400、发货超时路径（子单 CLOSED
  * 幂等跳过订单侧 + 回补照常）。fail——孤儿回调 404、PAY 类型拒绝、
  * null 拒绝、编排异常整体回滚语义。
@@ -109,7 +108,7 @@ class RefundCallbackUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测退款回调编排用例（红阶段不注册 Spring；依赖全 mock，setUp
+     * 被测退款回调编排用例（依赖全 mock，setUp
      * 装配）。
      */
     private RefundCallbackPort useCase;
@@ -156,7 +155,7 @@ class RefundCallbackUseCaseUnitTest {
     }
 
     /**
-     * 已发货退款单基线（shippedAtApply=true——退款成功不回补，C9）。
+     * 已发货退款单基线（shippedAtApply=true——退款成功不回补，回补判定）。
      */
     private static RefundOrder refundOrderShipped() {
         return new RefundOrder(7001L, REFUND_NO, PAY_NO, SUB_A, AMOUNT,
@@ -208,7 +207,7 @@ class RefundCallbackUseCaseUnitTest {
      * happy-1 成功回调全链（未发货，主动退款路径）：留痕先行 → SUCCEEDED
      * → 提权段内 completeRefund（子单退款中 → 已退款 + 主单派生）→
      * 未发货回补 restore（明细 = 订单项快照 SKU+数量，与预占/扣减同源
-     * 对称，I7 幂等键兜底）→ 退款单落库。
+     * 对称，幂等键兜底）→ 退款单落库。
      */
     @Test
     @DisplayName("成功回调（未发货）：留痕 + SUCCEEDED + completeRefund + 回补 restore")
@@ -230,8 +229,8 @@ class RefundCallbackUseCaseUnitTest {
     }
 
     /**
-     * happy-2 已发货退款成功：不回补库存（C9——已发货/已完成货已出，退货
-     * 物流 II 期深化留接口位）；订单侧退款成功推进照常。
+     * happy-2 已发货退款成功：不回补库存（已发货/已完成货已出，退货
+     * 物流售后深化留接口位）；订单侧退款成功推进照常。
      */
     @Test
     @DisplayName("成功回调（已发货）：不回补库存，订单侧推进照常")
@@ -269,7 +268,7 @@ class RefundCallbackUseCaseUnitTest {
     /* ================= critical path ================= */
 
     /**
-     * critical-1 同号重复回调幂等（B8.5 只生效一次）：重复成功回调命中
+     * critical-1 同号重复回调幂等（只生效一次）：重复成功回调命中
      * 状态守卫 refund_status_illegal 透传——留痕第二条仍落库（对账不依
      * 赖迁移成败），订单/库存编排不重放（completeRefund/restore 恰一次）。
      */
@@ -339,7 +338,7 @@ class RefundCallbackUseCaseUnitTest {
     /**
      * critical-4 发货超时路径成功回调：子单已关闭（履约侧终态定格，领域
      * 模型明示 CLOSED 而非 REFUNDED）——completeRefund 幂等跳过订单侧，
-     * 未发货回补照常（货未出，I7）；资金侧退款单 SUCCEEDED。
+     * 未发货回补照常（货未出）；资金侧退款单 SUCCEEDED。
      */
     @Test
     @DisplayName("发货超时路径：CLOSED 子单订单侧跳过 + 未发货回补照常")
@@ -411,7 +410,7 @@ class RefundCallbackUseCaseUnitTest {
 
     /**
      * fail-4 编排异常整体回滚语义：迁移成功后订单侧推进异常 → 异常原样
-     * 透传（TD-07 三域原子）——库存回补不发生、退款单不落库（方法事务
+     * 透传（三域原子）——库存回补不发生、退款单不落库（方法事务
      * 回滚，退款单不出现「已退款但订单未推进」的半程态）。
      */
     @Test

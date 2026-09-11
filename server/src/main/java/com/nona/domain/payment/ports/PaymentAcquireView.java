@@ -4,7 +4,7 @@ import java.time.Instant;
 
 /**
  * 发起支付受理视图（PaymentUseCase.initiatePaymentWithView 返回载体，
- * payment 域跨上下文冻结字段清单——WU-59 已裁决契约补充 2：PendingPayment
+ * payment 域跨上下文冻结字段清单——契约补充：PendingPayment
  * 与 AcquireResult 融合视图，8 字段）。
  * <p>
  * 语义：
@@ -16,11 +16,11 @@ import java.time.Instant;
  *         按受理失败处理；<b>受理 ≠ 支付结果</b>，最终结果经回调异步
  *         到达（轮询订单视图 payment.status 收敛）；</li>
  *     <li>金额单位分（= 主单实付快照）；timeoutAt = 创建时刻 + 超时
- *         时长（B8.3 30 分钟）。</li>
+ *         时长（30 分钟）。</li>
  * </ul>
  *
  * @param paymentOrderId     支付单 ID（PaymentOrder 聚合根标识）
- * @param payNo              支付单号（TD-13：PAY + 日期 + snowflake 后段）
+ * @param payNo              支付单号（PAY + 日期 + snowflake 后段）
  * @param amount             支付金额（分，= 主单实付）
  * @param payTimeoutMillis   支付超时时长（毫秒，规则值回显）
  * @param timeoutAt          支付超时截止时间（创建时刻 + 超时时长）

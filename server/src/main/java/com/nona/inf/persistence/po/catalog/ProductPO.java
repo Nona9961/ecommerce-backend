@@ -18,7 +18,7 @@ import org.hibernate.type.SqlTypes;
  * 跨店铺访问商品行在 Hibernate 租户过滤层即被拦截。shop_id 为业务关联列
  * （rootId 关联 shop 主表，冗余承载归属便于店铺维度分页查询）；平台类目/
  * 品牌为可空引用列（category_id / brand_id，草稿允许不挂载）；status 为
- * 生命周期状态（一期恒 DRAFT——草稿可保存不生效，状态机属后续阶段）。
+ * 生命周期状态（状态机迁移收敛在商品聚合，审核/上架依状态流转）。
  *
  * @author nona9961
  */
@@ -59,7 +59,7 @@ public class ProductPO extends TenantScopedBasePO {
     private Long brandId;
 
     /**
-     * 商品状态（一期恒 DRAFT）
+     * 商品状态（生命周期状态枚举，迁移收敛在商品聚合）
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
@@ -71,7 +71,7 @@ public class ProductPO extends TenantScopedBasePO {
      * 反序列化由转换器经中间形态完成（specTemplate_json 列与 JSON 扩展
      * 列同形态）。
      * <p>
-     * WU-53：@Lob → @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json，见
+     * @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json，见
      * ProductEditVersionPO 注释：@Lob 导出 tinytext 255B 不敷使用）。
      */
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
@@ -84,14 +84,14 @@ public class ProductPO extends TenantScopedBasePO {
      * 内容、驳回后作废；序列化形态与版本快照一致（快照中间形态复用），
      * 由转换器双向转换。
      * <p>
-     * WU-53：@Lob → @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json）。
+     * @JdbcTypeCode(LONGVARCHAR)（同 snapshot_json）。
      */
     @JdbcTypeCode(SqlTypes.LONGVARCHAR)
     @Column(name = "pending_draft_json")
     private String pendingDraftJson;
 
     /**
-     * 运费模板 ID（可空引用列）：商品级绑定店铺运费模板（S9.2 商品绑
+     * 运费模板 ID（可空引用列）：商品级绑定店铺运费模板（商品绑
      * 模板）——绑/解绑经商品聚合（写面冻结守卫），目标存在性/归属校验
      * 在用例层；null=未绑定（详情运费区按无模板呈现）。
      */

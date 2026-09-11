@@ -158,7 +158,7 @@ class OrderContractUnitTest {
                 .getReturnType()).isEqualTo(void.class);
         assertThat(OrderFacade.class.getMethod("autoComplete", Long.class).getReturnType())
                 .isEqualTo(void.class);
-        // 契约演进（WU-27 明示：接口成员随消费编排 WU 演进只增不改）——退款面三
+        // 契约演进（接口成员随消费编排演进只增不改）——退款面三
         // 成员：退款申请推进 / 退款成功推进 / 发货超时关单推进，消费者为退款
         // 编排与发货超时编排
         assertThat(OrderFacade.class.getMethod("beginRefund", Long.class).getReturnType())

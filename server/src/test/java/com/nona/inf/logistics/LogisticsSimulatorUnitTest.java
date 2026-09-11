@@ -38,7 +38,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 物流模拟推进器场景测试（模拟物流状态机自动推进——待发货→已发货→
- * 运输中→已签收，红阶段契约）：
+ * 运输中→已签收契约）：
  * <p>
  * happy——待发货无延时直推已发货 / 已发货满 30 秒推运输中 / 运输中满
  * 60 秒推已签收并发签收事件（载荷 = 运单 + 关联子单）/ 混合批次逐单
@@ -52,8 +52,8 @@ import static org.mockito.Mockito.when;
  * 不做跨实例匹配）；推进事务以 mock 直执行（事务边界属装配面，绿期
  * 冒烟测试验证真实独立提交）。
  * <p>
- * 桩纪律：红阶段 UOE 挡道（scanAndAdvance/isDue 未接线），全部桩以
- * lenient 豁免（红因纯净 = 100% 实现缺失；绿阶段实现后按本文件断言
+ * 桩纪律：UOE 挡道（scanAndAdvance/isDue 未接线），全部桩以
+ * lenient 豁免（按本文件断言
  * 面逐用例收回为精确桩）。
  *
  * @author nona9961

@@ -15,9 +15,8 @@ import jakarta.persistence.Table;
  * 回调原文的字段化快照，append-only 追加（对账不依赖迁移成败；与
  * payment_callback_log 同构的六字段 + 归属 + 收到时间）。
  * <p>
- * 归属 refund_order 主键（refund_order_id，rootId 关联）；created 于
- * WU-54 V2（新表）——CDC 白名单补入动作清单见红阶段报告 §6（V2 落库
- * 后部署位三处同步）。
+ * 归属 refund_order 主键（refund_order_id，rootId 关联）；V2 迁移
+ * 新建本表（CDC 白名单含本表，V2 落库后部署位数据同步）。
  *
  * @author nona9961
  */

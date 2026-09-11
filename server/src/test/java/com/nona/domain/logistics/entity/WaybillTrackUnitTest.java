@@ -16,8 +16,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 轨迹条目（append-only 实体）测试：形态不变量守卫（主键/归属/状态/
  * 时间必填，描述可空）与不可变性（字段 final、无变更路径）。
  * <p>
- * 红阶段：构造守卫为设计物实现（本文件用例绿）；append-only 语义由
- * 运单聚合 advanceTo 追加收敛（状态机测试红覆盖）。
+ * 结构守卫为设计物实现（本文件用例绿）；append-only 语义由
+ * 运单聚合 advanceTo 追加收敛（状态机测试覆盖）。
  *
  * @author nona9961
  */

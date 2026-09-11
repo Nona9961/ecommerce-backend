@@ -63,8 +63,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 下单编排用例单元测试：结算试算与提交订单的编排契约（B7.1-B7.6/TD-10
- * 拆单）——勾选集消费/跨店铺拆单/运费与金额明细/库存预占/支付单创建与
+ * 下单编排用例单元测试：结算试算与提交订单的编排契约（勾选集消费/跨店铺拆单/运费与金额明细/库存预占/支付单创建与
  * 超时注册，以及买家/地址/在售/归属校验的失败路径。
  * <p>
  * 依赖装配：机械层（工厂/枚举）用真实对象；业务端口以内存桩承载
@@ -233,10 +232,10 @@ class PlaceOrderUseCaseUnitTest {
         assertThat(first.getQuantity()).isEqualTo(2);
         assertThat(first.getSubtotal()).isEqualTo(20000L);
         assertThat(first.getMainImageUrl()).isEqualTo("/files/img-" + PRODUCT_A);
-        // 地址快照固化（B7.6）
+        // 地址快照固化
         assertThat(sub.getAddress().getRecipient()).isEqualTo("张三");
         assertThat(sub.getAddress().getPhone()).isEqualTo("13800138000");
-        // 子单号非空（TD-13 业务单号）
+        // 子单号非空（业务单号）
         assertThat(sub.getSubOrderNo()).isNotBlank();
 
         // 预占：以子单 ID 为操作单元，明细 = 勾选条目 SKU + 数量
@@ -327,7 +326,7 @@ class PlaceOrderUseCaseUnitTest {
         verify(paymentPort).createPendingPayment(master.getId(), 45800L,
                 TimeoutType.ORDER_PAY.durationMillis());
 
-        // 视图：两子单（含店铺名 B7.5③）
+        // 视图：两子单（含店铺名）
         assertThat(result.subOrders()).hasSize(2);
         assertThat(result.subOrders()).extracting(OrderResult.SubOrderResult::shopId)
                 .containsExactly(SHOP_A, SHOP_B);
@@ -337,7 +336,7 @@ class PlaceOrderUseCaseUnitTest {
 
     /**
      * happy：结算试算——按店铺分组（店铺名/商品额/运费/实付），总计 =
-     * Σ 商品金额 + Σ 运费（B7.4②）。
+     * Σ 商品金额 + Σ 运费。
      */
     @Test
     @DisplayName("试算按店铺分组并汇总金额")
@@ -424,7 +423,7 @@ class PlaceOrderUseCaseUnitTest {
     /* ================= critical path ================= */
 
     /**
-     * critical：跨店任一 SKU 预占失败 → 整单失败（TD-10 all-or-nothing）
+     * critical：跨店任一 SKU 预占失败 → 整单失败（all-or-nothing）
      * ——异常透传、已售店预占完成但零落库、零支付单（同事务回滚边界）。
      */
     @Test
@@ -508,7 +507,7 @@ class PlaceOrderUseCaseUnitTest {
 
     /**
      * critical：购物车勾选集过滤——勾选 3 条只选 2 条提交，未选条目不进
-     * 订单与预占（B7.2② 服务端强制）。
+     * 订单与预占（服务端强制）。
      */
     @Test
     @DisplayName("勾选集过滤：未选条目不进订单")
@@ -563,7 +562,7 @@ class PlaceOrderUseCaseUnitTest {
 
     /**
      * fail：提交的 SKU 不在购物车勾选集中（未勾选/已移除）拒绝——回购物
-     * 车重新选择（B7.2 服务端强制）。
+     * 车重新选择（服务端强制）。
      */
     @Test
     @DisplayName("未勾选条目下单拒绝")

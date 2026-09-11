@@ -11,15 +11,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 支付单状态机场景测试（TD-11 防线二 + 状态机契约，红阶段）。
+ * 支付单状态机场景测试（防线二 + 状态机契约）。
  * <p>
- * 覆盖（红阶段：失败原因 = 实现缺失——迁移方法体 UOE 抛直接 Error，
- * 或「期待 BusinessException 实抛 UOE」断言失败；绿阶段按本矩阵的
+ * 覆盖（失败原因 = 实现缺失——迁移方法体 UOE 抛直接 Error，
+ * 或「期待 BusinessException 实抛 UOE」断言失败；按本矩阵的
  * 目标行为实现后原样转绿）：
  * <ul>
  *     <li>Happy：待支付 → 已支付 / 已失败 / 已关闭；失败 → 关闭收口；
  *         已关闭重复关单幂等；留痕追加；</li>
- *     <li>Critical：同号重复回调幂等命中（B8.2 重复回调只生效一次）、
+ *     <li>Critical：同号重复回调幂等命中（重复回调只生效一次）、
  *         金额不符拒绝、异号冲突（409，渠道事故优先）、终态再收回调；</li>
  *     <li>Fail：已支付关单拒绝、终态再迁移拒绝、参数防御（空白流水号）。</li>
  * </ul>

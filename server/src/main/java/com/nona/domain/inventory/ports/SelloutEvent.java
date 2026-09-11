@@ -5,7 +5,7 @@ import com.nona.events.Event;
 import java.time.Instant;
 
 /**
- * 售罄领域事件（inventory 域发布 → 商品域消费自动下架，一期为日志型
+ * 售罄领域事件（inventory 域发布 → 商品域消费自动下架，日志型
  * 消费）：任何库存变更操作（预占/扣减/手工调整）导致 available=0 且
  * held=0 即发布——售罄定义收敛在判定点，本事件仅承载最小定位信息。
  * <p>

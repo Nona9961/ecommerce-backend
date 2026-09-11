@@ -74,7 +74,7 @@ public class ProductReviewUseCase {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * 写后自读窗口埋点（TD-08：审核通过 = 商品转入在售、搜索可见性变化，
+     * 写后自读窗口埋点（审核通过 = 商品转入在售、搜索可见性变化，
      * 标记商品归属商家使其 3s 内搜索立即可见——主体语义见用例契约）
      */
     private final LastWriteMarker lastWriteMarker;

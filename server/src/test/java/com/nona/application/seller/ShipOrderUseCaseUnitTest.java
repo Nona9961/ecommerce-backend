@@ -44,8 +44,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 商家发货编排用例场景测试（S10.3 商家标记发货 + 运单创建跨上下文
- * 同事务，红阶段契约）。
+ * 商家发货编排用例场景测试（商家标记发货 + 运单创建跨上下文
+ * 同事务契约）。
  * <p>
  * 覆盖：happy——发货全链路（归属校验 → 幂等短路判定 → 在途守卫 →
  * 提权段内建单 → 运单落库 → 订单推进，编排序与运单装配断言：公司/
@@ -57,8 +57,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：全部端口/仓储/工厂以 mock 承载（编排契约断言面）；提权
  * 事务以 mock 直执行（事务边界属应用层，由用例注解与提权包装承载，
- * 绿期冒烟测试验证真实回滚）。红阶段失败原因 = 实现缺失（用例方法体
- * 未接线），而非语法/装配错误。
+ * 冒烟测试验证真实回滚）。
  * <p>
  * 时间断言：运单创建时刻由编排取当前时间传入工厂——断言用相对窗口
  * （工厂收到时刻与断言时刻差 ≤5s），零绝对日期魔法值；运单 fixture
@@ -82,7 +81,7 @@ class ShipOrderUseCaseUnitTest {
     private static final long TRACK_ID = 9002L;
 
     /**
-     * 承运公司与运单号（录入契约面，TD-13 模拟物流单号 SF 前缀）
+     * 承运公司与运单号（录入契约面，模拟物流单号 SF 前缀）
      */
     private static final String COMPANY = "顺丰速运";
     private static final String TRACKING_NO = "SF202609080001";
@@ -106,7 +105,7 @@ class ShipOrderUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测用例（依赖全 mock，setUp 装配）。
      */
     private ShipOrderUseCase useCase;
 
@@ -214,7 +213,7 @@ class ShipOrderUseCaseUnitTest {
     }
 
     /**
-     * happy-2 不同公司/单号参数透传：录入契约面（S10.3② 物流公司与单号
+     * happy-2 不同公司/单号参数透传：录入契约面（物流公司与单号
      * 展示源）——货物由其它承运发出时，公司/单号仍原样透传工厂定型；
      * 运单创建后初始轨迹待发货（fixture 形态自洽即追认初始轨迹装配）。
      */

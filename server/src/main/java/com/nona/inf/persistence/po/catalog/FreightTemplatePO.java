@@ -75,7 +75,7 @@ public class FreightTemplatePO extends TenantScopedBasePO {
     /**
      * 默认模板身份标记（店铺兜底回退锚点；普通模板恒 false，默认模板
      * 由开店编排唯一创建入口定型 true——同店铺至多一条由创建入口守卫
-     * 保证，DB 唯一约束一期不做）
+     * 保证，DB 唯一约束不做）
      */
     @Column(nullable = false, name = "is_default")
     private Boolean isDefault;

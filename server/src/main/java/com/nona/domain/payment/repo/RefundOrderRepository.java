@@ -15,7 +15,7 @@ import com.nona.persistence.BaseRepository;
  * <p>
  * 唯一约束契约（DDL 落地时按本 javadoc 核对）：
  * <ul>
- *     <li>{@code refund_no} 唯一（业务退款单号，TD-13）；</li>
+ *     <li>{@code refund_no} 唯一（业务退款单号）；</li>
  *     <li>{@code sub_order_id} 唯一（一子单一生至多一个退款单——重复
  *         申请的最后防线，正常路径由申请编排「防重判定」守护；FAILED
  *         可重试复用同一单，不新建行）；</li>
@@ -25,7 +25,7 @@ import com.nona.persistence.BaseRepository;
  * </ul>
  * 查询契约遵循「契约演进只增不改」：本阶段冻结按退款单号（回调装载）
  * 与按子单（申请防重/超时短路）两装载；退款单列表/详情等查询面随
- * 消费编排 WU 扩展。
+ * 消费编排扩展。
  *
  * @author nona9961
  */

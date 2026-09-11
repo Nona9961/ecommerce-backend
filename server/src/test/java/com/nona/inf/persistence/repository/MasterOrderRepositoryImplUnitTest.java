@@ -30,7 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 主订单仓储实现场景测试（WU-55 红阶段契约：查询契约扩展 + 真实删除
+ * 主订单仓储实现场景测试（契约：查询契约扩展 + 真实删除
  * 语义）：
  * <p>
  * happy——买家分页按状态多值过滤（含空集合=全量分支）、count 透传、
@@ -40,11 +40,9 @@ import static org.mockito.Mockito.when;
  * <p>
  * 装配纪律：依赖全 mock（主表 JPA/子单反查 JPA/转换器/追踪提供者），
  * 无容器；被测仓储 @BeforeEach 重建（禁字段初始化 new X(mock)）。
- * 桩纪律（红阶段实证先例 ShipTimeoutStoreUnitTest）：行为桩以 lenient
- * 豁免 UOE 挡道面（红阶段 UOE 先于桩消费抛出），绿实现后逐桩收回为
- * 精确桩（零豁免）。全部断言为绿阶段可转绿的「真实行为」断言——
- * 现红的原因是 {@link UnsupportedOperationException}（实现缺失），
- * 非语法/装配错误。
+ * 桩纪律（实证先例 ShipTimeoutStoreUnitTest）：行为桩以 lenient
+ * 豁免挡道面（UOE 先于桩消费抛出），按需收回为
+ * 精确桩（零豁免）。全部断言为「真实行为」断言。
  *
  * @author nona9961
  */

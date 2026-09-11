@@ -17,8 +17,8 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  * 运单聚合根测试：创建/装载装配、形态不变量守卫（子单引用/公司/单号/
  * 轨迹必填、末条轨迹与当前状态一致）、在途判定边界、轨迹不可变视图。
  * <p>
- * 红阶段：构造守卫与查询判定（isInTransit）为设计物实现（本文件用例
- * 绿）；状态迁移（advanceTo）实现缺失由状态机测试红覆盖。
+ * 结构守卫与查询判定（isInTransit）为设计物实现（本文件用例
+ * 绿）；状态迁移（advanceTo）契约见状态机测试。
  *
  * @author nona9961
  */

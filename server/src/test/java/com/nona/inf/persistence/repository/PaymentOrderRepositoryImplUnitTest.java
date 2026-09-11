@@ -34,7 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 支付单仓储实现场景测试（WU-55 红阶段契约：回调装载锚点对 / 支付
+ * 支付单仓储实现场景测试（契约：回调装载锚点对 / 支付
  * 超时三件套（findDue-claim-clear）/ 级联删）。
  * <p>
  * happy——findByPayNo/findByOrderId 装载命中、findDue 状态与时刻透传、

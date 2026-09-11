@@ -18,8 +18,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 账号状态 DB SPI（JPA 实现）单元测试：按 uid 查单表与上下文组装语义
- * （Phase 1 骨架态，预期红）。
+ * 账号状态 DB SPI（JPA 实现）单元测试：按 uid 查单表与上下文组装语义。
  * <p>
  * 断言对准回填契约（单表 account，type 区分角色）：买家 → BUYER 角色、shopIds 恒空；
  * 商家 → SELLER 角色 + 关联店铺列表；平台运营（portal=ADMIN）无落点——单表不存在
@@ -126,7 +125,7 @@ class JpaAccountStatusProviderUnitTest {
     }
 
     /**
-     * 平台运营（portal=ADMIN）：单表无 admin 落点（RBAC 属 Phase-II），
+     * 平台运营（portal=ADMIN）：单表无 admin 落点（RBAC 扩展位），
      * 查询返回空 → 过滤器按未认证处理（fail-closed，登录拒绝）。
      */
     @Test

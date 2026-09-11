@@ -43,13 +43,13 @@ import java.util.List;
  * （TenantWriteGate 提权+空归属 fail-closed 拒绝，商品域仓储同先例
  * 形态），读经租户过滤 fail-closed。
  * <p>
- * <b>超时 SQL 三件套（WU-55 冻结落地面）</b>——PO 超时 SQL 面三列
+ * <b>超时 SQL 三件套（冻结落地面）</b>——PO 超时 SQL 面三列
  * （timeout_at/timeout_type/claimed）由本仓储维护，转换器不负责
- * （WU-54 契约）：
+ * （契约）：
  * <ul>
  *     <li>findDue：走 JPA 派生扫描面 {@code findByStatusAndTimeoutAtLessThanEqual...}，
  *         领域 Instant 以 UTC 字面转 PO LocalDateTime（ZoneOffset.UTC，
- *         WU-54 转换器同款形态），状态值由调用方（履约超时数据端口）
+ *         转换器同款形态），状态值由调用方（履约超时数据端口）
  *         传入，本类不写死；</li>
  *     <li>claim/clear：JdbcTemplate 参数化条件 UPDATE（InventoryItem
  *         casX 的 JPA @Modifying 先例不适用——引擎调度线程无请求租户
@@ -99,7 +99,7 @@ public class SubOrderRepositoryImpl
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 订单项行转换器（从表落库消费面；红阶段冻结的构造器签名不含
+     * 订单项行转换器（从表落库消费面；构造器签名不含
      * 本依赖——单测不触达落库路径，以字段注入补齐装配面）
      */
     @Autowired
@@ -108,7 +108,7 @@ public class SubOrderRepositoryImpl
     /**
      * 提权工具（提权保存前显式租户归属定型：TenantWriteGate 提权+空归属
      * fail-closed 拒绝——子单/订单项行 tenant=shopId 归属必得，不依赖请求
-     * 上下文；红阶段冻结的构造器签名不含本依赖——单测不触达落库路径，以
+     * 上下文；构造器签名不含本依赖——单测不触达落库路径，以
      * 字段注入补齐装配面，同 orderItemConvertor 形态）。
      */
     @Autowired
@@ -321,7 +321,7 @@ public class SubOrderRepositoryImpl
     /**
      * 根行/从表行租户承载：提权写路径（买家/回调/调度等无请求视角上下文
      * 推进店铺数据）显式锚定 tenant=shopId——归属必得，不依赖请求上下文
-     * （TD-12 提权写门禁语义：TenantWriteGate 提权+空归属 fail-closed 拒绝）；
+     * （提权写门禁语义：TenantWriteGate 提权+空归属 fail-closed 拒绝）；
      * 非提权商家路径保持既有注入语义（行租户由写门禁按请求上下文注入，
      * 显式值缺失即放行注入）。商品域仓储 ownedBy 同先例形态。
      *

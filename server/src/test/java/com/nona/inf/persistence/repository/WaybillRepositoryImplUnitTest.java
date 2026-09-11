@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 运单仓储实现场景测试（WU-55 红阶段契约：在途锚点 / 在途全量扫描 /
+ * 运单仓储实现场景测试（契约：在途锚点 / 在途全量扫描 /
  * 按子单装载面 / 级联删）。
  * <p>
  * happy——findInTransitBySubOrderId 命中在途、findInTransit 在途全量、
@@ -35,7 +35,7 @@ import static org.mockito.Mockito.when;
  * 逐条容错跳过不毒化整轮；fail——删除不存在返回 0。
  * <p>
  * 装配纪律：依赖全 mock，无容器；被测仓储 @BeforeEach 重建；行为桩
- * lenient 豁免 UOE 挡道（绿实现后收回精确桩）。
+ * lenient 豁免 UOE 挡道（按需收回精确桩）。
  *
  * @author nona9961
  */

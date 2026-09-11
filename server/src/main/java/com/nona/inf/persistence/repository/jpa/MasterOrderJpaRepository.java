@@ -25,7 +25,7 @@ public interface MasterOrderJpaRepository extends ListCrudRepository<MasterOrder
     Optional<MasterOrderPO> findByOrderNo(String orderNo);
 
     /**
-     * 买家订单分页（全量）：创建时间倒序 + 主键倒序（WU-55 冻结排序）。
+     * 买家订单分页（全量）：创建时间倒序 + 主键倒序（冻结排序）。
      * 本方法为「全部」tab 承载面——状态不过滤（调用方在 statuses
      * 为 null/空集合时走本方法）。
      *
@@ -38,7 +38,7 @@ public interface MasterOrderJpaRepository extends ListCrudRepository<MasterOrder
 
     /**
      * 买家订单分页（状态多值过滤）：创建时间倒序 + 主键倒序
-     * （WU-55 冻结排序；statuses 非空集合承载面——调用方归一化
+     * （冻结排序；statuses 非空集合承载面——调用方归一化
      * 空集合为全量分支）。
      *
      * @param buyerId  归属买家账号 ID

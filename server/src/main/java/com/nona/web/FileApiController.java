@@ -26,7 +26,7 @@ import java.io.InputStream;
  * <p>
  * 控制器保持薄壳：委托 {@link FileStorage} 防腐层，不承载业务逻辑；
  * 上传需登录（安全链任意已认证角色），读取公开（商品图买家端展示），
- * 删除登录即可（一期不做归属校验，随商品域细化）。URL 统一形态
+ * 删除登录即可（当前不做归属校验，随商品域细化）。URL 统一形态
  * {@code /files/{objectKey}}，业务表只存该字符串。
  *
  * @author nona9961

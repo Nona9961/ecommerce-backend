@@ -22,8 +22,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商家端库存 REST 控制器（/seller/inventory…，SELLER 角色，WU-60 接线
- * WU-47 约定端点）：库存三态分页（商品维度展示字段经 catalog join）/
+ * 商家端库存 REST 控制器（/seller/inventory…，SELLER 角色，接线段
+ * 约定端点）：库存三态分页（商品维度展示字段经 catalog join）/
  * 手工调整可售（每笔必记流水）/ 流水查看（append-only）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托 {@link SellerStockQuery}

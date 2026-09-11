@@ -32,14 +32,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 发起支付用例场景测试（B8.1 + C1 历史遗留主单状态防线，红阶段）。
+ * 发起支付用例场景测试（主单可支付状态防线）。
  * <p>
- * 覆盖：happy——复用待支付单受理（B8.1 主流程）、补建支付单受理（金额
+ * 覆盖：happy——复用待支付单受理（主流程）、补建支付单受理（金额
  * = 主单实付，超时长 = 订单域规则值）；critical——受理失败剧本透传；
  * fail——主单不存在/归属不符（404 按不存在呈现，防越权泄露）、主单不可
- * 支付再发起（C1：payment.order_invalid）、已存在非待支付单拒绝复用。
- * 红阶段失败原因 = 实现缺失（用例方法体 UOE），绿阶段实现后按本矩阵
- * 转绿。
+ * 支付再发起（主单状态防线：payment.order_invalid）、已存在非待支付单拒绝复用。
+ * 按本矩阵转绿。
  */
 @ExtendWith(MockitoExtension.class)
 class PaymentUseCaseUnitTest {
@@ -54,7 +53,7 @@ class PaymentUseCaseUnitTest {
     private MasterOrderRepository masterOrderRepository;
 
     /**
-     * 被测用例（直接装配，红阶段不注册 Spring；mock 注入后于实例构造，
+     * 被测用例（直接装配；mock 注入后于实例构造，
      * 用例经 setUp 装配）。
      */
     private PaymentUseCase useCase;
@@ -89,7 +88,7 @@ class PaymentUseCaseUnitTest {
             Instant.parse("2026-09-07T10:30:00Z"));
 
     @Test
-    @DisplayName("happy-1 发起支付主流程：主单可支付 → 复用/创建支付单 → 渠道受理成功（B8.1）")
+    @DisplayName("happy-1 发起支付主流程：主单可支付 → 复用/创建支付单 → 渠道受理成功")
     void initiatePayment_happyPath_acquired() {
         when(masterOrderRepository.getByID(100L)).thenReturn(pendingMaster);
         when(paymentPort.createPendingPayment(eq(100L), eq(10000L), any(Long.class)))
@@ -156,7 +155,7 @@ class PaymentUseCaseUnitTest {
     }
 
     @Test
-    @DisplayName("fail-3 C1 主单状态防线：已支付/已取消等非可支付主单再发起 → payment.order_invalid")
+    @DisplayName("fail-3 主单状态防线：已支付/已取消等非可支付主单再发起 → payment.order_invalid")
     void initiatePayment_masterNotPayable_rejected() {
         final MasterOrder paidMaster = master(100L, MasterOrderStatus.PAID);
         when(masterOrderRepository.getByID(100L)).thenReturn(paidMaster);
@@ -182,7 +181,7 @@ class PaymentUseCaseUnitTest {
     }
 
     /* ------------------------------------------------------------------ */
-    /* initiatePaymentWithView（WU-59 冻结契约补充 2：additive 新方法，   */
+    /* initiatePaymentWithView（契约补充：additive 新方法，   */
     /* 既有 initiatePayment 用例零改动）                                  */
     /* ------------------------------------------------------------------ */
 

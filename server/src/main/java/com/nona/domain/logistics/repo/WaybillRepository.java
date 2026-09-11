@@ -45,11 +45,11 @@ public interface WaybillRepository extends BaseRepository<Long, Waybill> {
     List<Waybill> findInTransit();
 
     /**
-     * 按子单装载运单（订单详情/物流展示面装载锚点，WU-55 冻结）：
+     * 按子单装载运单（订单详情/物流展示面装载锚点，契约冻结）：
      * 与 {@link #findInTransitBySubOrderId} 互补——后者仅为「一子单
      * 一在途」不变量锚点（发货编排查重），本方法承载消费面装载
-     * （WU-44 约定 GET /mall/sub-orders/{subOrderId}/waybill、WU-47
-     * 商家订单详情运单概要），含已签收终态行。
+     * （约定 GET /mall/sub-orders/{subOrderId}/waybill、商家订单
+     * 详情运单概要），含已签收终态行。
      * <p>
      * 业务常态一子单一张运单（发货创建 → 推进 → 签收同一行收尾）；
      * 历史并存行（在途唯一约束只挡在途，不挡签收历史行）取最新一张

@@ -18,8 +18,8 @@ import jakarta.persistence.Table;
  * 归属 payment_order 主键（payment_order_id，rootId 关联）；「回调
  * 原文」= callbackType/payNo/refundNo/result/channelTxnNo/amountCents
  * 六字段与渠道回调载荷同构 + occurred_at 收到时间（领域 Instant，
- * LocalDateTime UTC 字面承载）。真实渠道原始报文（raw JSON）为二期
- * 扩展位（契约演进只增不改，仅需向本表追加一列）。
+ * LocalDateTime UTC 字面承载）。真实渠道原始报文（raw JSON）为扩展
+ * 预留位（契约演进只增不改，仅需向本表追加一列）。
  *
  * @author nona9961
  */

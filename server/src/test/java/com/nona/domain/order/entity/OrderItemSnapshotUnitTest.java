@@ -15,10 +15,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 订单项快照单元测试：TD-09 快照列 + JSON 扩展列模型——高频字段固化
+ * 订单项快照单元测试：快照列 + JSON 扩展列模型——高频字段固化
  * （商品名/单价/数量/小计/主图 URL/规格摘要）、扩展属性 Map 冻结（保序
  * 不可变副本）、快照自洽恒等式（小计 == 单价 × 数量）与构造防御
- * （引用/名称/金额/数量/键校验），以及 B7.6 快照冻结语义（构造后不可变）。
+ * （引用/名称/金额/数量/键校验），以及快照冻结语义（构造后不可变）。
  *
  * @author nona9961
  */

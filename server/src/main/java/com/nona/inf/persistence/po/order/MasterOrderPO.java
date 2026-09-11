@@ -14,10 +14,10 @@ import jakarta.persistence.UniqueConstraint;
  * 维度数据全局可见。
  * <p>
  * 主键 id = 主订单独立主键（Snowflake，全局唯一）；order_no 业务单号唯一
- * （TD-13：ORD + 日期 + snowflake 后段）；buyer_id 业务关联列；地址六列
+ * （ORD + 日期 + snowflake 后段）；buyer_id 业务关联列；地址六列
  * （recipient/phone/province/city/district/detail）+ 金额四列
  * （goods_amount/freight_amount/discount/paid_amount）为快照冗余列
- * （AddressSnapshot/AmountDetail 不可变 VO 扁平化，B7.6 创建时定型）；
+ * （AddressSnapshot/AmountDetail 不可变 VO 扁平化，创建时定型）；
  * status 为派生态（子单投影派生刷新）。主表唯一行、无从表——子单 id
  * 集合经 sub_order.master_order_id 反查装载（引用 ID 协作，不建外键）。
  * 主表行由 {@code MasterOrderConvertor} 与领域实体互转；整体状态枚举
@@ -32,7 +32,7 @@ import jakarta.persistence.UniqueConstraint;
 public class MasterOrderPO extends BasePO {
 
     /**
-     * 订单号（TD-13 业务单号，唯一）
+     * 订单号（业务单号，唯一）
      */
     @Column(nullable = false, length = 64, name = "order_no")
     private String orderNo;

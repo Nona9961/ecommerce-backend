@@ -15,8 +15,8 @@ import java.util.List;
  * 主表行 = 聚合根身份（id = 主订单主键，orderNo 唯一业务单号，buyerId
  * 业务关联列）；地址六列（recipient/phone/province/city/district/
  * detail）+ 金额四列（goodsAmount/freightAmount/discount/paidAmount）
- * 为 AddressSnapshot/AmountDetail 不可变 VO 的扁平化快照列（B7.6
- * 创建时定型）；status 为派生态（子单投影经 MasterOrderStatusDeriver
+ * 为 AddressSnapshot/AmountDetail 不可变 VO 的扁平化快照列（创建
+ * 时定型）；status 为派生态（子单投影经 MasterOrderStatusDeriver
  * 刷新后由聚合状态读入）。转换器不作为装载端校验承担者——快照形态与
  * 金额恒等式守卫收敛在领域构造路径。
  *

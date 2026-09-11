@@ -52,7 +52,7 @@ public class ProductEditVersionPO extends TenantScopedBasePO {
     /**
      * 全量内容快照 JSON（保存时刻聚合全部内容：主体+图片+属性+规格模板+SKU）
      * <p>
-     * WU-53：@Lob → @JdbcTypeCode(LONGVARCHAR)（Hibernate 6 官方替代）：@Lob 在
+     * {@code @JdbcTypeCode(LONGVARCHAR)}（Hibernate 6 官方替代）：@Lob 在
      * MySQL 方言导出 tinytext（255B 上限），与全量快照体量冲突（实测写入
      * Data truncation）；LONGVARCHAR 在 MySQL 方言 = longtext，Hibernate
      * validate 期望与表列同型（V1.2 对齐落库）。

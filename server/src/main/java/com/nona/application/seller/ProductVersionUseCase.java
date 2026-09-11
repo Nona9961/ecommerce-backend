@@ -84,7 +84,7 @@ public class ProductVersionUseCase {
     private final ProductSnapshotConvertor snapshotConvertor;
 
     /**
-     * 写后自读窗口埋点（TD-08：版本回滚属商品内容变更，落库后标记写者）
+     * 写后自读窗口埋点（版本回滚属商品内容变更，落库后标记写者）
      */
     private final LastWriteMarker lastWriteMarker;
 
@@ -323,7 +323,7 @@ public class ProductVersionUseCase {
 
     /**
      * 写后窗口埋点（当前商家账号：请求上下文身份转 Long 打标——回滚 =
-     * 商品内容变更、搜索可见内容变化，TD-08；身份缺失或非数字时跳过埋点，
+     * 商品内容变更、搜索可见内容变化；身份缺失或非数字时跳过埋点，
      * 降级语义同埋点设施故障）。
      */
     private void markCurrentOperatorWrite() {

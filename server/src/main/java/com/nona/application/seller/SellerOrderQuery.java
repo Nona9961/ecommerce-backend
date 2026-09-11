@@ -25,12 +25,11 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * 商家端本店订单查询用例（seller 面，WU-60 冻结；Spring 注册 @Service
- * 随绿阶段与实现同提交——55 同款纪律，避免无中间态启动）。
+ * 商家端本店订单查询用例（seller 面，契约冻结；Spring 注册 {@code @Service}）。
  * <p>
  * 编排语义（只读，无事务写面）：
  * <ul>
- *     <li><b>列表分页</b>：消费 55 冻结的 {@code SubOrderRepository
+ *     <li><b>列表分页</b>：消费冻结的 {@code SubOrderRepository
  *         .listPagedByShop/countByShop}（店铺显式条件 + 租户过滤双层
  *         fail-closed、状态多值过滤、创建时间倒序 + 主键倒序稳定分页），
  *         {@code statuses} null/空 = 全量（「全部」tab 语义收敛在本层）；

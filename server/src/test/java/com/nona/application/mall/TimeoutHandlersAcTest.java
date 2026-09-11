@@ -19,12 +19,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 三超时业务处理器真实链验收测试（B8.3/B9.4①②③：真实链装配面——
- * store 认领/清除 SQL、租户列、仓储链路、调度激活逐一验证；WU-49 按
- * javadoc 启用契约改写，红阶段降级声明已解除——WU-55 仓储 JPA 实现 +
- * 用例/处理器/store Spring 注册落地，WU-56 调度门控 test=false 手触）。
+ * 三超时业务处理器真实链验收测试（支付超时/发货超时/收货超时：
+ * 真实链装配面——
+ * store 认领/清除 SQL、租户列、仓储链路、调度激活逐一验证；按
+ * javadoc 启用契约改写——仓储 JPA 实现 +
+ * 用例/处理器/store Spring 注册落地，调度门控 test=false 手触）。
  * <p>
- * 装配面清单见红设计报告 §装配面清单——支付超时关单链路 / 发货超时
+ * 装配面清单：支付超时关单链路 / 发货超时
  * 退款链路 / 收货超时自动完成链路。
  * <p>
  * 执行形态：test=false 调度关闭（无自动滴答干扰），经

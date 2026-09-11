@@ -31,8 +31,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 认证链路契约测试（真实 JPA 实现）：过滤器 + Spring Security 路由 + 单表 account 真实数据回填。
  * <p>
  * 无真实 Redis（缓存以 mock 替代）；账号数据直接写入 H2 内存库（account / account_shop_rel），
- * AccountStatusProvider 走真实 JPA 实现（Phase 1 骨架态：回填路径预期红，缓存命中路径随过滤器
- * 改造转绿）。
+ * AccountStatusProvider 走真实 JPA 实现（回填路径与缓存命中路径均已
+ * 接线）。
  * 覆盖：DB 回填组装上下文、商家店铺上下文写入租户（shopIds 落租户）、BANNED 真实数据 403、
  * 缓存命中直取、uid 不存在 401、平台运营（portal=ADMIN）无落点 401（fail-closed）。
  */
@@ -112,7 +112,6 @@ class AuthChainJpaIntegrationAcTest {
 
     /**
      * DB 回填（买家真实数据）：miss → JPA 查单表 account → 组装跟踪作用域并回填缓存。
-     * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_buyerFromDb_assemblesContextAndBackfills() throws Exception {
@@ -130,7 +129,7 @@ class AuthChainJpaIntegrationAcTest {
 
     /**
      * DB 回填（商家真实数据 + rel）：account 表命中 type=SELLER → SELLER 角色 + 店铺上下文
-     * 写入 跟踪作用域 tenantID（shopIds 落租户）。Phase 1 红（JPA 回填骨架态）。
+     * 写入 跟踪作用域 tenantID（shopIds 落租户）。
      */
     @Test
     void cacheMiss_sellerFromDb_fillsTenantFromShopIds() throws Exception {
@@ -147,7 +146,6 @@ class AuthChainJpaIntegrationAcTest {
 
     /**
      * BANNED 真实数据：DB 回填返回封禁 → 403（统一 auth.forbidden）。
-     * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_bannedFromDb_returns403() throws Exception {
@@ -177,9 +175,8 @@ class AuthChainJpaIntegrationAcTest {
     }
 
     /**
-     * 平台运营（portal=ADMIN）：单表无 admin 账号落点（RBAC 属 Phase-II），
+     * 平台运营（portal=ADMIN）：单表无 admin 账号落点（RBAC 扩展位），
      * DB 回填查无账号 → 401（fail-closed：admin 端在 RBAC 落地前不可达）。
-     * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_adminUid_returns401() throws Exception {
@@ -192,7 +189,6 @@ class AuthChainJpaIntegrationAcTest {
 
     /**
      * 单表无此 uid：fail-closed 按未认证处理 → 401。
-     * Phase 1 红（JPA 回填骨架态）。
      */
     @Test
     void cacheMiss_absentUid_returns401() throws Exception {

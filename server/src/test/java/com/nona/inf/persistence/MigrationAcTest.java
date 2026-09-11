@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
 /**
- * 迁移冒烟（WU-53 red-phase 契约：Flyway V1 落库前 schema 断言）。
+ * 迁移冒烟（契约：Flyway V1 落库前 schema 断言）。
  * <p>
  * 装配面：<b>纯 JDBC</b>（DriverManager + mysql-connector-j），不依赖 Spring 上下文——
  * 避免 ddl-auto / Flyway 自动迁移干扰被测面；连接宿主 MySQL 8.4.8 的 ecommerce 库
@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.fail;
  * 凭证注入：环境变量 {@code ECOM_DB_PASSWORD}（运行命令模板从 /opt/data-stack/.env 的
  * MYSQL_ECOM_PW 映射导出；本文件及任何配置文件不得出现密码明文）。
  * <p>
- * 运行（red 阶段红态验证 / green 阶段冒烟同形）：
+ * 运行（冒烟形态）：
  * <pre>
  * rm -f /tmp/localtunnel.pids; pkill socat 2>/dev/null
  * set -a; . /opt/data-stack/.env; set +a
@@ -34,16 +34,12 @@ import static org.assertj.core.api.Assertions.fail;
  * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend \
  *   &amp;&amp; mvn -o -llr -s /opt/code/.m2/settings.xml -Pfull -Dtest=MigrationAcTest test'
  * </pre>
- * 测试分类：AcTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行；命名合规见 WU-52 后缀表）。
+ * 测试分类：AcTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行）。
  * <p>
- * <b>生命周期声明</b>：
- * <ul>
- * <li>红阶段红态 = {@link #migrationBaselineAfterV1()} 红（红因 = Flyway V1 未落库，
- *     非连接/权限/语法问题）</li>
- * <li>绿阶段 V1/V2 落库后：基线用例按报告「冒烟清单」改为断言 33 表 + 探针表共存
- *     （精确集：33 张 PO 映射表全部存在且无多余业务表，cdc_probe 保留不受 V1/V2/
- *     Flyway 触碰——探针表不入迁移脚本的部署位契约），其余用例保持常绿</li>
- * </ul>
+ * <b>基线契约</b>：Flyway V1/V2 落库后 ecommerce 库
+ * schema = 33 张 PO 映射表 + 探针表 cdc_probe 共存（精确集：33 张
+ * PO 映射表全部存在且无多余业务表，cdc_probe 保留不受 V1/V2/
+ * Flyway 触碰——探针表不入迁移脚本的部署位契约），其余用例保持常绿
  */
 class MigrationAcTest {
 
@@ -81,7 +77,7 @@ class MigrationAcTest {
             "uk_product_edit_version_no", "uk_product_shop_category_rel",
             "uk_product_sku_spec_hash", "uk_inventory_item_sku",
             "uk_inventory_log_order_sku_type", "uk_cart_buyer", "uk_cart_item_buyer_sku",
-            // V2 trading (WU-54)：uk 9
+            // V2 trading：uk 9
             "uk_master_order_order_no", "uk_sub_order_sub_order_no", "uk_order_item_sub_sku",
             "uk_payment_order_pay_no", "uk_payment_order_order_id",
             "uk_payment_order_channel_txn_no", "uk_refund_order_refund_no",
@@ -93,7 +89,7 @@ class MigrationAcTest {
             "idx_product_edit_version_product", "idx_product_image_product", "idx_product_shop",
             "idx_product_shop_category_rel_product", "idx_shop_category_shop",
             "idx_product_sku_product", "idx_inventory_log_sku", "idx_cart_item_cart",
-            // V2 trading (WU-54)：idx 7
+            // V2 trading：idx 7
             "idx_sub_order_status_timeout", "idx_sub_order_shop", "idx_order_item_sub_order",
             "idx_payment_order_status_timeout", "idx_payment_callback_log_payment_order",
             "idx_refund_callback_log_refund_order", "idx_waybill_track_waybill");
@@ -103,7 +99,7 @@ class MigrationAcTest {
             "freight_template", "product_attribute", "product_edit_version", "product_image",
             "product", "product_shop_category_rel", "shop_category", "product_sku",
             "inventory_item", "inventory_log",
-            // V2 trading (WU-54)：tenant=shopId 仅 order 域主从两表（D1）
+            // V2 trading：tenant=shopId 仅 order 域主从两表
             "sub_order", "order_item");
 
     /**
@@ -156,7 +152,7 @@ class MigrationAcTest {
     }
 
     /**
-     * 迁移基线断言（红阶段红态锚 → 绿阶段基线契约）：V1/V2 落库后 ecommerce 库
+     * 迁移基线断言（基线契约）：V1/V2 落库后 ecommerce 库
      * schema = 33 张 PO 映射表 + 部署位探针表 cdc_probe + Flyway 元数据表
      * flyway_schema_history 的必备集——33 表全存在、cdc_probe 仍保留（迁移脚本不管理、
      * Flyway migrate 不触碰）；并断言无上述集合与测试支撑表之外的任何多余业务表
@@ -181,7 +177,7 @@ class MigrationAcTest {
         }
     }
 
-    /** 33 张 PO 映射表全部存在（V1/V2 落库后绿；红阶段此处失败 = 迁移缺失的预期红） */
+    /** 33 张 PO 映射表全部存在（V1/V2 落库后必备表集；缺失 = 迁移缺失） */
     @Test
     void allPoTablesPresent() throws SQLException {
         try (Connection conn = open()) {
@@ -247,8 +243,8 @@ class MigrationAcTest {
     }
 
     /**
-     * WU-10 遗留闭合（MySQL 8.4 保留字核对）：role / permission / assignment 三表名
-     * 在宿主 MySQL 8.4.8 实测可无引号建表（非保留字；本会话探针实证），引号形态亦可。
+     * MySQL 8.4 保留字核对：role / permission / assignment 三表名
+     * 在宿主 MySQL 8.4.8 实测可无引号建表（非保留字；探针实证），引号形态亦可。
      * V1 脚本按此结论直接书写表名（可带反引号以显式表达意图）。
      * 临时表不进 binlog、会话结束自动清理，无 CDC 污染。
      */

@@ -7,21 +7,21 @@ package com.nona.domain.payment.entity;
  * {@link com.nona.exceptions.BusinessException}，业务码
  * {@code payment.status_illegal}）：
  * <pre>
- * PENDING_PAYMENT → PAID（TD-11 守卫：回调成功 markPaid）
+ * PENDING_PAYMENT → PAID（守卫：回调成功 markPaid）
  * PENDING_PAYMENT → FAILED（回调失败 markFailed，订单保持待支付等待超时）
  * PENDING_PAYMENT → CLOSED（待支付关单：主动取消/支付超时 closePay）
  * FAILED → CLOSED（失败单显式收口：超时调度重复打向失败单，非仅靠超时）
  * CLOSED →（幂等：重复关单无害返回；取消与超时调度重放不报错）
  * PAID →（终态：无任何出边，资金锁定）
  * </pre>
- * 语义钉死（红阶段契约，TD-11 防线二状态守卫的判定依据）：
+ * 语义钉死（契约，防线二状态守卫的判定依据）：
  * <ol>
  *     <li>迁移仅 {@code PENDING_PAYMENT} 可出——到达 PAID/FAILED/CLOSED 后除
  *         FAILED→CLOSED 外的任何再迁移均为非法，聚合守卫拒绝（告警日志由
  *         实现方落位）；</li>
  *     <li>同号重复回调（幂等命中）：已非待支付且流水号与本次相同——状态守卫
  *         拒绝并抛 {@code payment.status_illegal}，回调编排捕获后按「已处理
- *         应答」返回渠道（B8.2 重复回调只生效一次，不重放订单/库存编排）；</li>
+ *         应答」返回渠道（重复回调只生效一次，不重放订单/库存编排）；</li>
  *     <li>PAID 为资金终态：已支付支付单不可关单（资金已锁定，关单走退款流）；</li>
  *     <li>CLOSED 幂等：对已关闭支付单重复 closePay 幂等成功（超时调度与主动
  *         取消并发重放的常态路径，不产生告警噪音）。</li>

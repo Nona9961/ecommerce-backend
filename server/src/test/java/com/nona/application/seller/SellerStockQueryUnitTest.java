@@ -35,8 +35,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 商家端库存查询用例场景测试（S09 库存管理 / WU-60 红阶段契约；卖方
- * 查询面 = WU-47 约定端点形状：库存三态分页 + catalog join、单行回显、
+ * 商家端库存查询用例场景测试（库存管理契约；卖方
+ * 查询面 = 约定端点形状：库存三态分页 + catalog join、单行回显、
  * 流水分页）。
  * <p>
  * 覆盖：happy——分页 join（库存行 → StockView 商品摘要字段装配 + 调用
@@ -48,7 +48,7 @@ import static org.mockito.Mockito.when;
  * 依赖装配：InventoryItemRepository / InventoryLogRepository /
  * SkuProductViewRepository 全 mock（@BeforeEach 重建被测用例，mock 桩
  * 逐用例布置全部被使用）；时间断言 = fixture createdAt 透传投影（零
- * 绝对魔法日期）。红阶段失败原因 = 实现缺失（用例方法体 UOE）。
+ * 绝对魔法日期）。
  *
  * @author nona9961
  */
@@ -72,7 +72,7 @@ class SellerStockQueryUnitTest {
     private SkuProductViewRepository skuProductViewRepository;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）
+     * 被测用例（依赖全 mock，setUp 装配）
      */
     private SellerStockQuery query;
 

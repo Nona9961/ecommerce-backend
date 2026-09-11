@@ -16,16 +16,16 @@ import jakarta.persistence.UniqueConstraint;
  * 维度数据全局可见。
  * <p>
  * 主键 id = 支付单独立主键（Snowflake，全局唯一）。唯一约束契约
- * （TD-11 防线一 + 一对一主单的 DB 物理面，随仓储接口 javadoc 核对）：
- * pay_no 唯一（业务单号，TD-13：PAY + 日期 + snowflake 后段）；order_id
+ * （防线一 + 一对一主单的 DB 物理面，随仓储接口 javadoc 核对）：
+ * pay_no 唯一（业务单号：PAY + 日期 + snowflake 后段）；order_id
  * 唯一（支付单与主单一对一）；channel_txn_no 唯一（重复回调防线——
  * 未回调为 NULL 时唯一约束允许多行）。(status, timeout_at) 复合索引为
  * 支付超时引擎扫描面（findDueByStatusAndTimeoutAtBefore 契约）。
  * <p>
  * 超时 SQL 面列同 sub_order 先例：timeout_type（ORDER_PAY，可空）/
  * claimed（非空默认 false）——claim/clear 落地面由仓储实现侧 SQL
- * （WU-55）维护，转换器不负责。timeout_at 领域字段为 Instant，PO 列
- * 以 LocalDateTime 承载（datetime(6)，UTC 字面往返——见 V2 决策表）。
+ * 维护，转换器不负责。timeout_at 领域字段为 Instant，PO 列
+ * 以 LocalDateTime 承载（datetime(6)，UTC 字面往返）。
  *
  * @author nona9961
  */
@@ -40,7 +40,7 @@ import jakarta.persistence.UniqueConstraint;
 public class PaymentOrderPO extends BasePO {
 
     /**
-     * 支付单号（TD-13 业务单号，唯一）
+     * 支付单号（业务单号，唯一）
      */
     @Column(nullable = false, length = 64, name = "pay_no")
     private String payNo;
@@ -58,7 +58,7 @@ public class PaymentOrderPO extends BasePO {
     private Long amount;
 
     /**
-     * 支付渠道（一期唯一实现 MOCK，字段保留真实渠道扩展位）
+     * 支付渠道（当前唯一实现 MOCK，字段保留真实渠道扩展位）
      */
     @Column(nullable = false, length = 32)
     private String channel;

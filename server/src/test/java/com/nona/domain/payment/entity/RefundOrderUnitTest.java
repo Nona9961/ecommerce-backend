@@ -14,12 +14,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 退款单聚合状态机场景测试（退款面防线二 + 状态机契约，红阶段——
+ * 退款单聚合状态机场景测试（退款面防线二 + 状态机契约——
  * 对齐领域模型冻结 Refund Aggregate：pending → succeeded / failed
  * （failed is retryable））。
  * <p>
- * 覆盖（红阶段：失败原因 = 实现缺失——迁移方法体 UOE 抛直接 Error，
- * 或「期待 BusinessException 实抛 UOE」断言失败；绿阶段按本矩阵的
+ * 覆盖（按本矩阵的
  * 目标行为实现后原样转绿）：
  * <ul>
  *     <li>Happy：受理落位（PENDING 保持 + 流水落位）、成功回调 →
@@ -58,7 +57,7 @@ class RefundOrderUnitTest {
     }
 
     /**
-     * happy-2 退款成功回调：退款中 → 已退款（终态；B8.5 ② 订单侧置已退款
+     * happy-2 退款成功回调：退款中 → 已退款（终态；订单侧置已退款
      * 由编排推进，本方法收敛资金侧迁移）。
      */
     @Test
@@ -149,7 +148,7 @@ class RefundOrderUnitTest {
     }
 
     /**
-     * critical-3 重复成功回调幂等命中（B8.5 重复回调只生效一次）：已退款
+     * critical-3 重复成功回调幂等命中（重复回调只生效一次）：已退款
      * 再收同号成功回调 → refund_status_illegal——编排捕获后按已处理应答，
      * 不重放订单/库存编排。
      */
@@ -202,7 +201,7 @@ class RefundOrderUnitTest {
 
     /**
      * fail-2 金额不符：回调金额 ≠ 退款单金额 → amount_mismatch 拒绝
-     * （B8.5 ③ 退款金额 = 实付金额——半额/超额不入账，渠道事故显式拒绝）。
+     * （退款金额 = 实付金额——半额/超额不入账，渠道事故显式拒绝）。
      */
     @Test
     @DisplayName("金额不符：回调金额 ≠ 退款单金额 → amount_mismatch 拒绝")

@@ -5,7 +5,7 @@ import com.nona.inf.timeout.TimeoutType;
 import org.springframework.stereotype.Component;
 
 /**
- * 支付超时处理器（ORDER_PAY：待支付 30 分钟自动关单回滚，B8.3）：
+ * 支付超时处理器（ORDER_PAY：待支付 30 分钟自动关单回滚）：
  * 超时引擎到期回调的<b>薄协调</b>——按类型路由到复用入口
  * {@link CancelOrderUseCase#cancelByTimeout}，不复制业务编排。
  * <p>
@@ -16,9 +16,8 @@ import org.springframework.stereotype.Component;
  * 放置：application 层（编排协调位——处理器依赖应用用例，domain 零
  * 框架依赖红线与 inf→application 反向引用禁令共同决定本归属；
  * application→inf.timeout 接口引用已有先例）。引擎按
- * {@link TimeoutType} 路由到本处理器，构造器注入了目标用例（红阶段
- * 用例不注册 bean，本处理器同构不注册；Spring 注册随仓储接线 WU
- * 落位）。
+ * {@link TimeoutType} 路由到本处理器，构造器注入了目标用例（均已
+ * 注册为容器 bean）。
  *
  * @author nona9961
  */

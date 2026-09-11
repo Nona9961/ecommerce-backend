@@ -18,8 +18,8 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
- * 发起支付用例（B8.1 承载：POST /mall/payments {orderId}）——买家对
- * 已下单主单发起支付：主单校验（C1 历史遗留接线：支付发起前必须校验
+ * 发起支付用例（承载：POST /mall/payments {orderId}）——买家对
+ * 已下单主单发起支付：主单校验（支付发起前必须校验
  * 主单处于可支付状态）→ 支付单创建/复用 → 渠道受理。
  * <p>
  * 编排语义（主单校验→创建/复用→渠道受理，共享编排）：
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Service;
  *     <li><b>主单装载与归属</b>：按 orderId 装载主单；不存在或归属买家
  *         不符 → 按不存在呈现（{@code order.master_not_found} 404，防
  *         越权与存在性泄露）；</li>
- *     <li><b>主单状态防线（C1）</b>：主单整体状态必须为
+ *     <li><b>主单状态防线</b>：主单整体状态必须为
  *         {@code PENDING_PAYMENT}（可支付）——已支付/已取消/已关闭等
  *         非可支付状态再发起 → {@code payment.order_invalid}（400）；
  *         主单状态为派生效（子单投影派生），校验由主单装配路径读取；</li>
@@ -41,13 +41,13 @@ import org.springframework.stereotype.Service;
  *         成功，结果经回调异步到达）→ 返回受理结果（渠道流水 + 收银台
  *         标识）。</li>
  * </ol>
- * 实现纪律（绿阶段）：两入口差异仅在返回载体（AcquireResult 与
+ * 实现纪律：两入口差异仅在返回载体（AcquireResult 与
  * PaymentAcquireView 融合视图），共享编排提取为 {@link #acquirePending}
  * 私有方法（主单装载归属 → 状态防线 → 支付单创建/复用），避免逻辑复制；
  * 既有 initiatePayment 签名与行为零改动。
  * <p>
  * 装配说明：本类注册为 {@code @Service}（依赖的支付端口实现与回调链路
- * 已由 WU-55 接线，容器装配复验见上下文 AcTest）。
+ * 已接线，容器装配复验见上下文 AcTest）。
  *
  * @author nona9961
  */
@@ -84,7 +84,7 @@ public class PaymentUseCase {
     }
 
     /**
-     * 买家对主单发起支付（B8.1；编排语义见类 javadoc）。
+     * 买家对主单发起支付（编排语义见类 javadoc）。
      *
      * @param buyerId 买家账号 ID（归属校验，必填）
      * @param orderId 主订单 ID（必填）
@@ -97,7 +97,7 @@ public class PaymentUseCase {
     }
 
     /**
-     * 共享编排（两发起入口共用）：主单装载归属 → 可支付状态防线 C1 →
+     * 共享编排（两发起入口共用）：主单装载归属 → 可支付状态防线 →
      * 支付单创建/复用。
      *
      * @param buyerId 买家账号 ID（归属校验，必填）
@@ -120,17 +120,17 @@ public class PaymentUseCase {
     }
 
     /**
-     * 买家对主单发起支付并返回受理视图（B8.1 web 端点承载面，WU-59
-     * 冻结契约补充 2——POST /mall/payments 返回 InitiatePaymentResult
+     * 买家对主单发起支付并返回受理视图（web 端点承载面，
+     * 契约补充——POST /mall/payments 返回 InitiatePaymentResult
      * 的用例侧源头）。
      * <p>
      * 编排语义与 {@link #initiatePayment(Long, Long)} 完全一致（主单
-     * 装载归属 → 可支付状态防线 C1 → 支付单创建/复用 → 渠道受理）；
+     * 装载归属 → 可支付状态防线 → 支付单创建/复用 → 渠道受理）；
      * 差异 = 返回载体为融合视图 {@link PaymentAcquireView}（PendingPayment
      * + AcquireResult，8 字段——payTimeoutMillis 规则回显仅供校验/装配
      * 断言，不对外投影）。
      * <p>
-     * 实现纪律（绿阶段）：提取私有共享编排方法避免与
+     * 实现纪律：提取私有共享编排方法避免与
      * {@link #initiatePayment(Long, Long)} 逻辑复制；既有
      * initiatePayment 签名与行为零改动（既有测试零波动）。
      *

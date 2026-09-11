@@ -14,7 +14,7 @@ import java.util.Set;
  *     <li>输入非法拒绝：空列表 / null 拒绝（主单至少一个子单，空输入
  *         为装配错误）；含 {@link SubOrderStatus#PENDING_PAYMENT} 且非
  *         全部拒绝（不可达组合——下单/支付/取消均为主单整单语义，
- *         TD-10 整单支付，待支付不可能与其它状态并存）；</li>
+ *         整单支付，待支付不可能与其它状态并存）；</li>
  *     <li>旁路覆盖：全部 {@code CANCELLED} → 主单已取消；全部
  *         {@code CLOSED} → 主单已关闭；全部 {@code REFUNDED} →
  *         主单已退款；任一 {@code REFUNDING} → 主单退款中（在途资金

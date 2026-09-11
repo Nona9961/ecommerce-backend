@@ -16,10 +16,10 @@ import java.util.List;
  * CartItem 判例同构）；领域层只依赖本契约，不感知 JPA。聚合根主表以
  * 独立主键（paymentOrderId）承载身份。
  * <p>
- * 唯一约束契约（TD-11 防线一 + 一对一主单的 DB 物理面，DDL 落地时按
+ * 唯一约束契约（防线一 + 一对一主单的 DB 物理面，DDL 落地时按
  * 本 javadoc 核对）：
  * <ul>
- *     <li>{@code pay_no} 唯一（业务单号，TD-13）；</li>
+ *     <li>{@code pay_no} 唯一（业务单号）；</li>
  *     <li>{@code order_id} 唯一（支付单与主单一对一——并发同主单双创建
  *         的最终防线，正常路径由发起支付编排「复用/拒绝」判定守护）；</li>
  *     <li>{@code channel_txn_no} 唯一（防线一「重复回调插入即失败」——
@@ -28,7 +28,7 @@ import java.util.List;
  * </ul>
  * 查询契约遵循「契约演进只增不改」：本阶段冻结按 payNo 与按 orderId
  * 两装载（回调处理 / 发起支付复用判定消费面）；支付单列表/详情等查询
- * 面随消费编排 WU 扩展。
+ * 面随消费编排扩展。
  *
  * @author nona9961
  */

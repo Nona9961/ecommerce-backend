@@ -16,9 +16,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * SKU 商品摘要投影仓储实现（WU-60 冻结契约，红阶段骨架）。
+ * SKU 商品摘要投影仓储实现（冻结契约）。
  * <p>
- * 投影装配路径（绿阶段实现）：SkuJpaRepository 按 SKU ID 集合装载
+ * 投影装配路径：SkuJpaRepository 按 SKU ID 集合装载
  * SKU 行（findByIds，租户过滤由 JPA 多租户机制注入）→ 按归属商品分组
  * → ProductJpaRepository 装载商品主体（findByIds）→ 组装
  * {@link SkuProductView} 行（specSummary 直接取自 SKU 行展示列，
@@ -57,7 +57,8 @@ public class SkuProductViewRepositoryImpl implements SkuProductViewRepository {
     /**
      * {@inheritDoc}
      * <p>
-     * 红阶段占位：实现缺失（WU-60 绿阶段接线）。
+     * 一次装载/分组/组装三段式：SKU 行集合 → 商品主体集合 → 投影行
+     * （商品主体缺失的 SKU 剔除，调用方按 join 缺失 fail-closed 呈现）。
      */
     @Override
     public List<SkuProductView> listBySkuIds(Collection<Long> skuIds) {

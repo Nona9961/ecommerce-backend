@@ -12,7 +12,7 @@ import com.nona.exceptions.BusinessException;
  * <pre>
  * pending shipment → shipped → in transit → delivered
  * </pre>
- * 语义钉死（红阶段契约）：
+ * 语义钉死（契约）：
  * <ol>
  *     <li>单向相邻推进：每次迁移只能前进到下一个状态（跳级/重复/回退/
  *         终态再推进均为非法，聚合守卫拒绝）；</li>

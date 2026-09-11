@@ -151,7 +151,7 @@ public class TenantPrivilege {
      *          放行/提权作用域（如 {@link #withReadBypass(Runnable)} / {@link #elevated(Runnable)}
      *          内联于事务回调）。
      *          <p>
-     *          <b>嵌套去重（WU-49）</b>：已在提权作用域内调用（如超时引擎
+     *          <b>嵌套去重</b>：已在提权作用域内调用（如超时引擎
      *          processOne 已建提权事务后再 fire 目标用例）→ 直接同事务执行，
      *          不再开 REQUIRES_NEW 新连接（新连接对当前事务持有行锁的等待会触
      *          发 MySQL socketTimeout 级联失败）。

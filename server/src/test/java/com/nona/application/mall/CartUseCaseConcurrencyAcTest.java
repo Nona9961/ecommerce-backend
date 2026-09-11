@@ -46,7 +46,7 @@ import static org.mockito.Mockito.when;
 @SpringBootTest(properties = {
         "management.health.redis.enabled=false",
         "spring.datasource.url=jdbc:h2:mem:cart-concurrency;LOCK_TIMEOUT=30000;DB_CLOSE_DELAY=-1",
-        // 独立 H2 面的 Flyway/validate 豁免（WU-53）：MySQL 方言 V1/V1.1 迁移与 H2 mem 库
+        // 独立 H2 面的 Flyway/validate 豁免：MySQL 方言 V1/V1.1 迁移与 H2 mem 库
         // 不兼容（engine=InnoDB 等），本面回退 H2 时代 ddl-auto=create 语义——
         // 并发正确性判例不依赖 MySQL 行为，避免每轮主库上的互斥清理干扰并发窗口
         "spring.flyway.enabled=false",

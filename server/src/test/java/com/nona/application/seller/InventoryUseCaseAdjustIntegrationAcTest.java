@@ -265,7 +265,7 @@ class InventoryUseCaseAdjustIntegrationAcTest {
 
     /**
      * critical：可售恢复——此前已售罄（available=0 且 held=0）经调整
-     * 恢复可售（available>0），发布恢复事件（一期日志消费）。
+     * 恢复可售（available>0），发布恢复事件（日志消费）。
      */
     @Test
     @DisplayName("售罄后调整恢复可售：发布恢复事件")

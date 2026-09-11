@@ -14,7 +14,7 @@ import jakarta.persistence.UniqueConstraint;
  * 维度数据全局可见。
  * <p>
  * 主键 id = 退款单独立主键（Snowflake，全局唯一）。唯一约束契约（随
- * 仓储接口 javadoc 核对）：refund_no 唯一（TD-13 业务退款单号：RF +
+ * 仓储接口 javadoc 核对）：refund_no 唯一（业务退款单号：RF +
  * 日期 + snowflake 后段）；sub_order_id 唯一（一子单一生至多一个退款
  * 单——重复申请防重复的 DB 物理兜底，FAILED 可重试复用同一单）；
  * channel_refund_txn_no <b>不建</b>唯一约束（FAILED 重试受理覆盖更新
@@ -32,7 +32,7 @@ import jakarta.persistence.UniqueConstraint;
 public class RefundOrderPO extends BasePO {
 
     /**
-     * 退款单号（TD-13 业务退款单号，唯一）
+     * 退款单号（业务退款单号，唯一）
      */
     @Column(nullable = false, length = 64, name = "refund_no")
     private String refundNo;

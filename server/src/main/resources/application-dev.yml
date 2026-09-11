@@ -30,6 +30,11 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
+    # 测试面 R 迁移（R__tenant_test_tables 仅 test locations）与 dev 共库：
+    # test profile 应用后 history 含该记录，dev 启动校验报 missing（
+    # 「Detected applied migration not resolved locally」）——忽略 repeatable
+    # 类型的 missing（版本化 V 迁移仍严格校验，误删即拒启）。
+    ignore-migration-patterns: repeatable:missing
   jpa:
     hibernate:
       # schema 校验：hbm2ddl 只验不建，schema 真源 = Flyway V1（24 表 PO 映射全集）。

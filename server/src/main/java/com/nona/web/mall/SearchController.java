@@ -12,8 +12,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 商品搜索 REST 控制器（GET /mall/search，仅买家角色可访问）——WU-59
- * 冻结端点契约，形状钉死前端 WU-43 约定清单（searchApi.ts 查询参数
+ * 商品搜索 REST 控制器（GET /mall/search，仅买家角色可访问）——
+ * 冻结端点契约，形状钉死前端约定清单（searchApi.ts 查询参数
  * 逐一对应：keyword/categoryId/brandId/shopId/minPrice/maxPrice/sort/
  * pageNum/pageSize——搜索为 GET 无请求体，全部经 query 参数展开）。
  * <p>

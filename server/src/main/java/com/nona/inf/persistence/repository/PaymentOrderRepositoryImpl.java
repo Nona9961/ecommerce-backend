@@ -40,7 +40,7 @@ import java.util.Optional;
  * null，不产生孤儿处理路径）。写：唯一约束契约（pay_no / order_id /
  * channel_txn_no）由表级约束兜底，本类只做变更集驱动落库。
  * <p>
- * <b>超时 SQL 三件套（WU-55 冻结落地面，同 SubOrderRepositoryImpl
+ * <b>超时 SQL 三件套（冻结落地面，同 SubOrderRepositoryImpl
  * 设计）</b>：findDue 走 JPA 派生扫描面（领域 Instant UTC 字面转 PO
  * LocalDateTime）；claim/clear 用 JdbcTemplate 参数化条件 UPDATE——
  * claim = {@code UPDATE payment_order SET claimed = 1 WHERE id = ? AND
@@ -94,7 +94,7 @@ public class PaymentOrderRepositoryImpl
     private final JdbcTemplate jdbcTemplate;
 
     /**
-     * 留痕行转换器（从表落库消费面；红阶段冻结的构造器签名不含本
+     * 留痕行转换器（从表落库消费面；构造器签名不含本
      * 依赖——单测不触达落库路径，以字段注入补齐装配面）
      */
     @Autowired

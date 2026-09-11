@@ -32,7 +32,7 @@ public interface TenantReadIsolationAdapter {
      * 无已绑定 EntityManager（无事务/无 session）时实现应空操作——该场景由 session 打开时的
      * resolver 自查（第一重保险）覆盖。实现必须可重入、幂等。
      * <p>
-     * TODO：接口形态与能力契约偏差——四能力点（读过滤/读放行/写门禁/提权生命周期）
+     * 接口形态与能力契约偏差：四能力点（读过滤/读放行/写门禁/提权生命周期）
      * 仅由本单方法语义承载，签名未显式表达能力边界，契约靠 javadoc 而非签名保证。
      * 重构方向：能力点显式化为接口方法（与未来 MyBatis 实现形态对齐后落地）。
      */

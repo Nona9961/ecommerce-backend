@@ -23,10 +23,10 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
- * 取消订单编排用例（买家主动取消 B8.6 ① + 支付超时自动取消 B8.3，
+ * 取消订单编排用例（买家主动取消 + 支付超时自动取消，
  * 跨上下文同事务：order.cancel → inventory.rollback → payment.closePay）。
  * <p>
- * <b>编排序</b>（设计 4.3 钉死，超时调度与主动取消共用）：
+ * <b>编排序</b>（超时调度与主动取消共用）：
  * <ol>
  *     <li><b>主动取消入口（cancelByBuyer）</b>：按 orderId 装载主单——
  *         不存在或归属买家不符 → 按不存在呈现（{@code order.master_not_found}
@@ -42,10 +42,10 @@ import org.springframework.stereotype.Service;
  *         tenant=shopId 回滚 + 支付单 global 关单）在
  *         {@link TenantPrivilege#elevatedInTransaction} 内整体执行——
  *         任一失败整体回滚（方法级 {@link Transactional} 统辖），买家
- *         视角取消店铺数据必须提权（TD-12，PlaceOrder 同构）；</li>
+ *         视角取消店铺数据必须提权（PlaceOrder 同构）；</li>
  *     <li><b>订单侧推进</b>：{@link OrderFacade#cancel} 逐子单
  *         （仅待支付可取消；已支付/已发货非法迁移由聚合守卫拒绝
- *         {@code order.sub_status_illegal}——B8.6 ②③ 语义内建）+ 主单
+ *         {@code order.sub_status_illegal}——取消语义内建）+ 主单
  *         派生（全部取消 → 主单已取消）；</li>
  *     <li><b>库存回滚</b>（no stock leaks）：逐子单按订单项快照装配回滚
  *         明细（SKU + 数量，与下单预占{@code preoccupy} 的 items 装配
@@ -72,10 +72,9 @@ import org.springframework.stereotype.Service;
  * 注解不影响写门禁——CrossTenantAspect 语义），PlaceOrderUseCase
  * 先例同形。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
- * MasterOrder/SubOrder/PaymentOrder 仓储实现未接线（红阶段装配学习，
- * 同 PlaceOrderUseCase）；以构造器注入声明装配契约，Spring 注册
- * （{@code @Service}）随接线 WU 落位恢复；单测以构造器直接装配。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——订单侧端口
+ * 实现与 MasterOrder/SubOrder/PaymentOrder 仓储实现已接线；以构造器
+ * 注入声明装配契约，单测以构造器直接装配。
  *
  * @author nona9961
  */
@@ -83,8 +82,8 @@ import org.springframework.stereotype.Service;
 public class CancelOrderUseCase {
 
     /**
-     * 支付超时自动取消的原因标记（设计 4.3：超时编排 + 原因 = TIMEOUT；
-     * 消费编排 WU 复用本常量而非裸字符串）。
+     * 支付超时自动取消的原因标记（超时编排 + 原因 = TIMEOUT；
+     * 消费编排复用本常量而非裸字符串）。
      */
     public static final String REASON_TIMEOUT = "TIMEOUT";
 
@@ -159,7 +158,7 @@ public class CancelOrderUseCase {
     }
 
     /**
-     * 买家主动取消（B8.6 ①：待支付直接取消 + 库存回滚 + 支付关单）。
+     * 买家主动取消（待支付直接取消 + 库存回滚 + 支付关单）。
      * <p>
      * 归属校验先于幂等短路：主单不存在或归属买家不符 → 404 按不存在
      * 呈现（防越权与存在性泄露）；校验通过后复用共享编排
@@ -182,7 +181,7 @@ public class CancelOrderUseCase {
     }
 
     /**
-     * 支付超时自动取消（B8.3：预占库存自动回滚 + 支付关单；调度引擎/
+     * 支付超时自动取消（预占库存自动回滚 + 支付关单；调度引擎/
      * handler 复用入口，reason = {@link #REASON_TIMEOUT}）。
      * <p>
      * 系统触发无买家身份，不做归属校验；主单不存在 → 404（数据异常

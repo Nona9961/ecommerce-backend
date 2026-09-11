@@ -8,7 +8,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * 超时任务处理器：认领 → 触发 → 清除 deadline 三步编排（调度面消费入口）。
  * <p>
- * 事务边界（WU-49 修订）：三步同 <b>提权事务</b>（REQUIRES_NEW）——认领行锁
+ * 事务边界（修订）：三步同 <b>提权事务</b>（REQUIRES_NEW）——认领行锁
  * （业务表行更新）与业务写（fire 内目标用例的提权写段）同连接执行：若认领在
  * 外层普通事务而业务写在 REQUIRES_NEW 新连接，新连接对认领行锁的等待会触发
  * MySQL socketTimeout（8s）级联失败。fire 内目标用例（如 cancelByTimeout）的

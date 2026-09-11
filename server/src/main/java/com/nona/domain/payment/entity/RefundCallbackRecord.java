@@ -11,19 +11,19 @@ import java.time.Instant;
 /**
  * 退款回调留痕记录（RefundOrder 聚合从表 refund_callback_log 行，
  * rootId = refund_order 主键，append-only）：退款回调原文留痕——先留痕
- * 后判迁移（TD-11 防线三在退款面的同构承载），重复/失败/金额不符等
+ * 后判迁移（防线三在退款面的同构承载），重复/失败/金额不符等
  * 被拒回调同样留痕，对账不依赖迁移成败。
  * <p>
  * 与支付回调留痕 {@link PaymentCallbackRecord} 字段同构（类型/支付单号/
  * 退款单号/结果/渠道流水/金额/时间），独立建模不跨聚合复用——从表以
  * rootId 归属各自聚合（refund_callback_log.refund_order_id vs
  * payment_callback_log.payment_order_id），DDL 归属清晰；同构抽取属
- * 域末 Refactor 范畴（绿阶段三阶段重构可选）。
+ * 整理范畴（可选项）。
  * <p>
- * 不变量（构造守卫，全部收敛在构造路径，由绿阶段按 javadoc 契约
+ * 不变量（构造守卫，全部收敛在构造路径，按 javadoc 契约
  * 实现）：id/rootId/类型/支付单号/结果/渠道流水号/收到时间必填；金额
  * 必为正整数；类型与字段配套——REFUND 回调退款单号必填（本记录型
- * 专用于退款回调场景）。红阶段仅字段定型。
+ * 专用于退款回调场景）。仅字段定型。
  *
  * @author nona9961
  */
@@ -76,8 +76,8 @@ public class RefundCallbackRecord {
     private final Instant occurredAt;
 
     /**
-     * 创建构造器（退款回调编排留痕第一位调用；形态守卫由绿阶段实现，
-     * 红阶段仅字段定型）。
+     * 创建构造器（退款回调编排留痕第一位调用；形态守卫按 javadoc 契约
+     * 实现，仅字段定型）。
      *
      * @param id            留痕记录主键（Snowflake，必填）
      * @param refundOrderId 归属退款单 ID（rootId，必填）

@@ -28,12 +28,12 @@ import java.util.concurrent.Callable;
 import org.springframework.stereotype.Service;
 
 /**
- * 退款编排用例（买家申请退款 B8.4 + 发货超时系统退款 B9.4② + 失败重试，
+ * 退款编排用例（买家申请退款 + 发货超时系统退款 + 失败重试，
  * 跨上下文同事务：建单 → 子单退款中推进 → 渠道受理；资金侧状态由
  * RefundOrder 承载，受理与回调分离的异步模型——受理成功 ≠ 退款成功）。
  * <p>
- * <b>编排序</b>（design 4.4 钉死：一期免平台人工、系统即时受理——
- * C11-2 商家封禁不阻塞退款；发货超时复用同一建单+受理编排）：
+ * <b>编排序</b>（免平台人工、系统即时受理——
+ * 商家封禁不阻塞退款；发货超时复用同一建单+受理编排）：
  * <ol>
  *     <li><b>买家申请入口（applyRefundByBuyer）</b>：按 subOrderId 装载
  *         子单——不存在 → 按不存在呈现（{@code order.sub_not_found} 404）；
@@ -43,7 +43,7 @@ import org.springframework.stereotype.Service;
  *         同先例）；超时入口（refundByShipTimeout）为系统调度触发（无
  *         买家身份），子单不存在同样 404（数据异常防御，不静默）；</li>
  *     <li><b>幂等短路（超时入口）</b>：目标子单状态非 {@code PAID} →
- *         直接返回成功——发货超时重扫（handler 幂等，B9.4②）的常态
+ *         直接返回成功——发货超时重扫（handler 幂等）的常态
  *         路径（已关闭/退款中/其他终态均不重复建单），与
  *         {@code CancelOrderUseCase.cancelByTimeout} 幂等短路对齐；
  *         短路以<b>子单</b>为判定单元（发货超时操作单元即子单）；</li>
@@ -56,19 +56,19 @@ import org.springframework.stereotype.Service;
  *         退款单创建/受理（global + 渠道无租户）在
  *         {@link TenantPrivilege#elevatedInTransaction} 内整体执行——
  *         任一失败整体回滚（方法级 {@link Transactional} 统辖），买家
- *         视角推进店铺数据必须提权（TD-12，取消/支付回调编排同构）；</li>
+ *         视角推进店铺数据必须提权（取消/支付回调编排同构）；</li>
  *     <li><b>订单侧推进</b>：{@link OrderFacade#beginRefund}（子单
  *         {@code markRefunding}——聚合守卫仅已支付/已发货/已完成可进入
- *         退款中，B8.4① 内建；未支付/终态非法迁移拒绝
+ *         退款中，内建；未支付/终态非法迁移拒绝
  *         {@code order.sub_status_illegal}）+ 主单派生（任一退款中 →
  *         主单退款中）；发货超时入口先 {@link OrderFacade#closeByTimeout}
  *         （已支付 → 已关闭 + 主单派生——履约侧终态定格，资金侧由退款
  *         单承载，领域模型明示 ship-timeout 子单终态 CLOSED 而非
  *         REFUNDED）；</li>
  *     <li><b>建单 + 渠道受理</b>：经 {@link RefundOrderFactory#create}
- *         创建退款单（refundNo = TD-13 REF 规则；金额 = 子单实付，
- *         B8.5③ 退款金额=实付金额；shippedAtApply 快照 = 申请时子单
- *         已发货与否——C9 回补判定锚点，超时入口固定 false 货未出）→
+ *         创建退款单（refundNo = REF 单号规则；金额 = 子单实付，
+ *         退款金额=实付金额；shippedAtApply 快照 = 申请时子单
+ *         已发货与否——回补判定锚点，超时入口固定 false 货未出）→
  *         以（payNo + refundNo + 金额）构造 {@link RefundRequest} 调
  *         {@link PaymentGateway#refund}（异步回调模型：受理成功 ≠ 退款
  *         成功，结果经 REFUND 回调异步到达）——受理成功 →
@@ -93,7 +93,7 @@ import org.springframework.stereotype.Service;
  * <b>超时复用面（冻结）</b>：发货超时 handler（消费编排 WU）以
  * {@link #refundByShipTimeout} 为唯一入口复用本编排（含建单 + 受理），
  * 不感知内部细节；买家入口保留归属校验，超时入口无身份校验。已支付
- * 取消的引导衔接（B8.6②）：取消编排对已支付子单拒绝（聚合守卫
+ * 取消的引导衔接：取消编排对已支付子单拒绝（聚合守卫
  * {@code order.sub_status_illegal}）——买家退款引导经本用例
  * {@link #applyRefundByBuyer} 承接，两编排互不耦合。
  * <p>
@@ -105,11 +105,9 @@ import org.springframework.stereotype.Service;
  * 前置装载段（写段保持 elevatedInTransaction 门禁，注解不影响写门禁——
  * CrossTenantAspect 语义），CancelOrderUseCase 先例同形。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
- * MasterOrder/SubOrder/RefundOrder/PaymentOrder 仓储实现未接线（红
- * 阶段装配学习，同 CancelOrderUseCase/PaymentCallbackUseCase）；以
- * 构造器注入声明装配契约，Spring 注册（{@code @Service}）随接线 WU
- * 落位恢复；单测以构造器直接装配。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——订单侧端口
+ * 实现与 MasterOrder/SubOrder/RefundOrder/PaymentOrder 仓储实现已
+ * 接线；以构造器注入声明装配契约，单测以构造器直接装配。
  *
  * @author nona9961
  */
@@ -195,8 +193,8 @@ public class RefundUseCase {
     }
 
     /**
-     * 买家申请退款（B8.4：仅已支付/已发货/已完成可申请——聚合守卫内建；
-     * 申请即系统即时受理，一期免平台人工 C11-2）。
+     * 买家申请退款（仅已支付/已发货/已完成可申请——聚合守卫内建；
+     * 申请即系统即时受理，免平台人工）。
      *
      * @param buyerId      当前买家账号 ID（归属校验，必填）
      * @param subOrderId   子订单 ID（退款操作单元，必填）
@@ -236,13 +234,13 @@ public class RefundUseCase {
             throw new BusinessException(EcommerceBusinessCode.PAYMENT_NOT_FOUND.code(),
                     "支付单不存在（数据异常防御）", 404);
         }
-        // 发货快照必须在 beginRefund 迁移前捕获（申请时刻定点：C9 判定锚点，
+        // 发货快照必须在 beginRefund 迁移前捕获（申请时刻定点：回补判定锚点，
         // 防退款流程中子单状态演进污染判定）；子单仅已支付为未发货
         final boolean shippedAtApply = subOrder.getStatus() != SubOrderStatus.PAID;
-        // ⑤ 提权写段（TD-12：跨租户写子单 tenant=shopId 必须放行；退款单创建/受理
-        //    为 global + 渠道路径）：订单侧推进 → 建单（金额 = 子单实付 B8.5③）→
+        // ⑤ 提权写段（跨租户写子单 tenant=shopId 必须放行；退款单创建/受理
+        //    为 global + 渠道路径）：订单侧推进 → 建单（金额 = 子单实付）→
         //    渠道受理（异步回调模型：受理成功 ≠ 退款成功）→ 根行落库——编排与落库
-        //    同提权事务（TD-07 三域原子：杜绝「编排已提交而退款单未落库」的半程态）
+        //    同提权事务（三域原子：杜绝「编排已提交而退款单未落库」的半程态）
         final RefundOrder refundOrder;
         try {
             refundOrder = tenantPrivilege.elevatedInTransaction(
@@ -268,7 +266,7 @@ public class RefundUseCase {
     }
 
     /**
-     * 发货超时系统退款（B9.4②：商家逾期未发货 → 自动关单 + 退款；
+     * 发货超时系统退款（商家逾期未发货 → 自动关单 + 退款；
      * handler 复用入口，同 {@code CancelOrderUseCase.cancelByTimeout}
      * 模式——系统触发无买家身份，不做归属校验）。
      *
@@ -286,7 +284,7 @@ public class RefundUseCase {
                     "子订单不存在", 404);
         }
         // ② 幂等短路：目标子单状态非 PAID → 直接返回成功 null——发货超时重扫
-        //    （handler 幂等，B9.4②）的常态路径（已关闭/退款中/其他终态均不重复建单）
+        //    （handler 幂等）的常态路径（已关闭/退款中/其他终态均不重复建单）
         if (subOrder.getStatus() != SubOrderStatus.PAID) {
             return null;
         }
@@ -304,7 +302,7 @@ public class RefundUseCase {
         }
         // ⑤ 提权写段：发货超时入口与买家申请分支互斥——closeByTimeout（已支付 →
         //    已关闭，履约侧终态定格）→ 建单（shippedAtApply 固定 false：超时前提
-        //    即货未出）→ 渠道受理 → 根行落库——编排与落库同提权事务（TD-07 三域
+        //    即货未出）→ 渠道受理 → 根行落库——编排与落库同提权事务（三域
         //    原子：杜绝「编排已提交而退款单未落库」的半程态）
         final RefundOrder refundOrder;
         try {
@@ -368,7 +366,7 @@ public class RefundUseCase {
         // ④ 提权段内以同一 refundNo 重新受理（渠道幂等键「同一退款单只受理一次」，
         //    重试复用单号）：受理成功 → recordAcceptance（FAILED → 退款中归位 +
         //    新流水覆盖）；受理拒绝 → 保持 FAILED（无动作）→ 根行落库与受理同
-        //    提权事务（TD-07 三域原子：杜绝「受理已提交而落库未达成」的半程态）
+        //    提权事务（三域原子：杜绝「受理已提交而落库未达成」的半程态）
         try {
             tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
                 final RefundResult result = gateway.refund(new RefundRequest(

@@ -20,22 +20,20 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 支付单域契约钉测试（红阶段：纯只读断言——枚举值/业务码码值/
- * 签名面，不触碰实现逻辑即绿；UOE 断言锁定红态防半实现回潮）。
+ * 支付单域契约钉测试（纯只读断言——枚举值/业务码码值/
+ * 签名面，不触碰实现逻辑即绿；UOE 断言锁定防半实现回潮）。
  * <p>
- * <b>绿阶段改造记录（上报主会话）</b>：契约-8/9 原为红阶段「UOE 自证
- * 防线」（断言实现缺失的红态），与绿阶段实现互斥——红报告第七节
- * 「11 个契约钉测试保持绿」的预设要求绿阶段将其改造为<b>绿态防线</b>：
+ * <b>防线形态</b>：契约-8/9 为绿态防线——
  * 断言实现已落地（任何方法回退成 UOE 或行为偏离即红），用例数与
  * 防线意图不变（防半实现回潮的反向形态）。
  * <p>
  * 其余用例为「设计物契约」的成立（非实现）：枚举常量、业务码、签名
- * 声明是红阶段契约本体，实现不触碰。
+ * 声明是契约本体，实现不触碰。
  */
 class PaymentContractUnitTest {
 
     // ------------------------------------------------------------------
-    // 状态值定型（设计契约：design §5.5 状态机 4 值，本阶段冻结）
+    // 状态值定型（设计契约：状态机 4 值，本阶段冻结）
     // ------------------------------------------------------------------
 
     @Test
@@ -128,12 +126,12 @@ class PaymentContractUnitTest {
     }
 
     // ------------------------------------------------------------------
-    // UOE 红阶段防线（防半实现回潮：任何实现一旦落地即转红）
+    // 绿态防线（防半实现回潮：任何实现一旦回退即红）
     // ------------------------------------------------------------------
 
     @Test
     @DisplayName("契约-8 绿态防线：聚合全部读取/迁移方法已实现落地（防回退 UOE/行为偏离）")
-    void aggregateMethodsAreImplementedInGreenPhase() {
+    void aggregateMethodsAreImplementedContract() {
         final PaymentOrder order = new PaymentOrder(
                 1L, "PAY202609070001", 100L, 10000L, "MOCK",
                 Instant.parse("2026-09-07T10:00:00Z"));
@@ -169,7 +167,7 @@ class PaymentContractUnitTest {
 
     @Test
     @DisplayName("契约-9 绿态防线：留痕实体读取方法全部实现落地（防回退 UOE/行为偏离）")
-    void callbackRecordMethodsAreImplementedInGreenPhase() {
+    void callbackRecordMethodsAreImplementedContract() {
         final PaymentCallbackRecord record = new PaymentCallbackRecord(
                 11L, 1L, com.nona.domain.payment.ports.CallbackType.PAY, "PAY202609070001",
                 null, com.nona.domain.payment.ports.GatewayResult.SUCCESS,

@@ -5,7 +5,7 @@ import java.util.List;
 
 /**
  * SKU 商品摘要投影仓储（catalog 域只读投影契约，商家库存列表/调整
- * 回显的 catalog join 面，WU-60 冻结；实现在基础设施层）。
+ * 回显的 catalog join 面，契约冻结；实现在基础设施层）。
  * <p>
  * 语义约束：
  * <ul>

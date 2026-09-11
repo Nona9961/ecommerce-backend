@@ -36,14 +36,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 买家交易 REST 控制器（路由前缀 /mall：estimate/orders/payments/
- * sub-orders/refunds，仅买家角色可访问）——WU-59 冻结端点契约，
- * 形状钉死前端 WU-44 约定清单（tradingApi.ts 10 端点逐名对应）。
+ * sub-orders/refunds，仅买家角色可访问）——端点契约冻结，
+ * 形状钉死前端约定清单（tradingApi.ts 10 端点逐名对应）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托用例，不承载业务逻辑；
  * 当前买家账号 ID 从跟踪上下文取（认证过滤器已填充，买家维度由此
  * 锚定——TenantContextAccessor 先例 AddressController 同构）。
  * <p>
- * 委托面（绿阶段接线完成）：下单/取消/支付/确认收货/退款端点委托
+ * 委托面（接线完成）：下单/取消/支付/确认收货/退款端点委托
  * 既有用例；列表/详情/运单委托 {@link BuyerOrderQuery}；发起支付返回
  * 受理视图投影（InitiatePaymentResult 7 字段 = PaymentAcquireView 8
  * 字段去 payTimeoutMillis 规则回显）；退款视图投影（RefundOrderView →

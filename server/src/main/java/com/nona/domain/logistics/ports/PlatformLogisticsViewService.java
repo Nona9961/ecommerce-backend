@@ -4,7 +4,7 @@ import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 
 /**
- * 平台物流视图查询服务（logistics 域查询契约，纯读意图，P5.1 平台运营
+ * 平台物流视图查询服务（logistics 域查询契约，纯读意图，平台运营
  * 物流监督列表）。
  * <p>
  * 语义约束：
@@ -19,7 +19,7 @@ import com.nona.api.common.PageResult;
  *         （不产生运单），只有行单元落在子单才可能呈现该异常标记；</li>
  *     <li><b>筛选</b>：店铺（shopId 等值）与履约状态（子单状态值，
  *         null = 不过滤，强类型枚举无非法值面）；</li>
- *     <li><b>排序</b>：固定按子单创建时间倒序（最新下单在前），一期
+ *     <li><b>排序</b>：固定按子单创建时间倒序（最新下单在前），当前
  *         不提供排序参数（YAGNI）；</li>
  *     <li><b>分页</b>：api 层 {@link PageQuery} 构造器归一化（页码从
  *         1 起、默认 10、上限 100）；</li>
@@ -29,7 +29,7 @@ import com.nona.api.common.PageResult;
  *     <li><b>事务</b>：读路径不开写事务；无账号形态（平台监督不涉
  *         写后自读窗口，无路由覆盖面）。</li>
  * </ul>
- * 接口签名契约冻结：II 期若迁移物流仓（外部仓配系统）读，仅换实现
+ * 接口签名契约冻结：后续若迁移物流仓（外部仓配系统）读，仅换实现
  * 不换调用方。
  *
  * @author nona9961

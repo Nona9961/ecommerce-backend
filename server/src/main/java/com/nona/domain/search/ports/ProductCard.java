@@ -1,7 +1,7 @@
 package com.nona.domain.search.ports;
 
 /**
- * 搜索结果卡片（搜索列表项视图，跨域聚合读模型的一期冻结字段）。
+ * 搜索结果卡片（搜索列表项视图，跨域聚合读模型的冻结字段）。
  * <p>
  * 字段语义：
  * <ul>
@@ -13,7 +13,7 @@ package com.nona.domain.search.ports;
  *         由实现 LEFT JOIN + 兜底呈现）；</li>
  *     <li>brandName：品牌名（无品牌商品为 null，卡片按无品牌呈现）。</li>
  * </ul>
- * 有货态不设字段：视图侧已过滤可售汇总 &gt; 0 的商品（TD-08：结果卡片仅
+ * 有货态不设字段：视图侧已过滤可售汇总 &gt; 0 的商品（结果卡片仅
  * 粗粒度有货态，视图过滤保证进入本载体的商品必有货）。
  *
  * @param productId     商品 ID

@@ -142,7 +142,7 @@ public class InventoryReservationService {
      * fail-closed）→ 仓储条件更新（受影响行数 0 即已售不足拒绝）→
      * 聚合方法做领域前置守卫并内嵌构造 REFUND_RESTORE 流水 → 流水
      * append-only 追加 → 事件统一触发点判定（售罄/恢复——回补路径
-     * 接入统一触发点，售罄态 SKU 经回补恢复可售发布恢复事件，一期
+     * 接入统一触发点，售罄态 SKU 经回补恢复可售发布恢复事件，
      * 日志消费）。
      *
      * @param orderId  订单 ID（必填；幂等键组成）

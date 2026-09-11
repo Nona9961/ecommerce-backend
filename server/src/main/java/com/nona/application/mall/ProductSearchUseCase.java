@@ -14,9 +14,9 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * 买家商品搜索用例（GET /mall/search 承载，WU-59 冻结——形状钉死
- * 前端 WU-43 约定清单，复用 search 域 ProductSearchService（WU-41，
- * PG 镜像读，只读无写路径）。
+ * 买家商品搜索用例（GET /mall/search 承载，端点契约冻结——形状钉死
+ * 前端约定清单，复用 search 域 ProductSearchService（PG 镜像读，
+ * 只读无写路径）。
  * <p>
  * 编排语义：
  * <ol>
@@ -29,7 +29,7 @@ import java.util.List;
  *         契约冻结不移位）；空白 keyword 等价 null（不限定，服务侧归约）；</li>
  *     <li><b>写后自读窗口</b>：uid = 当前登录买家账号 ID（web 层从
  *         认证上下文取；写者本人 3s 窗口主库读，其余走 PG 读库——与
- *         WU-41 冻结契约一致）；</li>
+ *         冻结契约一致）；</li>
  *     <li><b>形状投影</b>：ProductCard（domain，分）→ SearchCard
  *         （api 契约）逐字段原样投影（minPrice/salesTotal 分直传）；
  *         空搜索返回空列表 + total 0（fail-safe，非 null）。</li>

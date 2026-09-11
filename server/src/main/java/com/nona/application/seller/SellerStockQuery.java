@@ -21,12 +21,11 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
- * 商家端库存查询用例（seller 面，WU-60 冻结；Spring 注册 @Service
- * 随绿阶段与实现同提交——55 同款纪律，避免无中间态启动）。
+ * 商家端库存查询用例（seller 面，契约冻结；Spring 注册 {@code @Service}）。
  * <p>
  * 编排语义（只读查询 + catalog join 装配面）：
  * <ul>
- *     <li><b>库存分页</b>：消费 55 冻结的 {@code InventoryItemRepository
+ *     <li><b>库存分页</b>：消费冻结的 {@code InventoryItemRepository
  *         .listPaged/count}（当前店铺全集、主键升序、租户过滤 fail-closed）；
  *         行映射 = InventoryItem → {@link StockView}，商品维度展示字段
  *         （productId/productName/specSummary）经 catalog 投影仓储
@@ -42,7 +41,7 @@ import org.springframework.stereotype.Service;
  *         新流水在前）映射 {@link InventoryLogView}（类型枚举名、三态
  *         快照透传、createTime = 审计时间字符串投影）；</li>
  *     <li><b>分页参数</b>：offset 换算经 {@link PageQuery#offset()}，
- *         非法分页参数守卫由仓储契约承载（55 冻结，本层透传）。</li>
+ *         非法分页参数守卫由仓储契约承载（冻结，本层透传）。</li>
  * </ul>
  *
  * @author nona9961

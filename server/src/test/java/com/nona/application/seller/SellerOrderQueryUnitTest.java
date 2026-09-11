@@ -41,21 +41,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 商家端本店订单查询用例场景测试（S11 订单列表 / S12 订单详情+运单概要，
- * WU-60 红阶段契约；卖方查询面 = WU-47 约定端点形状）。
+ * 商家端本店订单查询用例场景测试（订单列表 / 订单详情+运单概要，
+ * 契约；卖方查询面 = 约定端点形状）。
  * <p>
  * 覆盖：happy——列表分页（状态多值过滤透传 + 分页参数换算 + 行字段
  * 逐字段锁定）与详情（已发货运单概要 / 地址金额订单项快照字段逐字段
  * 锁定）；critical——statuses null/空 = 全量透传、空页、未发货运单概要
  * null、运单引用悬挂容忍 null、首项主图 null 与多订单项 itemCount；
- * fail——子单不存在与跨店请求（S2.3/G1.1 锚点：A 店铺查询 B 店铺子单）
+ * fail——子单不存在与跨店请求（A 店铺查询 B 店铺子单）
  * 按不存在呈现 404、仓储参数守卫异常透传。
  * <p>
  * 依赖装配：SubOrderRepository / WaybillRepository 全 mock（@BeforeEach
  * 重建被测用例，mock 桩逐用例布置全部被使用）；时间断言 = fixture
  * createTime 透传投影（LocalDateTime.toString()，FavoriteItem 先例），
- * 零绝对魔法日期。红阶段失败原因 = 实现缺失（用例方法体 UOE），而非
- * 语法/装配错误。
+ * 零绝对魔法日期。
  *
  * @author nona9961
  */
@@ -83,7 +82,7 @@ class SellerOrderQueryUnitTest {
     private WaybillRepository waybillRepository;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）
+     * 被测用例（依赖全 mock，setUp 装配）
      */
     private SellerOrderQuery query;
 
@@ -358,11 +357,11 @@ class SellerOrderQueryUnitTest {
     }
 
     /**
-     * fail-2 跨店 fail-closed（S2.3/G1.1 锚点）：B 店铺查询 A 店铺子单 →
+     * fail-2 跨店 fail-closed：B 店铺查询 A 店铺子单 →
      * 404 按不存在呈现（归属不泄露；显式归属二道校验——租户过滤兜底先行）。
      */
     @Test
-    @DisplayName("跨店 fail-closed：B 店铺查询 A 店铺子单 → 404（S2.3/G1.1 锚点）")
+    @DisplayName("跨店 fail-closed：B 店铺查询 A 店铺子单 → 404")
     void detail_crossShop_404() {
         when(subOrderRepository.getByID(SUB_A)).thenReturn(subShippedA());
 

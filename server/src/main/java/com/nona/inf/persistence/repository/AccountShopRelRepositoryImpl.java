@@ -128,7 +128,7 @@ public class AccountShopRelRepositoryImpl
     /**
      * {@inheritDoc}
      * <p>
-     * 直接委托 JPA 定向查询（按店铺 ID 反查归属账号，一期每商家一行）。
+     * 直接委托 JPA 定向查询（按店铺 ID 反查归属账号，当前每商家一行）。
      */
     @Override
     public Optional<AccountShopRel> findByShopId(Long shopId) {

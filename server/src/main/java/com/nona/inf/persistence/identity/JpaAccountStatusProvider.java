@@ -19,8 +19,8 @@ import java.util.Optional;
  * <p>
  * 单表语义（领域模型：账号聚合仅承载凭证与状态）：账号只有一张表，type 列区分买家/商家——
  * 角色由 type 定向推导（BUYER → [BUYER]、SELLER → [SELLER]），商家附带读取
- * account_shop_rel 填充 shopIds（一期恒 1 个）；<b>平台运营（admin）账号
- * 无落点</b>（RBAC 属 Phase-II），本表不存在 ADMIN 类型，portal=ADMIN
+ * account_shop_rel 填充 shopIds（当前恒 1 个）；<b>平台运营（admin）账号
+ * 无落点</b>（RBAC 扩展位），本表不存在 ADMIN 类型，portal=ADMIN
  * 的查询定向不到任何账号 → 返回空（过滤器按未认证处理，fail-closed）。
  *
  * @author nona9961
@@ -54,7 +54,7 @@ public class JpaAccountStatusProvider implements AccountStatusProvider {
      * {@inheritDoc}
      * <p>
      * 按 uid 查单表：角色由 type 定向推导（BUYER/SELLER），商家账号附带读取
-     * account_shop_rel 填充 shopIds（一期恒 1 个）；域状态映射安全链状态
+     * account_shop_rel 填充 shopIds（当前恒 1 个）；域状态映射安全链状态
      * （NORMAL → ACTIVE、BANNED → BANNED）；查无账号返回空（fail-closed，
      * 含 portal=ADMIN 场景——单表无 admin 落点）。
      */

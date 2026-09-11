@@ -23,7 +23,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 入驻审核写后埋点契约测试（写用例完成时标记账号，搜索入口据此 3s
- * 主库重路由——TD-08）。
+ * 主库重路由）。
  * <p>
  * 契约：审核通过（商家侧数据生效：申请迁移/开店/绑定同事务）成功后
  * 必须调用 {@link LastWriteMarker#markWrite(Long)} 标记<b>商家账号</b>
@@ -32,8 +32,7 @@ import static org.mockito.Mockito.verify;
  * <p>
  * 全部经真实仓储链路（H2 + 真实 Repository，fixture 同
  * OnboardingApprovalOrchestrationIntegrationAcTest）；缓存与埋点以 mock
- * 隔离真实 Redis。红阶段：approve 埋点待落实（markWrite 未被调用），
- * 失败原因 = 实现缺失（埋点缺失）。
+ * 隔离真实 Redis。
  *
  * @author nona9961
  */

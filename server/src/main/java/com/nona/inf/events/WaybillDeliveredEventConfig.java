@@ -17,9 +17,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
  * 保持租户视角与追踪基线重建。装饰器不提供自动配置（脚手架约定：每个
  * 异步执行器必须显式接入）。
  * <p>
- * 装配声明：红阶段行为方法体未接线（UOE）——执行器 bean 装配随绿阶段
- * 实现恢复（与 {@code OrderCompletedEventConfig} / {@code InventoryEventConfig}
- * 同构：虚拟线程调度 + 线程名前缀 {@code waybill-event-}）。
+ * 装配声明：执行器 bean 已装配（与 {@code OrderCompletedEventConfig} /
+ * {@code InventoryEventConfig} 同构：虚拟线程调度 + 线程名前缀
+ * {@code waybill-event-}）。
  *
  * @author nona9961
  */

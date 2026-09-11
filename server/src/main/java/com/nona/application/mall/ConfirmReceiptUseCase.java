@@ -19,11 +19,11 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
- * 确认收货编排用例（买家主动确认收货 B9.3 + 收货超时自动完成 B9.4③，
+ * 确认收货编排用例（买家主动确认收货 + 收货超时自动完成，
  * 订单侧推进：子单已发货 → 已完成 + 主单派生；完成事件 OrderCompleted
- * 从本编排发布——子单完成粒度，AFTER_COMMIT 投递，一期日志型消费）。
+ * 从本编排发布——子单完成粒度，AFTER_COMMIT 投递，现行为日志型消费）。
  * <p>
- * <b>编排序</b>（设计 4.3 钉死：收货超时 = 超时调度自动确认，与
+ * <b>编排序</b>（收货超时 = 超时调度自动确认，与
  * 买家主动确认共用同一完成迁移——聚合侧 {@code markCompleted} 触发源
  * 由调用方语义区分，与取消编排「买家 + 超时共用共享编排」同构）：
  * <ol>
@@ -36,7 +36,7 @@ import org.springframework.stereotype.Service;
  *         子单不存在同样 404（数据异常防御，不静默）；</li>
  *     <li><b>幂等短路</b>：目标子单状态已为 {@code COMPLETED}（完成
  *         迁移终态）→ 直接返回成功且<b>不重复发布完成事件</b>——
- *         买家确认重放与超时调度重扫（handler 幂等，B9.4③）的常态
+ *         买家确认重放与超时调度重扫（handler 幂等）的常态
  *         路径；短路以<b>子单</b>为判定单元（操作单元即子单，主单
  *         COMPLETED 是全部子单完成的派生结果，子单判定自然覆盖主单
  *         级幂等面）；短路的并发窗口由数据库层兜底（与取消编排对齐）；</li>
@@ -45,9 +45,9 @@ import org.springframework.stereotype.Service;
  *     <li><b>提权写段</b>：跨租户写（子单 tenant=shopId 状态推进）在
  *         {@link TenantPrivilege#elevatedInTransaction} 内整体执行——
  *         任一失败整体回滚（方法级 {@link Transactional} 统辖），买家
- *         视角推进店铺数据必须提权（TD-12，取消编排同构）；</li>
+ *         视角推进店铺数据必须提权（取消编排同构）；</li>
  *     <li><b>订单侧推进</b>：{@link OrderFacade#autoComplete}（签名
- *         WU-27 冻结，双入口共用）——子单 {@code markCompleted}（仅
+ *         冻结，双入口共用）——子单 {@code markCompleted}（仅
  *         已发货可完成；未发货直接完成/重复完成为非法迁移，聚合守卫
  *         拒绝 {@code order.sub_status_illegal}）+ 主单按全部子单投影
  *         派生（全部完成 → 主单已完成）；</li>
@@ -56,8 +56,8 @@ import org.springframework.stereotype.Service;
  *         迁移，最后一个子单完成的发布时点即主单完成时点；多子单
  *         部分完成属正常中间态，消费方按子单处理结算/评价资格）；
  *         事件载荷 = subOrderId + masterOrderId（最小定位引用）；
- *         AFTER_COMMIT 异步监听（TD-07），一期日志型消费，Phase-II
- *         消费位（评价资格授予/结算入账/通知/统计）stub，发布失败
+ *         AFTER_COMMIT 异步监听，现行为日志型消费，消费位（评价
+ *         资格授予/结算入账/通知/统计）由对应域独立接入，发布失败
  *         同事务回滚（事件不承担可靠性职责，可靠面由同库事务承担）。</li>
  * </ol>
  * <b>超时复用面（冻结）</b>：收货超时 handler（消费编排 WU）以
@@ -73,10 +73,9 @@ import org.springframework.stereotype.Service;
  * 前置装载段（写段保持 elevatedInTransaction 门禁，注解不影响写门禁——
  * CrossTenantAspect 语义），CancelOrderUseCase 先例同形。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——订单侧端口实现与
- * MasterOrder/SubOrder 仓储实现未接线（红阶段装配学习，同
- * CancelOrderUseCase）；以构造器注入声明装配契约，Spring 注册
- * （{@code @Service}）随接线 WU 落位恢复；单测以构造器直接装配。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——订单侧端口
+ * 实现与 MasterOrder/SubOrder 仓储实现已接线；以构造器注入声明装配
+ * 契约，单测以构造器直接装配。
  *
  * @author nona9961
  */
@@ -138,7 +137,7 @@ public class ConfirmReceiptUseCase {
     }
 
     /**
-     * 买家主动确认收货（B9.3：已发货子单 → 已完成 + 主单派生 + 完成
+     * 买家主动确认收货（已发货子单 → 已完成 + 主单派生 + 完成
      * 事件发布）。
      * <p>
      * 归属校验先于幂等短路：子单不存在 → 404（order.sub_not_found —
@@ -167,7 +166,7 @@ public class ConfirmReceiptUseCase {
     }
 
     /**
-     * 收货超时自动完成（B9.4③：逾期未确认自动确认收货完成；调度引擎/
+     * 收货超时自动完成（逾期未确认自动确认收货完成；调度引擎/
      * handler 唯一复用入口，含完成事件发布）。
      * <p>
      * 系统触发无买家身份，不做归属校验；子单不存在 → 404（数据异常
@@ -193,7 +192,7 @@ public class ConfirmReceiptUseCase {
      * <p>
      * 幂等短路以入口装载的目标子单状态判定（操作单元即子单；已完成
      * 子单直返成功）；短路成功后不触发任何写动作且<b>不重复发布
-     * 完成事件</b>（幂等重放/超时重扫不产生重复事件，Phase-II 消费
+     * 完成事件</b>（幂等重放/超时重扫不产生重复事件，消费
      * 方不收重复完成）。
      *
      * @param subOrderId    目标子订单 ID

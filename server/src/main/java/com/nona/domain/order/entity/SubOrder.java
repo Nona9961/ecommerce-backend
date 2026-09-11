@@ -11,7 +11,7 @@ import java.util.List;
  * 子订单聚合根（sub_order 主表行，tenant=shopId）：店铺维度的履约单元——
  * 店铺归属/运费与金额/独立状态机/订单项集合/地址快照/运单引用。
  * <p>
- * 持久化形态（红阶段契约声明）：sub_order 主表（tenant=shopId，独立
+ * 持久化形态（契约声明）：sub_order 主表（tenant=shopId，独立
  * Snowflake 主键；master_order_id 业务关联列非唯一；sub_order_no 唯一；
  * waybill_id 可空；地址/金额为冗余快照列）+ order_item 从表（以
  * sub_order_id（rootId）关联，快照列 + ext JSON 列，(sub_order, sku)
@@ -21,7 +21,7 @@ import java.util.List;
  * <p>
  * 关键不变量（全部收敛在本聚合内，包外无直接字段变更路径）：
  * <ol>
- *     <li>快照冻结（B7.6）：地址/金额/订单项（价格/名称/图片/规格）创建
+ *     <li>快照冻结：地址/金额/订单项（价格/名称/图片/规格）创建
  *         时固化——全部字段 final 或不可变视图，无任何变更路径；</li>
  *     <li>金额自洽：商品总额 == Σ 订单项小计（恒等式收敛在构造路径，与
  *         {@link AmountDetail} 自身恒等式（实付=商品+运费-优惠）叠加
@@ -36,7 +36,7 @@ import java.util.List;
  *         （order.sub_shop_mismatch；fail-closed 的租户过滤先行，
  *         本校验为提权/装配路径第二道防线）；</li>
  *     <li>运单引用：waybill_id 发货时定型（markShipped 必填），关单/
- *         完成/退款不改变（一子单一在途运单的语义由物流域 WU 承载）。</li>
+ *         完成/退款不改变（一子单一在途运单的语义由物流域承载）。</li>
  * </ol>
  * 创建必须经由 {@link com.nona.domain.order.factory.SubOrderFactory}
  * + {@link com.nona.util.IDUtils#generateID()}；装载（仓储重建）走
@@ -62,7 +62,7 @@ public class SubOrder {
     private final Long shopId;
 
     /**
-     * 子订单号（TD-13 业务单号，sub_order_no 唯一）
+     * 子订单号（业务单号，sub_order_no 唯一）
      */
     private final String subOrderNo;
 
@@ -93,7 +93,7 @@ public class SubOrder {
 
     /**
      * 下单时间（主表 create_time 审计时间，LocalDateTime 墙钟语义；
-     * 冻结契约补充：卖家订单列表/详情展示面（WU-47 约定 createTime
+     * 冻结契约补充：卖家订单列表/详情展示面（约定 createTime
      * 字段必填）消费）。
      * <p>
      * 取值纪律（MerchantApplication 先例同构）：创建路径新建实例为 null
@@ -331,8 +331,8 @@ public class SubOrder {
     /**
      * 完成推进：已发货 → 已完成。
      * <p>
-     * 触发源由调用方语义区分：确认收货（B9.3）与收货超时自动完成
-     * （B9.4③）共用同一迁移（状态机语义相同，无需在聚合内区分）；
+     * 触发源由调用方语义区分：确认收货与收货超时自动完成共用同一
+     * 迁移（状态机语义相同，无需在聚合内区分）；
      * 未发货直接完成/重复完成为非法迁移拒绝。
      */
     public void markCompleted() {
@@ -344,12 +344,12 @@ public class SubOrder {
     }
 
     /**
-     * 待支付直接取消：待支付 → 已取消（B8.6 ①）。
+     * 待支付直接取消：待支付 → 已取消。
      * <p>
-     * 支付超时自动取消（B8.3）共用同一迁移（触发语义在调用方：超时引擎/
+     * 支付超时自动取消共用同一迁移（触发语义在调用方：超时引擎/
      * 主动取消编排）；库存回滚由编排在应用层事务内同批完成（本方法仅
      * 推进子单状态）。已支付/已发货取消为非法迁移拒绝（已支付走退款，
-     * 已发货不可取消 B8.6 ③）。
+     * 已发货不可取消）。
      */
     public void cancel() {
         if (status != SubOrderStatus.PENDING_PAYMENT) {
@@ -360,8 +360,8 @@ public class SubOrder {
     }
 
     /**
-     * 退款申请推进：已支付/已发货/已完成 → 退款中（B8.4，全阶段可退
-     * D1-o4）。未支付退款为非法迁移拒绝；重复申请（退款中再退款）为
+     * 退款申请推进：已支付/已发货/已完成 → 退款中（全阶段可退）。
+     * 未支付退款为非法迁移拒绝；重复申请（退款中再退款）为
      * 非法迁移拒绝（退款单防重的语义由支付域承载）。
      */
     public void markRefunding() {
@@ -374,7 +374,7 @@ public class SubOrder {
     }
 
     /**
-     * 退款成功推进：退款中 → 已退款（终态；B8.5 订单置已退款）。
+     * 退款成功推进：退款中 → 已退款（终态；订单置已退款）。
      * 未退款中状态推进为非法迁移拒绝（支付域回调幂等防线先行）。
      */
     public void markRefunded() {
@@ -386,7 +386,7 @@ public class SubOrder {
     }
 
     /**
-     * 发货超时自动关单：已支付 → 已关闭（终态；B9.4②）。
+     * 发货超时自动关单：已支付 → 已关闭（终态）。
      * <p>
      * 语义：商家逾期未发货（已支付未发货子单）自动关单，退款编排由
      * 调用方（超时引擎用例）部署——资金侧状态由退款单状态机承载，

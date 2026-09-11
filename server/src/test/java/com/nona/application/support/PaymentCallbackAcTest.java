@@ -18,9 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 支付回调编排真实链验收测试（WU-033 支付回调编排：真实链装配面——PO
- * 映射/租户过滤/上下文传播逐一验证；WU-49 按 javadoc 启用契约改写，
- * 红阶段降级声明已解除——WU-55 PaymentOrder/SubOrder/MasterOrder 仓储
+ * 支付回调编排真实链验收测试（支付回调编排：真实链装配面——PO
+ * 映射/租户过滤/上下文传播逐一验证；按 javadoc 启用契约改写——
+ * PaymentOrder/SubOrder/MasterOrder 仓储
  * JPA 实现 + PaymentCallbackUseCase/OrderFacadeImpl Spring 注册落地）。
  * <p>
  * 装配面清单见红设计报告 §四 6 条——真实事务三域原子（成功全链 + 失败

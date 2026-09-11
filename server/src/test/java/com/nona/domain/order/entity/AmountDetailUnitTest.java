@@ -13,9 +13,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 金额明细单元测试：TD-09 金额细分——商品总额/运费/实付字段读取、金额
+ * 金额明细单元测试：金额细分——商品总额/运费/实付字段读取、金额
  * 恒等式（实付 == 商品总额 + 运费 - 优惠）与非负守卫、discount 预留位
- * 契约（一期恒 0、VO 层不拒非零），以及 B7.6 快照冻结语义（构造后不可变）。
+ * 契约（当前恒 0、VO 层不拒非零），以及快照冻结语义（构造后不可变）。
  *
  * @author nona9961
  */
@@ -49,7 +49,7 @@ class AmountDetailUnitTest {
     /**
      * boundary：discount 预留位可构造——恒等式成立即通过（优惠超过
      * 商品+运费时等式成立但实付为负，由非负断言拦截；本用例恰好非负，
-     * 验证二期优惠叠加在 VO 层不需改结构）。
+     * 验证优惠叠加在 VO 层不需改结构）。
      */
     @Test
     @DisplayName("discount 预留位可构造")

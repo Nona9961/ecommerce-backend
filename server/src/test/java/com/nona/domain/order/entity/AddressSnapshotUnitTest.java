@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 收货地址快照单元测试：TD-09 地址快照列模型——六段必填校验收敛
- * （收件人/电话/省市区/详细地址）、原样保留语义，以及 B7.6 快照冻结
+ * 收货地址快照单元测试：地址快照列模型——六段必填校验收敛
+ * （收件人/电话/省市区/详细地址）、原样保留语义，以及快照冻结
  * 语义（构造后不可变：字段全 final、无任何变更路径）。
  *
  * @author nona9961

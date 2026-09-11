@@ -27,7 +27,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 收货超时数据端口场景测试（ORDER_RECEIVE：sub_order 表 deadline 列承载
- * 面，红阶段契约）：
+ * 面，契约）：
  * <p>
  * happy——findDue 经仓储超时扫描面按预期态 SHIPPED 过滤并映射候选
  * （id=sub_order 主键 / target=子订单 ID，id 与 target 同值）；claim 条件性
@@ -35,9 +35,9 @@ import static org.mockito.Mockito.when;
  * 不满足 false 透传、findDue 无候选空列表、目标参数透传正确；fail——仓储
  * 扫描/认领异常原样透传。
  * <p>
- * 装配纪律：端口为普通类（红阶段不注册 Spring，WU-032 决策 9 降级先例），
- * 构造器注入仓储 mock（@BeforeEach 重建，禁字段初始化）；桩纪律——红阶段
- * 以 lenient 豁免 UOE 挡道面，绿实现后已按本文件断言面逐桩收回精确桩
+ * 装配纪律：端口为普通类（既定装配纪律：
+ * 构造器注入仓储 mock（@BeforeEach 重建，禁字段初始化）；桩纪律——
+ * 以 lenient 豁免 UOE 挡道面，已按本文件断言面逐桩收回精确桩
  * （零豁免）。
  * <p>
  * 时间断言：now 为测试固定时刻（fixture 输入，非断言魔法值）；全部断言

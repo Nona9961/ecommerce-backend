@@ -16,17 +16,17 @@ import com.nona.exceptions.BusinessException;
  *     │        → cancelled
  *     └ closeByTimeout（发货超时自动关单，退款编排由调用方部署——
  *            资金侧状态由退款单承载）→ closed
- * paid/shipped/completed → refunding → refunded（全阶段可退，B8.4）
+ * paid/shipped/completed → refunding → refunded（全阶段可退）
  * shipped → completed（确认收货 / 收货超时自动完成共用同一迁移，
  *           触发源由调用方语义区分）
  * </pre>
- * 语义钉死（红阶段契约）：
+ * 语义钉死（契约）：
  * <ol>
  *     <li>迁移单向不可逆——cancelled / refunded / closed 为终态，无任何
  *         出边（待支付可取消除外，取消除外语义 = 仅 pending 可入 cancelled）；</li>
  *     <li>paid / shipped / completed 可进入 refunding（主动退款申请）；</li>
  *     <li>closed 仅由 paid 进入（发货超时针对已支付未发货子单；支付超时
- *         走 cancelled，与领域模型 M9 一致）；</li>
+ *         走 cancelled，与领域模型一致）；</li>
  *     <li>重复迁移（如重复支付、重复发货、重复完成）为非法，聚合守卫拒绝。</li>
  * </ol>
  *

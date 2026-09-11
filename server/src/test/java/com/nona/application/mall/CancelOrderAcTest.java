@@ -16,9 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 取消编排真实链验收测试（WU-29 取消与超时关单：真实链装配面——PO
- * 映射/租户过滤/上下文传播逐一验证；WU-49 按 javadoc 启用契约改写，
- * 红阶段降级声明已解除——WU-55 三交易域仓储实现 + 用例/端口实现
+ * 取消编排真实链验收测试（取消与超时关单：真实链装配面——PO
+ * 映射/租户过滤/上下文传播逐一验证；按 javadoc 启用契约改写——
+ * 三交易域仓储实现 + 用例/端口实现
  * Spring 注册落地）。
  * <p>
  * 装配面清单见红设计报告 §装配面清单——真实事务三联动 / 提权事务边界

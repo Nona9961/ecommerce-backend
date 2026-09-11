@@ -30,8 +30,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 订单门面退款面契约测试（OrderFacade 退款面三成员：beginRefund /
- * completeRefund / closeByTimeout——红阶段 UOE 契约，绿阶段按本矩阵
- * 目标行为实现后原样转绿）。
+ * completeRefund / closeByTimeout——按目标行为契约书写）。
  * <p>
  * 覆盖：happy——申请推进（退款中 + 主单派生）、成功推进（已退款 + 主单
  * 派生）、超时关单推进（已关闭 + 主单派生）；critical——已关闭子单退款
@@ -147,7 +146,7 @@ class OrderFacadeRefundContractUnitTest {
     }
 
     /**
-     * happy-3 closeByTimeout：目标子单 已支付 → 已关闭（终态，B9.4②）+
+     * happy-3 closeByTimeout：目标子单 已支付 → 已关闭（终态）+
      * 主单按子单投影派生（全部已关闭 → 主单已关闭）+ 同批保存。
      */
     @Test
@@ -209,7 +208,7 @@ class OrderFacadeRefundContractUnitTest {
 
     /**
      * fail-2 未支付子单申请退款：聚合守卫拒绝（order.sub_status_illegal，
-     * B8.4① 仅已支付/已发货/已完成可申请）。
+     * 仅已支付/已发货/已完成可申请）。
      */
     @Test
     @DisplayName("待支付子单申请退款：聚合守卫拒绝 sub_status_illegal")

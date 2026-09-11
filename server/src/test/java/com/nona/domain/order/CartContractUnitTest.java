@@ -23,7 +23,7 @@ import java.lang.reflect.Method;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 购物车契约钉测试（红阶段即绿）：领域行为签名、仓储契约、用例签名、
+ * 购物车契约钉测试（契约即绿）：领域行为签名、仓储契约、用例签名、
  * 错误码取值与 REST 端点路由的冻结校验——任一签名/路由漂移在此立即暴露
  * （防契约演进破坏消费方）。
  *

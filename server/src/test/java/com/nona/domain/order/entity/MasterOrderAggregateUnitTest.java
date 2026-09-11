@@ -16,11 +16,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 主订单聚合结构测试：装配形态（创建/装载）、金额恒等式（主单金额摘要
- * 四维 == Σ 子单金额投影四维，TD-10）、B7.6 快照冻结语义（订单号/买家/
+ * 四维 == Σ 子单金额投影四维）、快照冻结语义（订单号/买家/
  * 地址/金额摘要/子单引用集合创建后不可变）、整体状态派生入口。
  * <p>
- * 结构守卫（构造路径）红阶段即实现（设计物），本类用例绿；整体状态派生
- * （deriveStatus）属 UOE 红（见 MasterOrderStatusDeriverUnitTest 红矩阵）。
+ * 结构守卫（构造路径）为设计物实现（本类用例绿）；整体状态派生
+ * （deriveStatus）契约见 MasterOrderStatusDeriverUnitTest 矩阵。
  *
  * @author nona9961
  */

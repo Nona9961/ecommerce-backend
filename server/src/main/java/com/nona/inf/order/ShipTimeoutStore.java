@@ -17,17 +17,17 @@ import org.springframework.stereotype.Component;
  * 引擎是纯调度器不感知业务表：本端口承载发货超时的「预期态」业务
  * 知识（status = PAID——已支付未发货）与 deadline 列（timeout_at /
  * timeout_type / claimed）在 sub_order 表上的认领/清除 SQL 语义，
- * 数据面经 {@link SubOrderRepository} 新增契约落地（扫描面
+ * 数据面经 {@link SubOrderRepository} 已落地的契约（扫描面
  * findDueByStatusAndTimeoutAtBefore / claimTimeout / clearTimeoutDeadline，
- * 实现归属仓储接线 WU，本阶段不写实现）。
+ * 仓储实现侧 SQL 承载）。
  * <p>
  * 元素装配：引擎扫描时以本端口 {@link #type()}（ORDER_SHIP）路由——
  * 候选 id = sub_order 主键（认领/清除定位键），target = 子订单 ID
  * （发货超时退款的操作单元子单；id 与 target 同值）。
  * <p>
  * 放置：业务侧包（inf.order，与引擎包 inf.timeout 分离——引擎零业务
- * 知识，业务知识收敛于业务侧）；红阶段不注册 bean（依赖的仓储实现
- * 未接线，注册即装配错误，WU-032 决策 9 先例降级），构造器直接装配。
+ * 知识，业务知识收敛于业务侧）；本类注册为容器 bean（{@code @Component}）
+ * ——依赖的仓储实现已接线，构造器注入声明装配契约。
  *
  * @author nona9961
  */

@@ -7,12 +7,12 @@ import com.nona.domain.search.ports.SearchCriteria;
 import java.util.List;
 
 /**
- * 搜索主库通道仓储（写后窗口命中时的强一致搜索查询，TD-08 主库覆盖）。
+ * 搜索主库通道仓储（写后窗口命中时的强一致搜索查询，主库覆盖）。
  * <p>
  * 与 {@link ProductSearchViewRepository}（replica 通道）的协作语义：
  * <ul>
  *     <li><b>同构查询</b>：同一 SQL 构建（共享 support 类/statement
- *         构建，绿阶段抽取，行为等价既有 replica SQL）——窗口路由只换
+ *         构建，行为等价 replica SQL）——窗口路由只换
  *         执行通道，查询语义零漂移；</li>
  *     <li><b>查询物</b>：主库侧 {@code product_search_view}（部署位
  *         DDL 基于源表的实时视图，与 PG 镜像视图同构同规则——视图 DDL

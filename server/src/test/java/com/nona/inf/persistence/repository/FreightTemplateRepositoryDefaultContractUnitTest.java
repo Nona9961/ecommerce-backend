@@ -22,9 +22,7 @@ import static org.mockito.Mockito.when;
  * 默认运费模板仓储定位契约测试：findDefaultByShopId 按店铺定位默认
  * 模板行（is_default=true；租户过滤 fail-closed）——回退锚点查询通道。
  * <p>
- * 红阶段：findDefaultByShopId 实现为签名冻结（UnsupportedOperationException）
- * ——本用例红于实现缺失；绿阶段实现（JPA 派生查询 + 转换器透传）后
- * 转绿。
+ * 实现已落地（JPA 派生查询 + 转换器透传）。
  */
 class FreightTemplateRepositoryDefaultContractUnitTest {
 

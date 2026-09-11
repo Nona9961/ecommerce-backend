@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 商品搜索服务实现（一期契约=搜索编排；写后窗口路由）。
+ * 商品搜索服务实现（搜索编排；写后窗口路由）。
  * <p>
  * 编排职责：
  * <ol>
@@ -31,7 +31,7 @@ import java.util.List;
  * 数据源语义：无账号形态（既有 2 参契约）静态走 replica 通道（PG 镜像视图，
  * 白名单装配无运行时路由）；账号形态在写后窗口命中时本次查询
  * 走主库通道（{@link PrimaryProductSearchViewRepository}，read-your-writes），
- * 其余照常走 replica——「类型路由为主、窗口为次」的账号级受控覆盖（TD-08）。
+ * 其余照常走 replica——「类型路由为主、窗口为次」的账号级受控覆盖。
  *
  * @author nona9961
  */
@@ -45,7 +45,7 @@ public class ProductSearchServiceImpl implements ProductSearchService {
     private final ProductSearchViewRepository productSearchViewRepository;
 
     /**
-     * 搜索主库通道仓储（写后窗口命中时的强一致查询，TD-08 主库覆盖）。
+     * 搜索主库通道仓储（写后窗口命中时的强一致查询，主库覆盖）。
      */
     private final PrimaryProductSearchViewRepository primaryProductSearchViewRepository;
 
@@ -77,8 +77,8 @@ public class ProductSearchServiceImpl implements ProductSearchService {
      * 编排语义：校验/归约同等（同 {@link #search(SearchCriteria, PageQuery)}）
      * → 账号级窗口判定（null 账号不判定）→ 窗口内走主库通道（强一致，
      * 写者可见刚写入内容）、否则走 replica 通道；两通道同构查询语义，
-     * 路由只换执行通道——「类型路由为主、窗口为次」的账号级受控覆盖
-     * （TD-08），路由决策唯一出现在本入口。
+     * 路由只换执行通道——「类型路由为主、窗口为次」的账号级受控覆盖；
+     * 路由决策唯一出现在本入口。
      */
     @Override
     public PageResult<ProductCard> search(SearchCriteria criteria, PageQuery page, Long uid) {

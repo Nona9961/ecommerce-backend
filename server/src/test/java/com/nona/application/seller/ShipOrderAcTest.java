@@ -17,11 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 商家发货编排真实链验收测试（S10.3：真实链装配面——PO 映射/租户过滤/
- * 上下文传播/仓储链路逐一验证；WU-49 按 javadoc 启用契约改写，红阶段
- * 降级声明已解除——WU-55 五交易域仓储实现 + 用例/门面 Spring 注册落地）。
+ * 商家发货编排真实链验收测试（真实链装配面——PO 映射/租户过滤/
+ * 上下文传播/仓储链路逐一验证；按 javadoc 启用契约改写——
+ * 五交易域仓储实现 + 用例/门面 Spring 注册落地）。
  * <p>
- * 装配面清单见红设计报告 §装配面清单——真实事务发货 / 运单从表落库 /
+ * 装配面清单：真实事务发货 / 运单从表落库 /
  * 在途唯一约束 / 提权事务边界 / 租户过滤兜底 / 仓储降级规则。
  * <p>
  * 数据准备：测试内 JDBC 直插（测试库 ecommerce_test，固定 ID 段

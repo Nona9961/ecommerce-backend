@@ -17,22 +17,20 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.lang.reflect.Method;
 
 /**
- * 调度装配验收测试（WU-56 调度激活隔离面：mock 测不到的装配面——使能
+ * 调度装配验收测试（调度激活隔离面：mock 测不到的装配面——使能
  * 开关键 / 扫描入口注解 / 门控不激活语义 / 手触入口可用性，-Pfull 验收面）。
  * <p>
- * <b>冻结策略（implement.md §1.15 WU-56 / wu-wiring-plan.md）</b>：
+ * <b>冻结策略</b>：
  * {@code @EnableScheduling} 挂 {@code @ConditionalOnProperty(nona.scheduling.enabled,
- * havingValue=true)} 门控配置类——dev=true（WU-49 demo 真实滴答）、
+ * havingValue=true)} 门控配置类——dev=true（demo 真实滴答）、
  * test=false（测试手触 processOne/scanAndAdvance，调度装配经本类
  * 断言）。本类语义绑定 test profile（运行命令模板统一带
- * {@code -Dspring.profiles.active=test}，D5 决策）；若在 dev 下误跑，
+ * {@code -Dspring.profiles.active=test}）；若在 dev 下误跑，
  * 使能键断言将如实失败（dev 语义即 true，见 application-dev.yml）。
  * <p>
- * <b>红阶段交付</b>：本类以真实断言体交付（红阶段即红）——当前
- * {@code nona.scheduling.enabled} 键在 application-test.yml 缺失、
- * {@code LogisticsSimulator#scanAndAdvance} 尚未挂 {@code @Scheduled}，
- * 两断言驱动绿阶段交付（yml 落键 + 注解挂点）；余下断言为已落地面
- * （WU-39/55）的回归锚点（test=false 下无 @EnableScheduling 激活、
+ * <b>交付形态</b>：本类以真实断言体交付——使能开关键与扫描入口
+ * 注解两断言钉死调度隔离契约（yml 落键 + 注解挂点）；余下断言为已落地面
+ * 的回归锚点（test=false 下无 @EnableScheduling 激活、
  * 手触入口 bean 可用），恒绿以防护误激活与装配回退。
  * <p>
  * 与真推进面分工：本类只断言「调度装配不激活 + 入口可注入可调用」；
@@ -59,15 +57,15 @@ class SchedulingAssemblyAcTest {
     private Environment environment;
 
     /**
-     * 物流模拟推进器（WU-55 已注册 4 参装配构造——手触入口注入面）
+     * 物流模拟推进器（已注册 4 参装配构造——手触入口注入面）
      */
     @Autowired
     private LogisticsSimulator logisticsSimulator;
 
     /**
      * 冒烟-1 使能开关键：test 侧 {@code nona.scheduling.enabled}=false
-     * （<b>红态要点</b>：当前 application-test.yml 尚无该键，解析值 null
-     * ≠ "false" 即红；绿阶段落键转绿）。false 语义 = 全局调度关闭（两个
+     * （键缺失 = 配置漂移，@ConditionalOnProperty 默认不激活）。false
+     * 语义 = 全局调度关闭（两个
      * 引擎的 @Scheduled 都不生效），冒烟手触不受调度线程干扰。
      */
     @Test
@@ -77,14 +75,14 @@ class SchedulingAssemblyAcTest {
                 environment.getProperty("nona.scheduling.enabled"),
                 "application-test.yml 必须显式声明 nona.scheduling.enabled=false"
                         + "（调度激活隔离策略，缺失时 @ConditionalOnProperty 默认不激活"
-                        + "——键缺失属配置漂移，红阶段即红以驱动落键）");
+                        + "——键缺失属配置漂移，断言即红以驱动落键）");
     }
 
     /**
      * 冒烟-2 模拟器扫描入口调度注解：{@code LogisticsSimulator#scanAndAdvance}
      * 必须挂 {@code @Scheduled}，扫描周期配置键按类 javadoc 冻结为
-     * {@code ${nona.logistics.scan-interval-ms:5000}}（<b>红态要点</b>：
-     * 当前注解未挂，isAnnotationPresent=false 即红；绿阶段挂点转绿）。
+     * {@code ${nona.logistics.scan-interval-ms:5000}}（注解缺失即红，
+     * 防护挂点回退）。
      */
     @Test
     @DisplayName("冒烟-2 调度挂点：scanAndAdvance 带 @Scheduled（scan-interval-ms 键）")
@@ -99,7 +97,7 @@ class SchedulingAssemblyAcTest {
     }
 
     /**
-     * 冒烟-3 超时引擎扫描入口调度注解（回归锚点，恒绿）：WU-39 已冻结
+     * 冒烟-3 超时引擎扫描入口调度注解（回归锚点，恒绿）：既定冻结
      * {@code TimeoutScheduler#scan} 的 {@code @Scheduled}（30 秒周期）——
      * 本断言防装配回归（误删注解/改键名）。调度是否生效仍由冒烟-4 的
      * 门控不激活断言把关。
@@ -138,7 +136,7 @@ class SchedulingAssemblyAcTest {
     /**
      * 冒烟-5 手触入口可用性（回归锚点，恒绿）：调度关闭不消灭入口——
      * 推进器与处理器仍以普通 bean 存在、扫描入口方法签名可经反射调用
-     * （冒烟以直接方法调用代替调度触发，契约见 wu-wiring-plan.md）。不
+     * （冒烟以直接方法调用代替调度触发，契约见调度隔离策略）。不
      * 执行 {@code scanAndAdvance} 函数体：运单为 global 表（无租户过滤
      * 面），共享真库上裸调会推进全部到期在途运单（副作用面归
      * LogisticsSimulatorSmokeTest 以自有数据锚定，别处不裸调）。
@@ -147,7 +145,7 @@ class SchedulingAssemblyAcTest {
     @DisplayName("冒烟-5 手触入口：simulator/processor bean 就位 + 扫描入口可调用")
     void manualTrigger_entriesAvailable() throws NoSuchMethodException {
         Assertions.assertNotNull(logisticsSimulator,
-                "LogisticsSimulator bean 必须存在（WU-55 4 参装配构造注册面）");
+                "LogisticsSimulator bean 必须存在（4 参装配构造注册面）");
         Assertions.assertNotNull(applicationContext.getBean(TimeoutTaskProcessor.class),
                 "TimeoutTaskProcessor bean 必须存在（超时引擎手触入口）");
         Assertions.assertNotNull(LogisticsSimulator.class.getMethod("scanAndAdvance"),

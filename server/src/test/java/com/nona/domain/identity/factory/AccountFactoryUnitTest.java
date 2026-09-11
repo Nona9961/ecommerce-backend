@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 账号工厂单元测试：聚合创建与不变量初始化（单表 account 语义，type 区分买家/商家）。
  * <p>
- * 成功路径依赖凭证端口（Phase 1 骨架态，预期红）；纯拼装路径（类型校验、关联创建）
- * 随工厂真实实现转绿。平台运营（admin）账号无落点（RBAC 属 Phase-II），
+ * 成功路径依赖凭证端口；纯拼装路径（类型校验、关联创建）
+ * 随工厂真实实现转绿。平台运营（admin）账号无落点（RBAC 扩展位），
  * 工厂不接受 ADMIN——AccountType 枚举本身不存在该值，编译期即排除。
  */
 class AccountFactoryUnitTest {
@@ -26,13 +26,12 @@ class AccountFactoryUnitTest {
     private final AccountFactory factory = new AccountFactory();
 
     /**
-     * 凭证端口（骨架：hash 抛 UnsupportedOperationException，成功路径预期红）
+     * 凭证端口（BCrypt 落地）
      */
     private final BcryptCredentialService credentialService = new BcryptCredentialService();
 
     /**
-     * 创建买家账号（BUYER）：ID 生成、用户名/摘要/初始状态/类型正确
-     * （Phase 1 红：凭证端口未落地）。
+     * 创建买家账号（BUYER）：ID 生成、用户名/摘要/初始状态/类型正确。
      */
     @Test
     void createAccount_buyer_initializesAccount() {
@@ -46,7 +45,7 @@ class AccountFactoryUnitTest {
     }
 
     /**
-     * 创建商家账号（SELLER）：type 正确写入聚合（Phase 1 红：凭证端口未落地）。
+     * 创建商家账号（SELLER）：type 正确写入聚合。
      */
     @Test
     void createAccount_seller_setsType() {

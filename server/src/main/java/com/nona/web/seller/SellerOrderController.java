@@ -25,8 +25,8 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * 商家端本店订单 REST 控制器（/seller/orders…，SELLER 角色，WU-60 接线
- * WU-47 约定端点）：列表（状态筛选 + 分页）/ 详情（含运单概要）/ 发货
+ * 商家端本店订单 REST 控制器（/seller/orders…，SELLER 角色，接线段
+ * 约定端点）：列表（状态筛选 + 分页）/ 详情（含运单概要）/ 发货
  * （物流公司+运单号 → 运单创建 + 子单发货推进同事务）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380 / 查询参数显式解析）+ 委托

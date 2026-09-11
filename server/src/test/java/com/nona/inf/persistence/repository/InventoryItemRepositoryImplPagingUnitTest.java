@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 库存仓储分页扩展场景测试（WU-55 红阶段契约：WU-47 商家库存列表页
+ * 库存仓储分页扩展场景测试（契约：商家库存列表页
  * 查询面——店铺全集分页 + 计数；InventoryLogRepository.listBySkuPaged
  * 同款形状）。
  * <p>
@@ -39,7 +39,7 @@ import static org.mockito.Mockito.when;
  * 装配纪律：依赖全 mock（租户过滤面由 Hibernate 过滤器在容器内承载，
  * 本单元层以 mock 呈现——跨店 fail-closed 的真库断言归冒烟清单），
  * 无容器；被测仓储 @BeforeEach 重建；行为桩 lenient 豁免 UOE 挡道
- * （绿实现后收回精确桩）。
+ * （按需收回精确桩）。
  *
  * @author nona9961
  */

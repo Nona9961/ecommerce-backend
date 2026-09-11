@@ -140,7 +140,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * 组装 Spring Security 认证与跟踪作用域：角色写入 SecurityContext 与
      * 当前跟踪作用域持有者（{@link TrackingContext#scope()}，TrackingFilter
-     * 已先行绑定）；商家账号（shopIds 非空）取当前店铺（一期恒 1 个）写入
+     * 已先行绑定）；商家账号（shopIds 非空）取当前店铺（当前恒 1 个）写入
      * 持有者 tenantID（归属已在登录路径校验，运行期不再校验）。
      *
      * @param uid     用户 ID

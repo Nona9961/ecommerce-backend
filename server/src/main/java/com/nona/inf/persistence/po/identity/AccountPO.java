@@ -16,7 +16,7 @@ import jakarta.persistence.UniqueConstraint;
  * <p>
  * 领域模型：Account 聚合只有一个（仅承载凭证与状态），持久化即一张表——不存在需要分表的字段差异
  * （地址/收藏/店铺/入驻均为独立聚合）；平台运营（admin）账号不在本表承载
- * （RBAC 落点在 Phase-II，portal=ADMIN 查询定向不到即拒绝，fail-closed）。
+ * （portal=ADMIN 查询定向不到即拒绝，fail-closed）。
  *
  * @author nona9961
  */

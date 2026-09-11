@@ -111,8 +111,8 @@ public interface InventoryItemRepository extends BaseRepository<Long, InventoryI
     int casRestore(Long itemId, int quantity);
 
     /**
-     * 店铺库存分页列表（WU-47 商家库存列表页查询面「服务端分页」，
-     * WU-55 冻结；全量分页无业务键过滤——当前店铺全集，租户过滤
+     * 店铺库存分页列表（商家库存列表页查询面「服务端分页」，
+     * 契约冻结；全量分页无业务键过滤——当前店铺全集，租户过滤
      * fail-closed：跨店铺请求按空呈现，归属不泄露）。
      * <p>
      * 排序冻结：主键 ID 升序（创建加载序，稳定分页——与仓储从表装载

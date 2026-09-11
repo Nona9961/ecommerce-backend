@@ -24,7 +24,7 @@ public interface AccountShopRelRepository extends BaseRepository<Long, AccountSh
     List<AccountShopRel> findByAccountId(Long accountId);
 
     /**
-     * 按店铺 ID 反查关联（店铺归属账号定位；一期每商家一行有且仅有一家
+     * 按店铺 ID 反查关联（店铺归属账号定位；每商家一行有且仅有一家
      * 店，shop_id 至多一行关联——搜索写后窗口等消费方按归属账号打标）。
      *
      * @param shopId 店铺 ID

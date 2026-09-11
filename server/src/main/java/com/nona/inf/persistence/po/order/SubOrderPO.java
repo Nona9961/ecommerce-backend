@@ -18,7 +18,7 @@ import jakarta.persistence.UniqueConstraint;
  * <p>
  * 主键 id = 子订单独立主键（Snowflake，全局唯一）；master_order_id
  * 业务关联列（非唯一，主单下 N 子单）；sub_order_no 业务单号唯一
- * （TD-13：SUB + 日期 + snowflake 后段）；地址六列 + 金额四列为快照
+ * （SUB + 日期 + snowflake 后段）；地址六列 + 金额四列为快照
  * 冗余列（创建时定型）；status 履约状态（状态机迁移收敛在聚合方法）；
  * waybill_id 发货定型（可空，跨域引用 ID）。从表 order_item 以
  * sub_order_id（rootId）关联。
@@ -28,7 +28,7 @@ import jakarta.persistence.UniqueConstraint;
  * timeout_type（超时类型 ORDER_SHIP/ORDER_RECEIVE，可空）、claimed
  * （认领位，非空默认 false）——(status, timeout_at) 复合索引为履约
  * 超时引擎扫描面（findDueByStatusAndTimeoutAtBefore 契约）。三列由
- * 仓储实现侧 SQL（WU-55 claim/clear 落地面）维护，转换器不负责。
+ * 仓储实现侧 SQL（claim/clear 落地面）维护，转换器不负责。
  *
  * @author nona9961
  */
@@ -54,7 +54,7 @@ public class SubOrderPO extends TenantScopedBasePO {
     private Long shopId;
 
     /**
-     * 子订单号（TD-13 业务单号，唯一）
+     * 子订单号（业务单号，唯一）
      */
     @Column(nullable = false, length = 64, name = "sub_order_no")
     private String subOrderNo;

@@ -40,10 +40,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 约束兜底并发冲突（DB 级防线，独立并发测试见
  * ProductEditVersionUniqueConstraintAcTest）。
  * <p>
- * 红状态说明：本文件断言机械装配（版本行插行/分页/租户过滤/级联）——
- * 红阶段为绿底座；版本链领域语义（保存留痕/版本号递增分配/回滚编排）
+ * 本文件断言机械装配（版本行插行/分页/租户过滤/级联）——
+ * 为绿底座；版本链领域语义（保存留痕/版本号递增分配/回滚编排）
  * 由 ProductVersionUseCaseIntegrationAcTest / ProductRestoreContentUnitTest
- * 以红因承载（UnsupportedOperationException）。
+ * 承载。
  */
 @SpringBootTest(properties = "management.health.redis.enabled=false")
 class ProductEditVersionRepositoryIntegrationAcTest {

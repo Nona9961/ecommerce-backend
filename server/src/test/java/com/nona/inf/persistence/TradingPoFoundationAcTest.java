@@ -46,15 +46,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * ——每表 repository.save + findById/反查往返断言（列映射 / 唯一约束
  * 生效 / 从表关联 / 租户 fail-closed），mock 测不到的装配面逐一验证。
  * <p>
- * <b>启用契约（红阶段声明）</b>：本类在红阶段以真实断言体交付（非
+ * <b>启用契约</b>：本类以真实断言体交付（非
  * fail() 桩）——V2__trading_tables.sql 落库前运行 = Spring 上下文
- * validate 失败（9 表缺失）整体红 = 契约闸门生效；绿阶段 V2 落库 +
+ * validate 失败（9 表缺失）整体红 = 契约闸门生效；V2 落库 +
  * 9 个新 PO 进入 validate 校验面后本类直接转绿，无需改方法体。
- * 运行命令模板见红阶段报告（localtunnel + ECOM_DB_PASSWORD +
+ * 运行命令模板见验收说明（localtunnel + ECOM_DB_PASSWORD +
  * -Pfull -Dtest=TradingPoFoundationAcTest）。
  * <p>
  * 装配纪律：注入面 = 9 个 JPA 接口（Spring Data 自动实现，无领域仓储
- * bean——WU-55 前 5 个 DifferRepository 实现不存在）；租户面以
+ * bean——既定装配面）；租户面以
  * {@link TrackingContext#withScope} 建立（Hibernate {@code @TenantId}
  * 过滤器对 JPA 直查同样生效——写自动注入 tenant_id、读 fail-closed）；
  * 唯一约束冲突断言依赖 SimpleJpaRepository 独立事务（save 出栈即

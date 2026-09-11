@@ -54,7 +54,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * 下单编排用例（买家端）：结算试算 + 提交订单（跨上下文同事务，应用层
- * 用例协议 + TD-10 拆单）。
+ * 用例协议 + 拆单）。
  * <p>
  * <b>提交订单编排序</b>：
  * <ol>
@@ -63,39 +63,39 @@ import org.springframework.stereotype.Service;
  *         {@code order.buyer_not_purchasable}（403，防账号存在性泄露）；
  *         地址—addressId 必须属于当前买家地址簿，否则
  *         {@code order.address_not_found}（404）；</li>
- *     <li><b>购物车勾选集消费</b>（B7.2 服务端权威）：请求 skuIds 为空
+ *     <li><b>购物车勾选集消费</b>（服务端权威）：请求 skuIds 为空
  *         → {@code order.place_empty}（400）；逐 SKU 必须在勾选集中
  *         （含未勾选/已移除），否则 {@code order.item_not_checked}（409，
  *         回购物车重新选择）——判定顺序：空请求先拒绝（400），再逐条
  *         归属判定（409），勾选集为空且请求非空时逐条落到 409（与
  *         测试判例一致，不设「求交为空」独立分支）；数量/商品/店铺
- *         分组锚点全部取自勾选条目；立即购买（B7.1）由前端先行加购
+ *         分组锚点全部取自勾选条目；立即购买由前端先行加购
  *         （默认勾选）进入同一路径；</li>
  *     <li><b>商品前置读</b>：逐条目 {@link ProductQueryFacade#getBuyerView}
  *         （非在售统一 404 透传，不泄露生命周期）→ SKU 归属断言
  *         （{@code order.place_sku_invalid}，400）→ 快照装配
- *         （名称/单价/数量/小计/主图/规格摘要，B7.6② 固化）；</li>
- *     <li><b>试算</b>（O2/B7.4）：按店铺分组（锚点 = 商品视图 shopId，
+ *         （名称/单价/数量/小计/主图/规格摘要，快照固化）；</li>
+ *     <li><b>试算</b>（运费与金额明细展示）：按店铺分组（锚点 = 商品视图 shopId，
  *         服务端权威）→ 每店以商品额/总件数调用
  *         {@link FreightCalculator#calculate}（三规则；模板概要自买家
  *         视图装配——主会话裁定：视图 freight 恒非空，消费面无 null
  *         分支）→ 每店 {@code AmountDetail} 装配（商品额 = Σ 条目
  *         小计；实付 = 商品额 + 运费，优惠位恒 0）→ 主单四维 = Σ 子单
  *         （金额恒等式由聚合构造校验，order.amount_mismatch 兜底）；</li>
- *     <li><b>跨租户写段</b>（TD-12：买家家视角写店数据必须提权）：
+ *     <li><b>跨租户写段</b>（买家家视角写店数据必须提权）：
  *         {@link TenantPrivilege#elevatedInTransaction} 内——逐店
  *         {@link SubOrderFactory} 创建子单（内存，拿子单 ID 与金额投
  *         影）→ 逐店 {@link InventoryFacade#preoccupy}(subOrderId,
  *         items)（CAS + (order_id, sku, type) 幂等；<b>任一 SKU 预占
- *         失败 → 整单失败</b>，TD-10 同事务回滚，报错指明不足项）→ 全
+ *         失败 → 整单失败</b>，同事务回滚，报错指明不足项）→ 全
  *         部成功后才落库：保存子单（tenant=shopId，PO 显式
  *         setTenantID(shopId)）→ {@link MasterOrderFactory} 创建主单
  *         （global）→ 保存主单；</li>
  *     <li><b>支付单创建 + 超时注册</b>：{@link PaymentPort#createPendingPayment}
  *         （主单 ID，实付金额，支付超时时长 = {@link TimeoutType#ORDER_PAY}
- *         规则值——订单域 D1-o1 30 分钟，契约本阶段冻结、实现接线归
- *         支付域落位）→ 待支付支付单 + deadline（B8.3）；</li>
- *     <li><b>返回订单视图</b>：主单号/子单列表（含店铺名，B7.5③）/
+ *         规则值——订单域 30 分钟，契约本阶段冻结、实现接线归
+ *         支付域落位）→ 待支付支付单 + deadline；</li>
+ *     <li><b>返回订单视图</b>：主单号/子单列表（含店铺名）/
  *         支付单（payNo/金额/截止时间）。</li>
  * </ol>
  * 事务边界 = 用例方法（方法级 {@link Transactional} 统辖读段与写段，
@@ -107,16 +107,14 @@ import org.springframework.stereotype.Service;
  * 租户纪律：读放行（{@code @CrossTenant}）与写放行（elevatedInTransaction
  * + 显式 setTenantID）只出现在本类（application 层），domain 内不放行。
  * <p>
- * 业务单号（TD-13：前缀 + 日期 + snowflake 后段）：主单
+ * 业务单号（前缀 + 日期 + snowflake 后段）：主单
  * {@code ORD+yyyyMMdd+id}、子单 {@code SO+yyyyMMdd+id}（子单号前缀
  * SO 与主单 ORD/支付单 PAY 同构，唯一性由 snowflake 保证；生成逻辑
  * 收敛在本类）。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——跨上下文写依赖
- * （MasterOrder/SubOrder 仓储实现）与支付端口（PaymentPort 实现）未
- * 接线，注册会导致全量集成测试 context 启动失败（红阶段装配学习）；
- * 以构造器注入声明装配契约，Spring 注册（{@code @Service}）随接线
- * WU 落位恢复；单测以构造器直接装配（见用例测试）。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——跨上下文写依赖
+ * （MasterOrder/SubOrder 仓储实现）与支付端口（PaymentPort 实现）已
+ * 接线；以构造器注入声明装配契约，单测以构造器直接装配（见用例测试）。
  *
  * @author nona9961
  */
@@ -189,7 +187,7 @@ public class PlaceOrderUseCase {
     private final TransactionTemplate transactionTemplate;
 
     /**
-     * 业务单号日期段格式（TD-13：前缀 + 日期 + snowflake 后段）。
+     * 业务单号日期段格式（前缀 + 日期 + snowflake 后段）。
      */
     private static final DateTimeFormatter ORDER_DATE = DateTimeFormatter.ofPattern("yyyyMMdd");
 
@@ -299,11 +297,11 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 结算试算（O2/B7.4 运费与金额明细展示；与下单同源消费勾选集 + 同一
+     * 结算试算（运费与金额明细展示；与下单同源消费勾选集 + 同一
      * 校验（买家/条目/在售/归属），纯读不落库、不开写事务）。
      *
      * @param buyerId 当前买家账号 ID（认证上下文，与 placeOrder 对称——
-     *                红阶段签名缺陷裁定后补入，web 层解析身份传入）
+     *                web 层解析身份传入）
      * @param request 试算请求（购物车勾选条目 SKU 集合）
      * @return 按店铺分组的金额明细（含运费与合计）
      */
@@ -363,7 +361,7 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 购物车勾选集消费（B7.2 服务端权威）：请求 skuIds 为空 → 400
+     * 购物车勾选集消费（服务端权威）：请求 skuIds 为空 → 400
      * {@code order.place_empty}；逐 SKU 必须在购物车勾选集中（未勾选/
      * 已移除均拒绝）→ 409 {@code order.item_not_checked}（判定顺序：
      * 空请求先拒、再逐条判定，勾选集为空且请求非空逐条落 409——按测试
@@ -395,7 +393,7 @@ public class PlaceOrderUseCase {
 
     /**
      * 商品前置读 + 试算装配：逐勾选条目读买家商品视图（非在售 404 透传）
-     * → SKU 归属断言（400）→ 快照装配（B7.6②）→ 按商品视图 shopId 分组
+     * → SKU 归属断言（400）→ 快照装配（快照固化）→ 按商品视图 shopId 分组
      * （服务端权威，决策表 #6）→ 每店按模板三规则计算运费（模板概要自
      * 视图装配；恒非空契约，无 null 分支）→ 每店金额明细。
      *
@@ -451,7 +449,7 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 运费模板参数装配：买家视图运费概要（恒非空契约——WU-51 未绑定
+     * 运费模板参数装配：买家视图运费概要（恒非空契约——未绑定
      * 回退店铺默认模板，本消费面无 null 分支）→ 模板实体（规则枚举
      * 与计费参数校验收敛在模板构造）。
      *
@@ -496,7 +494,7 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 地址详情 → 订单地址快照（下单时固化，B7.6）。
+     * 地址详情 → 订单地址快照（下单时固化）。
      *
      * @param address 归属当前买家的地址
      * @return 地址快照
@@ -508,7 +506,7 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 主订单号（TD-13：ORD + 日期 + snowflake 后段，order_no 唯一）。
+     * 主订单号（ORD + 日期 + snowflake 后段，order_no 唯一）。
      *
      * @return 订单号
      */
@@ -527,7 +525,7 @@ public class PlaceOrderUseCase {
     }
 
     /**
-     * 订单提交结果视图装配：主单号/子单列表（含店铺名 B7.5③）/支付单
+     * 订单提交结果视图装配：主单号/子单列表（含店铺名）/支付单
      * （payNo/金额/截止时间）。
      *
      * @param masterOrder 主订单（已落库）
@@ -575,7 +573,7 @@ public class PlaceOrderUseCase {
         private final Long shopId;
 
         /**
-         * 店铺名（视图店铺卡片，B7.5③ 展示）
+         * 店铺名（视图店铺卡片展示）
          */
         private final String shopName;
 

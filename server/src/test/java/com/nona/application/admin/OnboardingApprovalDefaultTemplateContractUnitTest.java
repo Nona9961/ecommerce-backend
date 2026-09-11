@@ -41,12 +41,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 开店编排补建默认运费模板契约测试（非空设计 §2.5：开店即建默认模板，
+ * 开店编排补建默认运费模板契约测试（开店即建默认模板，
  * 商品未绑定回退锚点恒存在）：审核通过链路（approve）在创建店铺的同
  * 一事务内自动创建并落库店铺默认运费模板（tenant=shopId，与普通模板
- * 同构）。红阶段：approve 行为签名冻结（实现缺失）——三类契约测试在
- * 调用点红（UnsupportedOperationException），绿阶段实现后转为断言期
- * 验证。
+ * 同构）。
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)

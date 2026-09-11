@@ -14,7 +14,7 @@ import org.hibernate.type.SqlTypes;
  * 随主表租户化先例见 ProductImagePO）：子单的一行商品快照，归属
  * sub_order 主键（sub_order_id，rootId 关联）。
  * <p>
- * 列模型（TD-09）：高频字段为列——商品名/单价/数量/小计/主图 URL/
+ * 列模型：高频字段为列——商品名/单价/数量/小计/主图 URL/
  * SKU 规格摘要文本；半结构化内容（规格键值对、自定义属性快照）入 JSON
  * 扩展列（spec_attributes/custom_attributes，longtext，@JdbcTypeCode
  * (LONGVARCHAR)——V1.2 定稿形态，Map 序列化由 OrderItemConvertor 以

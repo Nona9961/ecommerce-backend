@@ -7,7 +7,7 @@ import java.util.List;
  * <p>
  * 该值对象同时是 Redis 缓存（JSON）与 DB SPI 的返回形态；roles 为角色名列表
  * （与 {@link AuthRole#name()} 对齐），shopIds 为账号关联的店铺 ID 列表
- * （账号-店铺关联，商家登录时读取写入；买家/平台端恒为空列表，一期商家恒 1 个）。
+ * （账号-店铺关联，商家登录时读取写入；买家/平台端恒为空列表，当前商家恒 1 个）。
  * 兼容旧缓存 JSON（无 shopIds 字段）：compact constructor 将缺失字段归一为空列表。
  *
  * @param status  账号状态（裁决封禁）

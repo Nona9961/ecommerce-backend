@@ -35,7 +35,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 商品审核写后埋点契约测试（审核通过 = 商品转入在售、搜索可见性变化
- * ——TD-08 写后窗口，搜索可见性最直接相关写用例）。
+ * ——写后窗口，搜索可见性最直接相关写用例）。
  * <p>
  * 契约：审核通过（商品在售 + REVIEW_PASS 版本行同事务）成功后必须调用
  * {@link LastWriteMarker#markWrite(Long)} 标记<b>商品归属商家账号</b>
@@ -43,8 +43,7 @@ import static org.mockito.Mockito.verify;
  * 商家提交商品审核后，通过瞬间 3s 内搜索立即可见自身商品在售。
  * <p>
  * fixture：商家侧直建待审商品（草稿 → 提交审核状态迁移，同既有审核流），
- * 平台用例走真实提权事务链路。红阶段：approve 埋点待落实（markWrite
- * 未被调用），失败原因 = 实现缺失（埋点缺失）。
+ * 平台用例走真实提权事务链路。
  *
  * @author nona9961
  */
@@ -188,7 +187,7 @@ class ProductReviewApproveWriteMarkerContractAcTest {
 
     /**
      * 预置店铺归属关联（SHOP_A → SELLER_UID）：approve 埋点主体经
-     * {@code findByShopId} 反查定位（绿阶段机械补全：红线契约测试未
+     * {@code findByShopId} 反查定位（既有契约测试未
      * 预置反查所需行，而埋点契约要求 markWrite 归属商家）。
      */
     private void createShopOwnerRel() {

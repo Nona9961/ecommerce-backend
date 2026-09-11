@@ -51,7 +51,7 @@ public class InventoryUseCase {
     private final InventoryEventRouter inventoryEventRouter;
 
     /**
-     * 写后自读窗口埋点（TD-08：库存调整影响搜索有货态，落库后标记操作人）
+     * 写后自读窗口埋点（库存调整影响搜索有货态，落库后标记操作人）
      */
     private final LastWriteMarker lastWriteMarker;
 
@@ -154,7 +154,7 @@ public class InventoryUseCase {
 
     /**
      * 写后窗口埋点（操作人账号：认证上下文身份转 Long 打标——库存调整
-     * 影响搜索有货态，TD-08；身份非数字时跳过埋点，降级语义同埋点设施
+     * 影响搜索有货态；身份非数字时跳过埋点，降级语义同埋点设施
      * 故障——窗口失效走 PG 读库）。
      *
      * @param operator 操作人（认证上下文身份，已断言非空）

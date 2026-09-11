@@ -23,7 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Supplier;
 
 /**
- * WU-49 E2E 验收真链断言共享数据面工具（纯 JDBC，无 Spring 上下文）。
+ * E2E 验收真链断言共享数据面工具（纯 JDBC，无 Spring 上下文）。
  * <p>
  * 装配面：双连宿主隧道——MySQL {@code ecommerce_test}（localtunnel
  * 13306→3306，业务主库）与 PostgreSQL {@code ecommerce_test}（localtunnel
@@ -31,8 +31,8 @@ import java.util.function.Supplier;
  * /opt/data-stack/.env 映射导出：{@code ECOM_DB_PASSWORD} /
  * {@code ECOM_PG_PASSWORD}），本文件及任何测试文件不得出现密码明文。
  * <p>
- * 职责边界：直插/直查/poll 等待/幂等清理的工具函数——本 WU 的 8 个
- * 占位类改写与 CDC 真链 AcTest 共用；业务断言仍写在各自测试类（断言
+ * 职责边界：直插/直查/poll 等待/幂等清理的工具函数——CDC 真链
+ * AcTest 共用；业务断言仍写在各自测试类（断言
  * 面收口于 javadoc 启用契约）。
  * <p>
  * 测试分类合规：本类无 {@code @Test} 方法，为测试支撑类，不参与
@@ -170,7 +170,7 @@ public final class AcceptanceDbSupport {
      * 不依赖 Spring Boot OutputCaptureExtension（System.out 替换）：多测试类
      * 同 JVM 下输出捕获只对首个加载 Spring context 的类有效（本项目日志
      * 实现为 log4j2，控制台 appender 的流绑定同理）——后续类的 CapturedOutput
-     * 收不到异步日志（-Pfull 全量验收必红，WU-49 实测）。本 helper 用 log4j2
+     * 收不到异步日志（-Pfull 全量验收必红，实测）。本 helper 用 log4j2
      * 原生 appender 直收目标 logger 事件，与输出流捕获机制无关，跨类稳定。
      * <p>
      * 事件列表以 CopyOnWriteArrayList 承载（异步日志线程 append 与断言轮询

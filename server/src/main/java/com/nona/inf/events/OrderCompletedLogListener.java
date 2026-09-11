@@ -11,23 +11,23 @@ import java.time.Instant;
 import java.util.concurrent.Executor;
 
 /**
- * 完成事件消费位（Phase-I 日志型消费 + Phase-II 消费方 stub）：
+ * 完成事件消费位（日志型消费）：
  * {@link TransactionalEventListener} 订阅订单事务提交（AFTER_COMMIT）
  * 后的子单完成事件——消费方仅看到已提交的完成状态（确认收货/收货
  * 超时编排的一致性前提），订单事务成败与事件消费解耦（消费失败不
  * 影响订单主链路）。
  * <p>
- * <b>Phase-I 接线形态（绿阶段实现依据）</b>：与库存事件日志监听
+ * <b>接线形态</b>：与库存事件日志监听
  * （{@code InventoryEventLogListener}）同构——监听方法将日志任务
  * 提交到订单事件异步执行器（虚拟线程调度 + 请求上下文传播装饰器，
  * 上下文传播随执行器装配），仅日志留痕（事件类型 + 完成子单/主单
  * 引用 ID），不承载业务副作用。
  * <p>
- * <b>Phase-II 消费位 stub（本 WU 范围声明，不落实现）</b>：评价资格
- * 授予（review 域，B11.1 仅已完成订单可评价——订单项维度，经
+ * <b>消费位扩展（不落实现）</b>：评价资格
+ * 授予（review 域，仅已完成订单可评价——订单项维度，经
  * subOrderId 回查）、结算入账（settlement 域，完成事件入账归档，
- * B9.4④ 完成/关闭时资金结算完成）、通知中心与统计（notification /
- * analytics 域）接入同一机制（TD-07）——各消费位由对应 Phase-II WU
+ * 完成/关闭时资金结算完成）、通知中心与统计（notification /
+ * analytics 域）接入同一机制——各消费位由对应域
  * 独立实现，本类不占位。
  *
  * @author nona9961

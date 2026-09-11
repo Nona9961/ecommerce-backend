@@ -17,7 +17,7 @@ import org.springframework.stereotype.Service;
  * + markShipped + autoComplete + beginRefund + completeRefund + closeByTimeout；markShipped 为商家发货编排消费面——运单创建后子单发货
  * 推进 + 运单引用定型 + 主单派生，双参冻结签名）。
  * <p>
- * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约，绿阶段实现依据）：
+ * 接线语义（按 OrderFacade 接口 javadoc + 聚合契约）：
  * <ul>
  *     <li><b>cancel</b>：按 masterOrderId 装载主单——不存在 →
  *         {@code order.master_not_found}（404，编排层归属校验先行，此处
@@ -25,7 +25,7 @@ import org.springframework.stereotype.Service;
  *         {@code order.sub_not_found}（防御装配错误，下单保证至少一子单）；
  *         逐子单 {@link SubOrder#cancel()}（仅待支付可取消，已支付/已发货
  *         非法迁移由聚合守卫拒绝 {@code order.sub_status_illegal}——已支付
- *         走退款流程 B8.6②、已发货不可取消 B8.6③）；全部推进成功后按
+ *         走退款流程、已发货不可取消）；全部推进成功后按
  *         子单状态投影刷新主单整体状态（全部 CANCELLED → 主单已取消，
  *         派生见 {@link MasterOrder#deriveStatus}），子单与主单同批保存。
  *         已取消订单再取消的幂等成功语义<b>不落本类</b>——由编排层短路
@@ -115,7 +115,7 @@ public class OrderFacadeImpl implements OrderFacade {
     /**
      * 整单支付成功推进（消费者：支付回调用例，同事务压链回调编排面）。
      * <p>
-     * 编排语义（绿阶段实现依据，见类 javadoc）：装载主单（不存在 404）
+     * 编排语义（见类 javadoc）：装载主单（不存在 404）
      * → 装载子单集合（空 404 防御）→ 逐子单 markPaid（聚合守卫仅待支付
      * 可迁移，重复推进按非法迁移拒绝——幂等短路由回调端口支付单守卫承
      * 载，本方法保持防御面契约）→ 主单按子单投影派生（全部已支付 → 主
@@ -152,7 +152,7 @@ public class OrderFacadeImpl implements OrderFacade {
     /**
      * 待支付取消/支付超时关单（订单侧状态推进；跨域编排见取消用例）。
      * <p>
-     * 编排语义（绿阶段实现依据，见类 javadoc）：装载主单（不存在 404）
+     * 编排语义（见类 javadoc）：装载主单（不存在 404）
      * → 装载子单集合（空 404 防御）→ 逐子单 cancel（聚合守卫拒非法迁移）
      * → 主单按子单投影派生（全部取消 → 已取消）→ 子单与主单同批保存。
      * 已取消再取消的幂等短路由编排层承载，本方法对已取消子单按非法迁移
@@ -242,10 +242,10 @@ public class OrderFacadeImpl implements OrderFacade {
     }
 
     /**
-     * 完成推进——买家确认收货（B9.3）与收货超时自动完成（B9.4③）共用
+     * 完成推进——买家确认收货与收货超时自动完成共用
      * （订单侧状态推进；事件发布与幂等短路见确认收货用例）。
      * <p>
-     * 编排语义（绿阶段实现依据，见类 javadoc）：按 subOrderId 装载子单
+     * 编排语义（见类 javadoc）：按 subOrderId 装载子单
      * （不存在 404）→ 按归属主单装载主单（不存在 404）→ 装载子单集合
      * （空 404 防御）→ 目标子单 markCompleted（聚合守卫仅已发货可完成）
      * → 主单按子单投影派生（全部完成 → 已完成，部分完成 → 部分发货）
@@ -291,12 +291,12 @@ public class OrderFacadeImpl implements OrderFacade {
      * 退款申请推进（订单侧状态推进；退款单创建/受理与库存回补见退款
      * 申请编排）。
      * <p>
-     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * 编排语义（见 OrderFacade 接口 javadoc）：按
      * subOrderId 装载子单（不存在 404，编排层归属校验先行，此处为
      * 契约防御）→ 按归属主单装载主单（不存在 404，防御）→ 装载子单
      * 集合（空 404 防御装配错误）→ 目标子单 {@code markRefunding}
      * （聚合守卫仅已支付/已发货/已完成可进入退款中，未支付/终态非法
-     * 迁移拒绝 {@code order.sub_status_illegal}——B8.4① 内建）→ 主单
+     * 迁移拒绝 {@code order.sub_status_illegal}——内建）→ 主单
      * 按子单投影刷新整体状态（任一退款中 → 主单退款中，派生见
      * {@link com.nona.domain.order.entity.MasterOrder#deriveStatus}）
      * → 子单与主单同批保存。防重短路<b>不落本类</b>——由退款申请编排
@@ -341,7 +341,7 @@ public class OrderFacadeImpl implements OrderFacade {
     /**
      * 退款成功推进（订单侧状态推进；资金侧迁移/回补见退款回调成功编排）。
      * <p>
-     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * 编排语义（见 OrderFacade 接口 javadoc）：按
      * subOrderId 装载子单（不存在 404）→ 子单状态分派——
      * {@code REFUNDING} → 按归属主单装载主单（不存在 404，防御）→
      * 装载子单集合 → 目标子单 {@code markRefunded}（仅退款中可迁移）→
@@ -398,7 +398,7 @@ public class OrderFacadeImpl implements OrderFacade {
      * 发货超时关单推进（订单侧状态推进；退款单创建/受理与库存回补见
      * 发货超时编排——退款编排由调用方部署）。
      * <p>
-     * 编排语义（绿阶段实现依据，见 OrderFacade 接口 javadoc）：按
+     * 编排语义（见 OrderFacade 接口 javadoc）：按
      * subOrderId 装载子单（不存在 404）→ 按归属主单装载主单（不存在
      * 404，防御）→ 装载子单集合 → 目标子单 {@code closeByTimeout}
      * （聚合守卫仅已支付未发货可超时关单——支付超时走取消，重复关闭

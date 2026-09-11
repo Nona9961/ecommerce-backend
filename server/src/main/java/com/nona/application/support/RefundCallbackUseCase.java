@@ -27,14 +27,14 @@ import org.springframework.stereotype.Service;
 
 /**
  * 退款回调编排用例（退款回调接线阶段的核心编排：渠道 REFUND 回调 →
- * 退款单装载/核对 → 留痕 → 迁移 → 同事务推进订单与库存回补（I7））。
+ * 退款单装载/核对 → 留痕 → 迁移 → 同事务推进订单与库存回补）。
  * <p>
  * 承载位依据：回调入口无身份校验（网关/系统触发，与支付回调对称），
  * 编排横跨 payment/order/inventory 三域且含跨租户写（子单/库存
  * tenant=shopId）——按设计「跨端共用编排」落 application.support；
  * 跨上下文协作全经各域端口（OrderFacade/InventoryFacade）与仓储契约，
- * 应用层承载事务边界（方法级 {@link Transactional}）与提权写段（TD-12
- * 写放行只允许出现在 application 层用例方法上）。
+ * 应用层承载事务边界（方法级 {@link Transactional}）与提权写段（写放行
+ * 只允许出现在 application 层用例方法上）。
  * <p>
  * <b>编排语义</b>（实现接线依据，按 RefundCallbackPort 接口 javadoc +
  * RefundOrder 聚合守卫契约 + 支付回调编排先例逐条钉死）：
@@ -55,7 +55,7 @@ import org.springframework.stereotype.Service;
  *         result=FAIL → {@code markRefundFailed}（守卫判定顺序见
  *         RefundOrder 类 javadoc：流水异号 409 → 非 PENDING 拒绝 →
  *         金额不符 400）——<b>迁移守卫被拒的落库律</b>：同号重复回调
- *         （{@code payment.refund_status_illegal}，B8.5 幂等命中）、
+ *         （{@code payment.refund_status_illegal}，幂等命中）、
  *         异号冲突（{@code payment.callback_duplicate} 409）、金额不符
  *         （{@code payment.amount_mismatch}）一律先
  *         {@code repository.save}（留痕持久化，对账可查）再原样透传异常
@@ -67,15 +67,15 @@ import org.springframework.stereotype.Service;
  *         （404，数据异常防御））；② {@link OrderFacade#completeRefund}
  *         （子单状态分派内建：退款中 → 已退款 + 主单派生；已关闭 →
  *         发货超时路径幂等跳过——履约侧终态定格，资金侧由退款单承载；
- *         其余状态拒绝）；③ <b>未发货回补（C9 判定）</b>：退款单
+ *         其余状态拒绝）；③ <b>未发货回补（回补判定）</b>：退款单
  *         {@code shippedAtApply = false} → 逐 SKU 按子单订单项快照装配
- *         回补明细经 {@link InventoryFacade#restore}（I7：sold→sellable，
+ *         回补明细经 {@link InventoryFacade#restore}（sold→sellable，
  *         REFUND_RESTORE 流水 + RestockEvent 触发；幂等键
  *         (order_id, sku_id, type) 兜底重复退款回调不重复回补）；
  *         {@code shippedAtApply = true} → <b>不回补</b>（已发货/已完成
- *         退款货已出，退货退补为 II 期售后深化项，此处留接口位）；
+ *         退款货已出，退货退补为售后深化扩展项，此处留接口位）；
  *         任一步失败 → 异常透传 → 方法事务<b>整体回滚</b>（payment →
- *         order → inventory 三域原子，TD-07 同步编排）；</li>
+ *         order → inventory 三域原子，同步编排）；</li>
  *     <li><b>落库</b>：迁移 + 留痕经 {@code repository.save} 持久化
  *         （与成功编排同一方法事务；编排异常时不单独落库——事务回滚
  *         已保证原子，退款单不出现「已退款但订单未推进」的半程态）；</li>
@@ -84,17 +84,16 @@ import org.springframework.stereotype.Service;
  *         不推进订单/库存，买家对同一退款单重试受理。</li>
  * </ol>
  * <p>
- * 幂等语义汇总（B8.5「重复回调不重复处理」）：幂等锚点 = 退款单状态
+ * 幂等语义汇总（「重复回调不重复处理」）：幂等锚点 = 退款单状态
  * 迁移守卫（同号重复回调命中 status_illegal 即已处理应答，编排不重放）；
  * 本用例不做订单侧附加短路（订单侧状态由退款单守卫上游唯一驱动）。
  * <p>
  * 事务边界 = 用例方法（方法级 {@link Transactional}）；领域方法不做
  * 事务；提权写段（跨租户写子单/库存）只出现在本类（application 层）。
  * <p>
- * 装配声明：用例类<b>不注册为容器 bean</b>——仓储实现（order/payment
- * 域）未接线（装配学习，同支付回调/取消/完成编排用例）；以构造器注入
- * 声明装配契约，Spring 注册（{@code @Service}）随接线阶段落位恢复；
- * 单测以构造器直接装配。
+ * 装配声明：本类注册为容器 bean（{@code @Service}）——仓储实现
+ * （order/payment 域）已接线；以构造器注入声明装配契约，单测以构造器
+ * 直接装配。
  *
  * @author nona9961
  */
@@ -117,7 +116,7 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
     private final OrderFacade orderFacade;
 
     /**
-     * 库存门面（成功编排：未发货回补 I7 restore）
+     * 库存门面（成功编排：未发货回补 restore）
      */
     private final InventoryFacade inventoryFacade;
 
@@ -197,7 +196,7 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
         refundOrder.appendCallbackRecord(record);
         // 4. 防线二状态迁移（守卫判定顺序见 RefundOrder 类 javadoc）——迁移守卫
         //    被拒（status_illegal/callback_duplicate/amount_mismatch）：先落库留痕
-        //    再原样透传（B8.5 幂等命中不重放订单/库存编排）
+        //    再原样透传（幂等命中不重放订单/库存编排）
         if (callback.result() == GatewayResult.SUCCESS) {
             try {
                 refundOrder.markSucceeded(callback.channelTxnNo(), callback.amountCents());
@@ -210,13 +209,13 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
                 });
                 throw e;
             }
-            // 5. 成功编排（首次迁移成功后）：提权写段（TD-12——回调上下文
+            // 5. 成功编排（首次迁移成功后）：提权写段（回调上下文
             //    无买家身份、tenant 空，推进店铺数据必须放行）内依序 completeRefund
             //    （子单装载与 404 契约防御内建于订单门面：退款中 → 已退款 + 主单派生
             //    / 已关闭幂等跳过 / 其余拒绝）→ 按操作单元装载子单（不存在 404 数据
-            //    异常防御）→ 未发货回补（C9 判定：shippedAtApply=false → I7 restore，
-            //    明细 = 子单订单项快照；已发货不回补，退货物流 II 期留接口位）→ 根行
-            //    迁移 + 留痕落库——编排与落库同提权事务（TD-07 三域原子：杜绝「编排
+            //    异常防御）→ 未发货回补（判定：shippedAtApply=false → restore，
+            //    明细 = 子单订单项快照；已发货不回补，退货物流后续扩展留接口位）→ 根行
+            //    迁移 + 留痕落库——编排与落库同提权事务（三域原子：杜绝「编排
             //    已提交而退款单未迁移」的部分提交窗口）
             try {
                 tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
@@ -236,7 +235,7 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
                 });
             } catch (final RuntimeException e) {
                 // 编排异常（聚合守卫/库存回补失败）原样透传 → 方法事务整体回滚
-                // （TD-07 三域原子）；不单独落库——退款单不出现「已退款但订单未
+                // （三域原子）；不单独落库——退款单不出现「已退款但订单未
                 // 推进」的半程态
                 throw e;
             } catch (final Exception e) {
@@ -262,7 +261,7 @@ public class RefundCallbackUseCase implements RefundCallbackPort {
     }
 
     /**
-     * 未发货回补（I7）：调用方已装载退款操作单元子单（不存在 404 防御在提权
+     * 未发货回补：调用方已装载退款操作单元子单（不存在 404 防御在提权
      * 段内先行）——订单项快照装配回补明细（SKU + 数量，与下单预占/支付扣减/
      * 取消回滚的 items 装配同源对称）→ InventoryFacade.restore（sold →
      * sellable，REFUND_RESTORE 流水 + RestockEvent 触发面；幂等键

@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 物流域契约钉（红阶段即绿）：状态值定型集合、聚合/工厂/仓储签名与
+ * 物流域契约钉（契约即绿）：状态值定型集合、聚合/工厂/仓储签名与
  * 业务码（只增不改）防漂移——实现期签名、码值、枚举集合改动即失败，
  * 消费编排（发货 / 模拟推进 / 平台视图）按本契约
  * 装配。

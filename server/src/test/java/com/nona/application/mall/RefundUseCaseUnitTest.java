@@ -50,8 +50,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 退款编排用例场景测试（B8.4 买家申请 + B9.4② 发货超时 + 失败重试，
- * 红阶段契约）。
+ * 退款编排用例场景测试（买家申请 + 发货超时 + 失败重试，
+ * 契约）。
  * <p>
  * 覆盖：happy——申请全链（归属 → 防重 → 提权段内建单（金额=子单实付 +
  * 发货快照）→ beginRefund → 渠道受理落位 → 视图返回）与已发货申请
@@ -62,7 +62,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：全部端口/仓储/渠道/提权/事务以 mock 承载（编排契约断言
  * 面）；提权事务以 mock 直执行（真实事务回滚属应用层注解面，冒烟清单
- * 覆盖）。红阶段失败原因 = 实现缺失（用例方法体 UOE）。
+ * 覆盖）。
  *
  * @author nona9961
  */
@@ -116,7 +116,7 @@ class RefundUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测用例（依赖全 mock，setUp 装配）。
      */
     private RefundUseCase useCase;
 
@@ -210,7 +210,7 @@ class RefundUseCaseUnitTest {
 
         final RefundOrderView view = useCase.applyRefundByBuyer(BUYER_ID, SUB_A, "不想要了");
 
-        // 受理参数：支付单号 + 退款单号（建单动态生成，TD-13 REF 单号） + 金额 = 子单实付（B8.5③）
+        // 受理参数：支付单号 + 退款单号（建单动态生成，REF 单号） + 金额 = 子单实付（B8.5③）
         final org.mockito.ArgumentCaptor<RefundRequest> refundCaptor =
                 org.mockito.ArgumentCaptor.forClass(RefundRequest.class);
         verify(gateway).refund(refundCaptor.capture());
@@ -233,7 +233,7 @@ class RefundUseCaseUnitTest {
 
     /**
      * happy-2 已发货申请：shippedAtApply 快照 = true（已发货退款不回补
-     * 库存——C9 判定锚点固化在申请时刻）。
+     * 库存——回补判定锚点固化在申请时刻）。
      */
     @Test
     @DisplayName("已发货申请：已发货快照定型（退款成功不回补）")
@@ -273,7 +273,7 @@ class RefundUseCaseUnitTest {
 
         verify(orderFacade).closeByTimeout(SUB_A);
         verify(orderFacade, never()).beginRefund(anyLong());
-        // 受理参数：支付单号 + 退款单号（建单动态生成，TD-13 REF 单号） + 金额 = 子单实付
+        // 受理参数：支付单号 + 退款单号（建单动态生成，REF 单号） + 金额 = 子单实付
         final org.mockito.ArgumentCaptor<RefundRequest> refundCaptor =
                 org.mockito.ArgumentCaptor.forClass(RefundRequest.class);
         verify(gateway).refund(refundCaptor.capture());
@@ -444,7 +444,7 @@ class RefundUseCaseUnitTest {
      * 建单与推进同一事务，异常即回滚）。
      */
     @Test
-    @DisplayName("待支付子单申请退款：聚合守卫异常透传（B8.4① 内建）")
+    @DisplayName("待支付子单申请退款：聚合守卫异常透传（守卫内建）")
     void applyRefundByBuyer_pendingPaymentSubOrder_guardRejects() {
         when(subOrderRepository.getByID(SUB_A)).thenReturn(subA(SubOrderStatus.PENDING_PAYMENT));
         when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(master());

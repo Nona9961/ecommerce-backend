@@ -100,7 +100,7 @@ public class InventoryLogRepositoryImpl implements InventoryLogRepository {
     /**
      * 流水行租户承载：提权写路径（买家取消回滚/支付确认扣减/退款回补等
      * 无请求视角上下文）显式锚定 tenant=shopId——归属必得，不依赖请求
-     * 上下文（TD-12 提权写门禁语义：TenantWriteGate 提权+空归属
+     * 上下文（提权写门禁语义：TenantWriteGate 提权+空归属
      * fail-closed 拒绝）；非提权商家路径保持既有注入语义（行租户由写门
      * 禁按请求上下文注入）。
      *

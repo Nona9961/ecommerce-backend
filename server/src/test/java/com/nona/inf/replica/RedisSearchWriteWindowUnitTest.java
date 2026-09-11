@@ -13,11 +13,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 写后窗口判定单元测试（TD-08 3s 业务窗口：键剩余 TTL &gt; 2s ⟺ 写入
+ * 写后窗口判定单元测试（3s 业务窗口：键剩余 TTL &gt; 2s ⟺ 写入
  * 未满 3s；秒级精度边界 ±1s 属预期）。
  * <p>
- * 全程 mock StringRedisTemplate，不依赖真实 Redis。红阶段：判定实现
- * 缺失（UnsupportedOperationException），失败原因 = 实现缺失。
+ * 全程 mock StringRedisTemplate，不依赖真实 Redis。
  *
  * @author nona9961
  */
@@ -41,9 +40,8 @@ class RedisSearchWriteWindowUnitTest {
     /**
      * 初始化 mock 与被测对象。
      * <p>
-     * 装配说明（绿阶段机械修正）：被测对象以构造器注入 mock 模板——
-     * 红线阶段骨架无构造器可直接 new，mock 模板随之悬空；绿阶段实现
-     * 为构造器注入形态，测试补传注入（用例语义不变）。
+     * 装配说明：被测对象以构造器注入 mock 模板——
+     * 实现为构造器注入形态，测试补传注入（用例语义不变）。
      */
     @BeforeEach
     void setUp() {

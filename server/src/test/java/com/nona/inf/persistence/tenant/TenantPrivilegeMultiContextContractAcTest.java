@@ -154,7 +154,7 @@ class TenantPrivilegeMultiContextContractAAcTest {
     private ElevatedTenantTestService elevatedTenantTestService;
 
     /**
-     * 测试支撑表前置清理（WU-57 真库化后必需）：test_tenant_note 跨 JVM 持久，
+     * 测试支撑表前置清理（真库化后必需）：test_tenant_note 跨 JVM 持久，
      * 行数精确断言（count / findAll size）受他类/上轮残留行干扰——与
      * TenantCacheLeak/TenantDmlBoundary/TenantRepositoryAspect 同款入口。
      */

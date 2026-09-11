@@ -17,7 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Mock 支付渠道（PaymentGateway 一期唯一实现）：按真实渠道异步回调形态
+ * Mock 支付渠道（PaymentGateway 当前唯一实现）：按真实渠道异步回调形态
  * 仿真三剧本（成功 / 失败 / 不回调），供全流程演示与测试。
  * <p>
  * 剧本路由（行为可控，规则收敛本类）：

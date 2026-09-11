@@ -15,7 +15,7 @@ package com.nona.domain.payment.entity;
  *         渠道幂等键 refundNo 复用；可重试语义，领域模型冻结）
  * SUCCEEDED →（终态：无任何出边，资金已退还不可逆）
  * </pre>
- * 语义钉死（红阶段契约，退款编排守卫的判定依据）：
+ * 语义钉死（契约，退款编排守卫的判定依据）：
  * <ol>
  *     <li>创建即 PENDING（申请受理中/等待渠道开、退款结果异步到达——
  *         受理与回调分离的异步模型，受理成功不改变状态仅落位流水）；</li>
@@ -28,7 +28,7 @@ package com.nona.domain.payment.entity;
  *     <li>同号重复退款回调（幂等命中）：已非 PENDING（SUCCEEDED/
  *         FAILED 终态或过渡态）再收到同号回调 → 状态守卫拒绝
  *         {@code payment.refund_status_illegal}，编排捕获后按「已处理
- *         应答」返回（B8.5 重复回调只生效一次，不重放订单/库存编排）。</li>
+ *         应答」返回（重复回调只生效一次，不重放订单/库存编排）。</li>
  * </ol>
  * 本枚举为纯值定型（无手写字段/方法——解析/判定逻辑收敛在聚合方法或
  * 实现侧，契约演进只增不改，禁止向本枚举追加可实现逻辑）。
@@ -38,8 +38,8 @@ package com.nona.domain.payment.entity;
 public enum RefundOrderStatus {
 
     /**
-     * 退款中（初始态）：退款单创建后的状态——系统即时受理（一期免平台
-     * 人工，C11-2）后等待渠道 REFUND 回调异步到达；可迁移出
+     * 退款中（初始态）：退款单创建后的状态——系统即时受理（免平台
+     * 人工）后等待渠道 REFUND 回调异步到达；可迁移出
      * （→ SUCCEEDED / FAILED）。
      */
     PENDING,

@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 移与留痕归回调编排，业务异常由全局 ExceptionAdviser 统一映射，
  * 本类不做 try/catch。
  * <p>
- * 装配契约：{@link PaymentGateway} 端口构造器注入（一期唯一实现
+ * 装配契约：{@link PaymentGateway} 端口构造器注入（当前唯一实现
  * MockPaymentGateway 为 @Component，按端口装配，未来真实渠道仅换实现
  * 类）；两个回调编排用例已 @Service 注册，同构造器注入。
  * <p>

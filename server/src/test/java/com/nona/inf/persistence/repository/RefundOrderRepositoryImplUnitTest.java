@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 退款单仓储实现场景测试（WU-55 红阶段契约：退款回调装载锚点对 /
+ * 退款单仓储实现场景测试（契约：退款回调装载锚点对 /
  * 申请防重锚点 / 级联删）。
  * <p>
  * happy——findByRefundNo/findBySubOrderId 装载命中、级联删留痕先删；
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
  * 按「新建」处理——接口 javadoc 冻结语义）、删除不存在返回 0。
  * <p>
  * 装配纪律：依赖全 mock，无容器；被测仓储 @BeforeEach 重建；行为桩
- * lenient 豁免 UOE 挡道（绿实现后收回精确桩）。
+ * lenient 豁免 UOE 挡道（按需收回精确桩）。
  *
  * @author nona9961
  */

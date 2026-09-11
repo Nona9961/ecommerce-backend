@@ -31,11 +31,11 @@ import static org.mockito.Mockito.when;
 
 /**
  * OrderFacade 实现侧场景测试（cancel 接线 + autoComplete 完成接线：订单
- * 侧状态推进契约，红阶段）。
+ * 侧状态推进契约）。
  * <p>
  * 覆盖：cancel——happy 待支付整单取消 + 主单派生 + 保存（reason 透传
  * 无副作用）；critical 子单集合为空防御 404；fail 主单不存在 404、已
- * 支付/已发货/已取消/混态子单非法迁移拒绝（B8.6 ②③ 守卫内建，无任何
+ * 支付/已发货/已取消/混态子单非法迁移拒绝（守卫内建，无任何
  * 保存）。autoComplete——happy 已发货子单完成 + 主单派生已完成 + 保存；
  * critical 多子单部分完成中间态派生；fail 子单不存在/主单不存在 404、
  * 未发货/重复完成守卫拒绝。库存回滚/支付关单不在本类（编排层承载，
@@ -43,8 +43,7 @@ import static org.mockito.Mockito.when;
  * 用例测试）。
  * <p>
  * 依赖装配：仓储以真实对象 + mock 承载装载面（子单/主单为真实聚合，
- * 状态迁移守卫与派生真实执行）；红阶段失败原因 = 实现缺失（cancel /
- * autoComplete 方法体 UOE）。
+ * 状态迁移守卫与派生真实执行）。
  *
  * @author nona9961
  */
@@ -67,7 +66,7 @@ class OrderFacadeImplUnitTest {
     private SubOrderRepository subOrderRepository;
 
     /**
-     * 被测门面实现（红阶段不注册 Spring；mock 注入后于实例构造，setUp
+     * 被测门面实现（不注册 Spring；mock 注入后于实例构造，setUp
      * 装配）。
      */
     private OrderFacadeImpl orderFacade;
@@ -219,7 +218,7 @@ class OrderFacadeImplUnitTest {
     }
 
     /**
-     * fail-2 已支付子单取消：非法迁移拒绝（B8.6 ② 语义内建——已支付走
+     * fail-2 已支付子单取消：非法迁移拒绝（已支付走
      * 退款流程，不可直接取消），无保存动作。
      */
     @Test
@@ -239,11 +238,11 @@ class OrderFacadeImplUnitTest {
     }
 
     /**
-     * fail-3 已发货子单取消：非法迁移拒绝（B8.6 ③ 不可取消），无保存
+     * fail-3 已发货子单取消：非法迁移拒绝（不可取消），无保存
      * 动作。
      */
     @Test
-    @DisplayName("已发货子单取消：不可取消（B8.6③）")
+    @DisplayName("已发货子单取消：不可取消")
     void cancel_shippedSubOrder_rejected() {
         when(masterOrderRepository.getByID(MASTER_ID)).thenReturn(pendingMaster());
         when(subOrderRepository.getByMasterOrderId(MASTER_ID)).thenReturn(
@@ -398,7 +397,7 @@ class OrderFacadeImplUnitTest {
 
     /**
      * fail-7 未发货子单完成（PAID）：非法迁移拒绝（仅已发货可完成——
-     * 未发货直接完成/提前完成为非法，B9.3 ① 语义内建），无保存动作。
+     * 未发货直接完成/提前完成为非法），无保存动作。
      */
     @Test
     @DisplayName("未发货子单完成：非法迁移拒绝")
@@ -462,7 +461,7 @@ class OrderFacadeImplUnitTest {
 
     /**
      * happy-4 整单支付推进：待支付主单下全部子单标记已支付（真实聚合
-     * 迁移）＋主单按全部子单投影派生已支付（M9）＋子单与主单全部保存
+     * 迁移）＋主单按全部子单投影派生已支付＋子单与主单全部保存
      * （回调编排同事务面：payment → order → inventory）。
      */
     @Test

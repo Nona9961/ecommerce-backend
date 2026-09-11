@@ -38,8 +38,8 @@ public interface SubOrderJpaRepository extends ListCrudRepository<SubOrderPO, Lo
             SubOrderStatus status, LocalDateTime timeoutAt, org.springframework.data.domain.Limit limit);
 
     /**
-     * 店铺订单分页（全量）：店铺业务条件 + 租户过滤双层定位（WU-55
-     * 冻结），创建时间倒序 + 主键倒序稳定分页。本方法为「全部」tab
+     * 店铺订单分页（全量）：店铺业务条件 + 租户过滤双层定位（冻结），
+     * 创建时间倒序 + 主键倒序稳定分页。本方法为「全部」tab
      * 承载面（statuses 为 null/空集合时调用）。
      *
      * @param shopId   归属店铺 ID
@@ -51,7 +51,7 @@ public interface SubOrderJpaRepository extends ListCrudRepository<SubOrderPO, Lo
 
     /**
      * 店铺订单分页（状态多值过滤）：shop_id 显式条件 + 租户过滤双层
-     * 防线（WU-55 冻结；statuses 非空集合承载面），创建时间倒序 +
+     * 防线（冻结；statuses 非空集合承载面），创建时间倒序 +
      * 主键倒序稳定分页。
      *
      * @param shopId   归属店铺 ID
