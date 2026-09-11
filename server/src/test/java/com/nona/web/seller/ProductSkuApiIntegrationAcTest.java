@@ -62,14 +62,15 @@ class ProductSkuApiIntegrationAcTest {
     private static final long SELLER_B_UID = 77002L;
 
     /**
-     * 店铺 A ID（商家 A 当前店铺，租户锚点）
+     * 店铺 A ID（商家 A 当前店铺，租户锚点；9720x 段——避开 seed 97001/97002
+     * 演示店段与 98/99 测试段，防与 seed 造数脚本（seed-on-sale.sh）互踩）
      */
-    private static final long SHOP_A_ID = 97001L;
+    private static final long SHOP_A_ID = 97201L;
 
     /**
      * 店铺 B ID（商家 B 当前店铺，租户锚点）
      */
-    private static final long SHOP_B_ID = 97002L;
+    private static final long SHOP_B_ID = 97202L;
 
     /**
      * MockMvc 客户端

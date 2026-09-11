@@ -6,6 +6,7 @@ import com.nona.api.common.PageQuery;
 import com.nona.domain.logistics.ports.PlatformLogisticsViewFilter;
 import com.nona.domain.logistics.ports.PlatformLogisticsViewService;
 import com.nona.domain.order.entity.SubOrderStatus;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,6 +102,27 @@ class PlatformLogisticsViewAcTest {
      */
     @BeforeEach
     void setUp() throws Exception {
+        cleanupDbRows();
+        // 等 CDC 删除传播收敛（旧行在 PG 镜像消失）——否则测试体 INSERT 后
+        // poll「三行齐」可能命中新旧行混合态（旧行未删 + 新行未达），断言不稳
+        awaitMirrorSwept();
+    }
+
+    /**
+     * 类末清理（2026-09-11 补，验收面类间残留根治）：本类 fixture 段与
+     * ConfirmReceipt/RefundFlow/ShipOrder 共享（SUB 76101-76103 / MASTER
+     * 86101-86103），无类末清理时最后一个用例的数据残留 → 后序同段类
+     * setUp 撞主键（Duplicate entry for sub_order.PRIMARY，全量顺序相关）；
+     * 类末清理后任何执行顺序零残留。@AfterEach 不等待 CDC 收敛（删除传播
+     * 异步完成即可，下轮 @BeforeEach 的 awaitMirrorSwept 兜底）。
+     */
+    @AfterEach
+    void tearDown() throws Exception {
+        cleanupDbRows();
+    }
+
+    /** 本类 fixture 段幂等清理（@BeforeEach 前置 + @AfterEach 后置共用）。 */
+    private void cleanupDbRows() throws Exception {
         try (Connection mysql = AcceptanceDbSupport.mysql()) {
             AcceptanceDbSupport.update(mysql, "DELETE FROM waybill_track WHERE waybill_id IN (?, ?)",
                     WAYBILL_A, WAYBILL_B);
@@ -113,9 +135,6 @@ class PlatformLogisticsViewAcTest {
             AcceptanceDbSupport.update(mysql, "DELETE FROM shop WHERE id IN (?, ?, ?, ?)",
                     SHOP_A, SHOP_B, SHOP_C, MIRROR_SHOP);
         }
-        // 等 CDC 删除传播收敛（旧行在 PG 镜像消失）——否则测试体 INSERT 后
-        // poll「三行齐」可能命中新旧行混合态（旧行未删 + 新行未达），断言不稳
-        awaitMirrorSwept();
     }
 
     /** 等待本类 fixture 行在 PG 镜像消失（CDC DELETE 收敛窗口）。 */
@@ -213,11 +232,14 @@ class PlatformLogisticsViewAcTest {
             insertRows(mysql, SHOP_C, SHOP_C_NAME, MASTER_C, SUB_C, 0,
                     "SHIPPED", timeoutPast, -20);
         }
-        // poll-until 本类三行在 PG 镜像收敛（共享库其他残留行不进断言面）
+        // poll-until 本类三行在 PG 镜像收敛——等待面与 viewService 查询面完全
+        // 同构（LEFT JOIN waybill × shop 三表）：sink 删除→重插窗口内 waybill
+        // 表处于被锁/重建瞬时状态时，INNER/单表面先于查询面放行导致 76103 掉行
         AcceptanceDbSupport.pollUntil(
-                () -> rowCountOnPg("sub_order",
-                        "id IN (" + SUB_A + ", " + SUB_B + ", " + SUB_C + ")") == 3,
-                "PG 镜像本类三行收敛（CDC）",
+                () -> rowCountOnPg("sub_order s LEFT JOIN waybill wb ON wb.sub_order_id = s.id "
+                        + "LEFT JOIN shop sh ON sh.id = s.shop_id",
+                        "s.id IN (" + SUB_A + ", " + SUB_B + ", " + SUB_C + ")") == 3,
+                "PG 镜像本类三行收敛（CDC，LEFT JOIN 同构面）",
                 Duration.ofSeconds(30));
 
         // 跨店全集：total ≥ 3 + 本类三行齐全（三店可见性）
@@ -316,9 +338,10 @@ class PlatformLogisticsViewAcTest {
                     "SHIPPED", Timestamp.valueOf(LocalDateTime.now().minusMinutes(5)), 0);
         }
         AcceptanceDbSupport.pollUntil(
-                () -> rowCountOnPg("sub_order",
-                        "id IN (" + SUB_A + ", " + SUB_B + ", " + SUB_C + ")") == 3,
-                "PG 镜像本类三行收敛（CDC）",
+                () -> rowCountOnPg("sub_order s LEFT JOIN waybill wb ON wb.sub_order_id = s.id "
+                        + "LEFT JOIN shop sh ON sh.id = s.shop_id",
+                        "s.id IN (" + SUB_A + ", " + SUB_B + ", " + SUB_C + ")") == 3,
+                "PG 镜像本类三行收敛（CDC，LEFT JOIN 同构面）",
                 Duration.ofSeconds(30));
 
         var result = viewService.list(

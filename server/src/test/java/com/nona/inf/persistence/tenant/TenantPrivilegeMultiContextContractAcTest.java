@@ -6,6 +6,7 @@ import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.context.TrackingContext;
 import com.nona.inf.persistence.repository.jpa.TestTenantNoteRepository;
 import com.nona.tenant.TenantScopeExitHandler;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -151,6 +152,16 @@ class TenantPrivilegeMultiContextContractAAcTest {
 
     @Autowired
     private ElevatedTenantTestService elevatedTenantTestService;
+
+    /**
+     * 测试支撑表前置清理（WU-57 真库化后必需）：test_tenant_note 跨 JVM 持久，
+     * 行数精确断言（count / findAll size）受他类/上轮残留行干扰——与
+     * TenantCacheLeak/TenantDmlBoundary/TenantRepositoryAspect 同款入口。
+     */
+    @BeforeEach
+    void setUp() {
+        elevatedTenantTestService.deleteAllNotes();
+    }
 
     @Autowired
     private PlatformTransactionManager transactionManager;
