@@ -1,5 +1,6 @@
 package com.nona.inf.persistence.repository;
 
+import com.nona.acceptance.AcceptanceDbSupport;
 import com.nona.domain.inventory.entity.InventoryItem;
 import com.nona.domain.inventory.repo.InventoryItemRepository;
 import com.nona.domain.logistics.repo.WaybillRepository;
@@ -32,6 +33,7 @@ import com.nona.inf.persistence.repository.jpa.OrderItemJpaRepository;
 import com.nona.inf.persistence.repository.jpa.PaymentOrderJpaRepository;
 import com.nona.inf.persistence.repository.jpa.SubOrderJpaRepository;
 import com.nona.inf.timeout.TimeoutType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import java.sql.Connection;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -72,6 +75,14 @@ class RepoContractAcTest {
      * 测试主键种子（自增，避开 TradingPoFoundationAcTest 的 100 万段）
      */
     private static final AtomicLong IDS = new AtomicLong(2_000_000L);
+
+    /**
+     * 本类独占 id 段边界（与 {@link #IDS} 同面：2,000,000-2,999,999）——
+     * {@link #cleanupOwnedRows} 段位清理谓词；全测试树无其他类使用本段
+     * （grep 实证），段位 DELETE 零越界风险。
+     */
+    private static final long ID_SEGMENT_LOW = 2_000_000L;
+    private static final long ID_SEGMENT_HIGH = 2_999_999L;
 
     /**
      * 店铺 A 租户（数据归属面）
@@ -633,5 +644,57 @@ class RepoContractAcTest {
         final SubOrderPO po = subOrderJpa.findById(subId).orElseThrow();
         po.setStatus(status);
         subOrderJpa.save(po);
+    }
+
+    /**
+     * 类级段位清理（2026-09-11 补，测试库卫生 WU 第二部分——类级兜底）：
+     * ecommerce_test 由 app（dev demo）与本 AcTest 共享，本类直插/经仓储
+     * 落库行无清理时每轮 -Pfull 留下大量孤儿行——订单类残留被 app
+     * TimeoutScheduler 拾取处理（app.log 实证 WARN taskId=1000006）、孤儿
+     * 运单被 app 推进产生无主事件。本方法按本类独占 id 段幂等 DELETE（从表
+     * 先删、主表后删；段位谓词不存在即 0 行天然幂等），覆盖全部冒烟
+     * （冒烟-1~9）。order_item 按 sub_order_id 段删——经 diff 链路落的条目
+     * 行 id 由 IDUtils.generateID() 雪花生成、不在测试 id 段内
+     * （SubOrderRepositoryImpl.insertItemRow），按根行关联列段删才完整覆盖
+     * （本类直写路径的条目行 id 段内、diff 链路路径段外，两源同覆盖）。
+     * refund_callback_log / refund_order 当前无落行（refundOrderRepository
+     * 仅注入未调用），语句保留作姿态防御（幂等 0 行，未来 refund 冒烟自动
+     * 进入兜底面）。与 TradingPoFoundationAcTest.cleanupOwnedRows 同模式
+     * （同表集 + inventory_item）。
+     */
+    @AfterEach
+    void cleanupOwnedRows() throws Exception {
+        try (Connection mysql = AcceptanceDbSupport.mysql()) {
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM waybill_track WHERE waybill_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM waybill WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM refund_callback_log WHERE refund_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM payment_callback_log WHERE payment_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM order_item WHERE sub_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM sub_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM refund_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM payment_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM master_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM inventory_item WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+        }
     }
 }

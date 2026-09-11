@@ -1,5 +1,6 @@
 package com.nona.inf.persistence;
 
+import com.nona.acceptance.AcceptanceDbSupport;
 import com.nona.domain.logistics.entity.WaybillStatus;
 import com.nona.domain.order.entity.MasterOrderStatus;
 import com.nona.domain.order.entity.SubOrderStatus;
@@ -27,6 +28,7 @@ import com.nona.inf.persistence.repository.jpa.SubOrderJpaRepository;
 import com.nona.inf.persistence.repository.jpa.WaybillJpaRepository;
 import com.nona.inf.persistence.repository.jpa.WaybillTrackJpaRepository;
 import com.nona.inf.timeout.TimeoutType;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.sql.Connection;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -66,6 +69,14 @@ class TradingPoFoundationAcTest {
      * 测试主键种子（自增，避开 Snowflake 面）
      */
     private static final AtomicLong IDS = new AtomicLong(1_000_000L);
+
+    /**
+     * 本类独占 id 段边界（与 {@link #IDS} 同面：1,000,000-1,999,999）——
+     * {@link #cleanupOwnedRows} 段位清理谓词；全测试树无其他类使用本段
+     * （grep 实证），段位 DELETE 零越界风险。
+     */
+    private static final long ID_SEGMENT_LOW = 1_000_000L;
+    private static final long ID_SEGMENT_HIGH = 1_999_999L;
 
     /**
      * 店铺 A 租户（子单隔离面）
@@ -511,6 +522,14 @@ class TradingPoFoundationAcTest {
             Assertions.assertTrue(waybillJpaRepository.findByInTransitTrue().stream()
                             .anyMatch(w -> w.getId().equals(inTransitId)),
                     "在途行仍被扫描面命中（历史行并存不影响）");
+
+            // —— 清理：测试库与 app 共享（ecommerce_test），自建行残留会
+            // 毒化 app 物流在途扫描（in_transit=TRUE 无轨迹行触发聚合守卫
+            // 「运单轨迹列表不能为空」→ 整轮扫描停摆），断言完成后按自建
+            // 主键逐行删除；dup 行被唯一约束拒绝未落库，findById 判存幂等化。
+            waybillJpaRepository.findById(inTransitId).ifPresent(waybillJpaRepository::delete);
+            waybillJpaRepository.findById(dupInTransit.getId()).ifPresent(waybillJpaRepository::delete);
+            waybillJpaRepository.findById(delivered.getId()).ifPresent(waybillJpaRepository::delete);
         });
     }
 
@@ -543,6 +562,58 @@ class TradingPoFoundationAcTest {
             Assertions.assertNull(tracks.get(1).getDescription(), "可空描述往返");
             Assertions.assertEquals(LocalDateTime.of(2026, 9, 8, 14, 0, 0),
                     tracks.get(0).getOccurredAt(), "轨迹时间列往返");
+
+            // —— 清理：共享测试库残留的孤儿 waybill_track 行（无对应 waybill
+            // 主表行）会污染反查面，按自建轨迹主键逐条删除（deleteByWaybillId
+            // 派生删无事务会抛「No EntityManager...remove 拒绝」）。
+            waybillTrackJpaRepository.deleteById(first.getId());
+            waybillTrackJpaRepository.deleteById(second.getId());
         });
+    }
+
+    /**
+     * 类级段位清理（2026-09-11 补，测试库卫生 WU 第二部分——类级兜底）：
+     * ecommerce_test 由 app（dev demo）与本 AcTest 共享，本类直插行无清理
+     * 时每轮 -Pfull 留下大量孤儿行——订单类残留被 app TimeoutScheduler
+     * 拾取处理（app.log 实证 WARN taskId=1000006）、孤儿运单被 app 推进产生
+     * 无主事件、在途无轨迹运单毒化物流扫描（整轮停摆）。本方法按本类独占
+     * id 段幂等 DELETE（从表先删、主表后删；段位谓词不存在即 0 行天然
+     * 幂等），与冒烟-9/10 方法内清理双保险：方法内清理防测试运行期间毒化
+     * app 扫描面（保留不动），本兜底覆盖其余冒烟（冒烟-1~8 等）防跨轮残留。
+     * order_item 按 sub_order_id 段删——经 diff 链路落的条目行 id 由
+     * IDUtils.generateID() 雪花生成、不在测试 id 段内（
+     * SubOrderRepositoryImpl.insertItemRow），按根行关联列段删才完整覆盖。
+     */
+    @AfterEach
+    void cleanupOwnedRows() throws Exception {
+        try (Connection mysql = AcceptanceDbSupport.mysql()) {
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM waybill_track WHERE waybill_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM waybill WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM refund_callback_log WHERE refund_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM payment_callback_log WHERE payment_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM order_item WHERE sub_order_id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM sub_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM refund_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM payment_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+            AcceptanceDbSupport.update(mysql,
+                    "DELETE FROM master_order WHERE id BETWEEN ? AND ?",
+                    ID_SEGMENT_LOW, ID_SEGMENT_HIGH);
+        }
     }
 }
