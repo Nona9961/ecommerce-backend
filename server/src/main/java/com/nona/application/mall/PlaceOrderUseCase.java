@@ -279,8 +279,8 @@ public class PlaceOrderUseCase {
                 final List<AmountDetail> subAmounts =
                         subOrders.stream().map(SubOrder::getAmount).toList();
                 final MasterOrder masterOrder = masterOrderFactory.createMasterOrder(
-                        generateOrderNo(), buyerId, addressSnapshot, totalAmount,
-                        subOrderIds, subAmounts);
+                        masterOrderId, generateOrderNo(), buyerId, addressSnapshot,
+                        totalAmount, subOrderIds, subAmounts);
                 masterOrderRepository.save(masterOrder);
                 final PendingPayment payment = paymentPort.createPendingPayment(
                         masterOrder.getId(), masterOrder.getAmount().getPaidAmount(),

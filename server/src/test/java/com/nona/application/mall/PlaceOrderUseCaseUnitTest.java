@@ -243,8 +243,9 @@ class PlaceOrderUseCaseUnitTest {
         verify(inventoryFacade).preoccupy(eq(sub.getId()), eq(List.of(
                 new StockChangeItem(SKU_A1, 2), new StockChangeItem(SKU_A2, 3))));
 
-        // 主单：金额四维 = 子单合计；状态待支付
+        // 主单：金额四维 = 子单合计；状态待支付；主单 ID 与子单归属引用一致
         final MasterOrder master = masterOrderRepository.lastSaved();
+        assertThat(master.getId()).isEqualTo(sub.getMasterOrderId());
         assertThat(master.getOrderNo()).startsWith("ORD");
         assertThat(master.getBuyerId()).isEqualTo(BUYER_ID);
         assertThat(master.getStatus()).isEqualTo(MasterOrderStatus.PENDING_PAYMENT);

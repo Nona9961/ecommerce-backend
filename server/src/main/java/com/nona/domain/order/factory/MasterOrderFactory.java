@@ -5,7 +5,6 @@ import com.nona.domain.order.entity.AmountDetail;
 import com.nona.domain.order.entity.MasterOrder;
 import com.nona.exceptions.EcommerceBusinessCode;
 import com.nona.util.BusinessAssert;
-import com.nona.util.IDUtils;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -17,8 +16,10 @@ import java.util.List;
  * ID 集合与各子单金额投影，再创建主单——金额摘要（商品额/运费/优惠/
  * 实付）由编排按子单四维合计装配，本工厂以恒等式复核（不一致拒绝，
  * 守卫收敛在聚合构造路径）；子单引用集合创建后定型（跨聚合只存引用
- * ID）。订单号（TD-13：ORD + 日期 + snowflake 后段）由下单编排生成
- * 传入（生成逻辑收敛在编排侧一处），工厂仅校验形态。
+ * ID）。主单 ID 由下单编排预生成传入（与子单归属引用同源，保证
+ * {@code master_order.id} = 各子单 {@code master_order_id} 引用一致），
+ * 订单号（TD-13：ORD + 日期 + snowflake 后段）同样由编排生成传入，
+ * 工厂仅校验形态。
  *
  * @author nona9961
  */
@@ -28,6 +29,8 @@ public class MasterOrderFactory {
     /**
      * 创建主订单（整体状态定型为待支付）。
      *
+     * @param masterOrderId 主订单聚合根 ID（必填——编排预生成的引用值，
+     *                       与子单归属引用同源）
      * @param orderNo     订单号（必填非空，TD-13 业务单号）
      * @param buyerId     归属买家账号 ID（必填）
      * @param address     地址快照（必填，下单时固化）
@@ -37,9 +40,10 @@ public class MasterOrderFactory {
      *                      ——校验用：四维合计与金额摘要一致）
      * @return 新建主订单（待支付，待仓储保存）
      */
-    public MasterOrder createMasterOrder(String orderNo, Long buyerId,
+    public MasterOrder createMasterOrder(Long masterOrderId, String orderNo, Long buyerId,
                                          AddressSnapshot address, AmountDetail amount,
                                          List<Long> subOrderIds, List<AmountDetail> subAmounts) {
+        BusinessAssert.assertNonNull(masterOrderId, "主订单聚合根 ID 不能为空");
         BusinessAssert.assertTrue(orderNo != null && !orderNo.isBlank(), "订单号不能为空");
         BusinessAssert.assertNonNull(buyerId, "归属买家账号 ID 不能为空");
         BusinessAssert.assertNonNull(address, "主订单地址快照不能为空");
@@ -48,7 +52,7 @@ public class MasterOrderFactory {
                 subOrderIds != null && !subOrderIds.isEmpty(), "主订单必须包含至少一个子订单");
         BusinessAssert.assertTrue(subAmounts != null && subAmounts.size() == subOrderIds.size(),
                 "子单金额投影与子单引用集合必须等长");
-        return new MasterOrder(IDUtils.generateID(), orderNo, buyerId, address, amount,
+        return new MasterOrder(masterOrderId, orderNo, buyerId, address, amount,
                 subOrderIds, subAmounts);
     }
 }

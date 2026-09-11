@@ -191,8 +191,8 @@ class OrderContractUnitTest {
     @Test
     @DisplayName("工厂：主单/子单创建签名定型（ID 生成收敛工厂）")
     void factory_createSignaturesFrozen() throws Exception {
-        assertThat(MasterOrderFactory.class.getMethod("createMasterOrder", String.class,
-                Long.class, com.nona.domain.order.entity.AddressSnapshot.class,
+        assertThat(MasterOrderFactory.class.getMethod("createMasterOrder", Long.class,
+                String.class, Long.class, com.nona.domain.order.entity.AddressSnapshot.class,
                 com.nona.domain.order.entity.AmountDetail.class, List.class, List.class)
                 .getReturnType()).isEqualTo(MasterOrder.class);
         assertThat(SubOrderFactory.class.getMethod("createSubOrder", Long.class, Long.class,
