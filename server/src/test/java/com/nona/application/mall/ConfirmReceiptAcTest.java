@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * MasterOrder/SubOrder 仓储 JPA 实现 + 用例/门面/事件
  * 发布器 Spring 注册落地）。
  * <p>
- * 装配面清单见红设计报告 §装配面清单——真实事务双入口 / 完成事件真实
+ * 装配面清单——真实事务双入口 / 完成事件真实
  * 投递 / 提权事务边界 / 幂等重放真实面 / 归属过滤 + 仓储链路 / 仓储降级
  * 规则。事件监听/发布/执行器（OrderCompletedLogListener /
  * SpringOrderCompletedEventPublisher / OrderCompletedEventConfig）为 inf

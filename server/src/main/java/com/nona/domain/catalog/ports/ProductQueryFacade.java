@@ -16,7 +16,7 @@ package com.nona.domain.catalog.ports;
  *         （经库存域 {@code InventoryFacade.queryAvailable} 跨上下文读——
  *         未初始化/缺行按 0，zip 语义）；</li>
  *     <li><b>运费模板/店铺信息</b>：运费模板规则概要（<b>恒非空</b>——商品绑定
- *         模板概要；未绑定/绑定悬挂回退店铺默认模板概要，非空设计 §2.5，
+ *         模板概要；未绑定/绑定悬挂回退店铺默认模板概要，非空设计，
  *         不存在 null 语义）+ 店铺卡片信息（买家详情展示用）；</li>
  *     <li><b>租户放行形态</b>：本契约读 tenant 表（product/sku/freight），
  *         买家视角（contextTenant 空）须在读放行上下文内调用——放行

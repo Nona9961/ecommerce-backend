@@ -93,7 +93,7 @@ class TestFoundationContractAcTest {
      * <p>
      * 识别规则：按行扫描，跳过 javadoc/注释行（{@code *}/{\@code //} 开头）后
      * 仍含注解字面才计入——支撑类 javadoc 中「本类无 {@code @Test} 方法」等
-     * 字样不误判（WU-49 AcceptanceDbSupport 触发实证）。
+     * 字样不误判（AcceptanceDbSupport 触发实证）。
      */
     private static List<String> annotatedTestClassBaseNames(Path root) throws IOException {
         Path srcRoot = root.resolve(TEST_SRC_ROOT);

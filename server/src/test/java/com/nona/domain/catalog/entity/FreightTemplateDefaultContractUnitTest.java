@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 默认运费模板身份契约测试（非空设计 §2.5 领域侧落点）：默认模板 =
+ * 默认运费模板身份契约测试（非空设计领域侧落点）：默认模板 =
  * 既有 {@code FreightTemplate} 聚合的一个具名实例（isDefault=true 显式
  * 标记店铺回退锚点），身份创建后不可变；规则可编辑（冻结的是存在性
  * 而非规则形态）；默认模板禁停用（frozen 400）；普通模板（8 参构造）

@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * 商品搜索服务集成测试（WU-41 一期：PG 读库 + product_search_view 查询服务；
+ * 商品搜索服务集成测试（一期：PG 读库 + product_search_view 查询服务；
  * 2026-09-11 真视图化修订：test 搜索走真实 PG——不再自建模拟表）。
  * <p>
  * 测试策略（修订契约）：replica 数据源 = 真 PostgreSQL（ecommerce_test 库，
@@ -199,7 +199,7 @@ class ProductSearchServiceIntegrationAcTest {
 
     /**
      * 关键词命中 + 大小写不敏感（upper() like 双库语义：「APPLE」命中标题
-     * 含 Apple 的 101/106 两行；108 标题含小写 watch 不含 apple；B5.2）。
+     * 含 Apple 的 101/106 两行；108 标题含小写 watch 不含 apple）。
      */
     @Test
     @DisplayName("happy：关键词标题命中且大小写不敏感")
@@ -213,7 +213,7 @@ class ProductSearchServiceIntegrationAcTest {
     }
 
     /**
-     * 关键词描述命中（「摄影」命中 101/103/107 三行描述；B5.2 标题/描述匹配）。
+     * 关键词描述命中（「摄影」命中 101/103/107 三行描述；标题/描述匹配）。
      */
     @Test
     @DisplayName("happy：关键词描述命中")
@@ -228,7 +228,7 @@ class ProductSearchServiceIntegrationAcTest {
 
     /**
      * 过滤组合生效（类目 101 + 品牌 9901 + 店铺 99001 + 价格 [400000, 600000]
-     * 四过滤器同时命中仅 101；同条件品牌换 9902 → 空——组合为 AND 语义；B5.3）。
+     * 四过滤器同时命中仅 101；同条件品牌换 9902 → 空——组合为 AND 语义）。
      */
     @Test
     @DisplayName("happy：类目+品牌+店铺+价格过滤组合生效")
@@ -315,7 +315,7 @@ class ProductSearchServiceIntegrationAcTest {
     }
 
     /**
-     * 空结果：无命中关键词 → total 0 + 空列表（非 null），空态可提示（B5.2 空态）。
+     * 空结果：无命中关键词 → total 0 + 空列表（非 null），空态可提示。
      */
     @Test
     @DisplayName("critical：无命中返回空结果")

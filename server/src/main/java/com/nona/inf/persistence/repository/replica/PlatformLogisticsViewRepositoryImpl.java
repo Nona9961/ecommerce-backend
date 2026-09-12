@@ -32,7 +32,7 @@ import static org.mybatis.dynamic.sql.SqlBuilder.select;
 import static org.mybatis.dynamic.sql.SqlBuilder.where;
 
 /**
- * 平台物流视图读模型仓储实现（replica 通道，P5.1 平台监督列表数据面）。
+ * 平台物流视图读模型仓储实现（replica 通道，平台监督列表数据面）。
  * <p>
  * 只读三张镜像表（waybill / sub_order / shop，CDC 白名单在案——镜像
  * 链路存在性由验收前同步核对兜底）：行单元 = 子单

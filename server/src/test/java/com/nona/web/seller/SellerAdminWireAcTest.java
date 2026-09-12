@@ -51,13 +51,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商家/平台侧接线装配面测试（WU-60 装配清单 #1/#2/#3/#4/#5/#6，真实
+ * 商家/平台侧接线装配面测试（装配清单 #1/#2/#3/#4/#5/#6，真实
  * 装配：Security 链 + JWT + MySQL 真库 + 租户上下文）。
  * <p>
  * 覆盖：
  * <ul>
  *     <li>#1 端点形状：9 seller 端点逐字段断言 + 未登录取数 401 + B 店铺
- *         token 请求 A 店铺子单详情/发货/库存流水按 404 呈现（S2.3/G1.1
+ *         token 请求 A 店铺子单详情/发货/库存流水按 404 呈现（租户隔离
  *         锚点端点面，fail-closed 归属不泄露）；</li>
  *     <li>#2 列表 status 逗号分隔多值绑定生效、缺省全量；</li>
  *     <li>#3 分页参数归一化端点面（pageNum=0→1、pageSize=200→100）；</li>
@@ -478,7 +478,7 @@ class SellerAdminWireAcTest {
     }
 
     /**
-     * 装配 #1：租户 fail-closed（S2.3/G1.1 锚点端点面）——B 店铺 token
+     * 装配 #1：租户 fail-closed（租户隔离锚点端点面）——B 店铺 token
      * 请求 A 店铺子单详情/发货/库存流水按 404 呈现，归属不泄露；未认证
      * 登录取数 401。
      */

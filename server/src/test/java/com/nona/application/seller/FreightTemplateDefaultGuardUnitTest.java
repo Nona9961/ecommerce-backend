@@ -66,7 +66,7 @@ class FreightTemplateDefaultGuardUnitTest {
 
     /**
      * fail：删除默认模板拒绝（catalog.freight_default_template_frozen 400）
-     * 且不落删除——回退锚点恒存在（非空设计 §2.5）。
+     * 且不落删除——回退锚点恒存在（非空设计）。
      */
     @Test
     @DisplayName("删除默认模板拒绝且不落库")

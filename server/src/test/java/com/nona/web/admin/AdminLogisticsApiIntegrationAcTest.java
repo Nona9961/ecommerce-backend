@@ -28,8 +28,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 平台物流总览端点装配面测试（WU-60 装配清单 #7：GET /admin/logistics
- * 复用 WU-38 冻结的 PlatformLogisticsViewService 链路——真实 Security
+ * 平台物流总览端点装配面测试（装配清单 #7：GET /admin/logistics
+ * 复用已冻结的 PlatformLogisticsViewService 链路——真实 Security
  * 链 + JWT + replica 镜像表数据，PG 镜像三表直插跨店行集）。
  * <p>
  * 覆盖：跨店铺全集行形状（12 字段逐字段，枚举 name()/Instant ISO

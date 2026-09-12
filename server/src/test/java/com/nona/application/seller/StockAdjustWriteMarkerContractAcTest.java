@@ -20,7 +20,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 库存调整写后埋点契约测试（调整可售影响搜索「有货」过滤，落库后
- * 标记操作人——TD-08 写用例）。
+ * 标记操作人——写后自读（read-your-writes）写用例）。
  * <p>
  * 契约：adjustStock 成功后调用 {@link LastWriteMarker#markWrite(Long)}
  * 标记<b>操作人</b>（adjustStock 操作人参数 = 认证上下文身份，写者

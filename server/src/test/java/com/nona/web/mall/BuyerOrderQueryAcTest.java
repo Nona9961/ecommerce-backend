@@ -65,7 +65,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 买家订单查询装配面验收测试（WU-59 红报告 §5 装配面 1/2/3，真库面）：
+ * 买家订单查询装配面验收测试（装配面 1/2/3，真库面）：
  * mock 测不到的 PO 映射/Convertor 回填/归属过滤/分页排序逐一验证。
  * <ul>
  *     <li><b>装配面 1（createdAt 回填）</b>：真实仓储保存（DifferRepository
@@ -74,7 +74,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *         createdAt 非空且与库列 create_time 字符串一致；新建路径 null
  *         不落库；</li>
  *     <li><b>装配面 2（查询真链 + PO 映射）</b>：listPaged/detail/waybill
- *         经 WU-55 真仓储 → 视图字段与 PO 往返一致；子单反查序/店铺名
+ *         经真仓储 → 视图字段与 PO 往返一致；子单反查序/店铺名
  *         装配（真实 JOIN 装载）；分页排序（create_time DESC, id DESC）——
  *         跨买家 404 归属过滤真实生效；</li>
  *     <li><b>装配面 3（initiatePaymentWithView 字段透出）</b>：真主单 +

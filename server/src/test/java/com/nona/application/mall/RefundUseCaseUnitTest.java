@@ -210,7 +210,7 @@ class RefundUseCaseUnitTest {
 
         final RefundOrderView view = useCase.applyRefundByBuyer(BUYER_ID, SUB_A, "不想要了");
 
-        // 受理参数：支付单号 + 退款单号（建单动态生成，REF 单号） + 金额 = 子单实付（B8.5③）
+        // 受理参数：支付单号 + 退款单号（建单动态生成，REF 单号） + 金额 = 子单实付
         final org.mockito.ArgumentCaptor<RefundRequest> refundCaptor =
                 org.mockito.ArgumentCaptor.forClass(RefundRequest.class);
         verify(gateway).refund(refundCaptor.capture());
@@ -256,7 +256,7 @@ class RefundUseCaseUnitTest {
     }
 
     /**
-     * happy-3 发货超时系统退款（B9.4②）：已支付未发货子单 → closeByTimeout
+     * happy-3 发货超时系统退款：已支付未发货子单 → closeByTimeout
      * （履约侧已关闭，资金侧由退款单承载）→ 建单（未发货快照固定
      * false——超时关闭前提即货未出）→ 受理落位 → 落库。
      */
@@ -288,7 +288,7 @@ class RefundUseCaseUnitTest {
 
     /**
      * critical-1 超时重扫幂等短路：子单已关闭（上次超时已处理）→ 直接
-     * 返回 null 成功——不再关单/建单/受理（handler 幂等，B9.4② 重扫
+     * 返回 null 成功——不再关单/建单/受理（handler 幂等，超时重扫
      * 常态路径）。
      */
     @Test

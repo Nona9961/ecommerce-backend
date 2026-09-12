@@ -28,7 +28,7 @@ public interface FreightTemplateRepository extends BaseRepository<Long, FreightT
     /**
      * 按店铺定位默认运费模板（is_default=true 行；租户过滤 fail-closed）：
      * 回退锚点查询——商品未绑定/绑定悬挂时详情读/试算回退目标（非空设计
-     * §2.5：回退值本身是显式实体行）。
+     * （回退值本身是显式实体行）。
      *
      * @param shopId 店铺 ID
      * @return 默认模板；行缺失返回 null（消费侧防御拒绝

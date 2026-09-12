@@ -51,7 +51,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 仓储契约冒烟测试（WU-55 冒烟清单 6 项）：@SpringBootTest 全上下文 +
+ * 仓储契约冒烟测试（冒烟清单 6 项）：@SpringBootTest 全上下文 +
  * MySQL 真库（localtunnel 隧道 + -Pfull -Dspring.profiles.active=test），
  * 注入 5 个 DifferRepository 仓储 bean——mock 测不到的装配面逐面验证：
  * 1) claim 条件更新真库语义（4 断言×2 表）；2) clear 幂等 + 不再被

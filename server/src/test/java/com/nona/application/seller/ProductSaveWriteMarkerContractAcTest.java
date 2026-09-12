@@ -25,7 +25,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 商品保存写后埋点契约测试（商品保存 = 搜索可见内容变更，落库后
- * 标记写者本人——TD-08 read-your-writes）。
+ * 标记写者本人——写后自读（read-your-writes））。
  * <p>
  * 契约：商品写方法（createDraft/update/delete/图片/属性/规格/SKU/
  * 提交审核等全部写路径）成功后调用

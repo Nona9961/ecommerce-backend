@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 三交易域仓储实现 + 用例/端口实现
  * Spring 注册落地）。
  * <p>
- * 装配面清单见红设计报告 §装配面清单——真实事务三联动 / 提权事务边界
+ * 装配面清单——真实事务三联动 / 提权事务边界
  * / 幂等重放真实面 / 租户过滤 / 仓储链路。
  * <p>
  * 数据准备：测试内 JDBC 直插（测试库 ecommerce_test，固定 ID 段

@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
  * 商品查询门面实现（买家视图装配）：商品加载（在售校验：非 ON_SALE
  * 按不存在呈现）→ 生效内容 + 从表集合
  * → 运费模板规则概要（绑定概要；未绑定/绑定悬挂回退<b>店铺默认模板</b>
- * 概要——freight 恒非空，非空设计 §2.5）→ 店铺卡片（Shop 聚合
+ * 概要——freight 恒非空，非空设计）→ 店铺卡片（Shop 聚合
  * 读）→ SKU 可售量（跨域 InventoryFacade.queryAvailable zip）→ 视图拼装。
  * <p>
  * 租户语义：本实现自身不放行——买家/下单编排视角（contextTenant 空）的
@@ -179,7 +179,7 @@ public class ProductQueryFacadeImpl implements ProductQueryFacade {
     /**
      * 运费模板规则概要装配：绑定行存在 → 绑定概要；未绑定/绑定悬挂（模板
      * 行缺失）→ 回退 {@code findDefaultByShopId(shopId)} 概要（freight 恒非空，
-     * 非空设计 §2.5）；默认模板缺失 → 防御拒绝
+     * 非空设计）；默认模板缺失 → 防御拒绝
      * {@code catalog.freight_default_template_not_found}（开店必建故不可达，
      * 不静默降级为 null/包邮）。
      *

@@ -6,7 +6,7 @@ import com.nona.domain.logistics.ports.PlatformLogisticsViewFilter;
 import java.util.List;
 
 /**
- * 平台物流视图读模型仓储（PG 镜像表读取契约，纯读，P5.1 平台监督列表）。
+ * 平台物流视图读模型仓储（PG 镜像表读取契约，纯读，平台物流监督列表数据面）。
  * <p>
  * 只读 PG replica 数据源（静态装配白名单纪律：本仓储实现仅持有 replica
  * 命名参数模板，无运行时路由、无事务、无写路径）；三张镜像表

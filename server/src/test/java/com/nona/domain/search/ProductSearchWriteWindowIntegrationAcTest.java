@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 /**
- * 写后自读窗口路由集成测试（TD-08：窗口命中 → 本次查询走主库；
+ * 写后自读窗口路由集成测试（窗口命中 → 本次查询走主库；
  * 2026-09-11 真视图化修订：test 搜索走真实 PG——双库不再自建模拟表）。
  * <p>
  * 测试策略（真实双库差异构造）：CDC sink 全量监听三库（MySQL ecommerce_test

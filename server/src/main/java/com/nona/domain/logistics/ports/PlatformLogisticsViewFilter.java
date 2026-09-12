@@ -6,7 +6,7 @@ import com.nona.domain.order.entity.SubOrderStatus;
  * 平台物流视图筛选条件（不可变值对象；null 字段 = 不过滤——平台全量
  * 视角）。
  * <p>
- * 筛选维度即 P5.1 验收②「按店铺/状态筛选」两项：
+ * 筛选维度即平台监督列表的「按店铺/状态筛选」两项：
  * <ul>
  *     <li>{@code shopId}——店铺等值过滤（跨店铺全集下按店铺收敛）；</li>
  *     <li>{@code status}——子单履约状态过滤（行单元=子单，状态筛选

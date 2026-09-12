@@ -22,7 +22,7 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 版本回滚写后埋点契约测试（回滚 = 商品内容变更、搜索可见内容变化，
- * 落库后标记写者本人——TD-08 写用例）。
+ * 落库后标记写者本人——写后自读（read-your-writes）写用例）。
  * <p>
  * 契约：rollback 成功后调用 {@link LastWriteMarker#markWrite(Long)}
  * 标记<b>当前商家账号</b>（请求上下文身份）——商家回滚版本后 3s 内

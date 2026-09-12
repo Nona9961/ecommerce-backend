@@ -22,10 +22,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * mock 网关回调送达端点装配面验收测试（支付/退款 HTTP 送达面接线，绿
  * 阶段装配面清单实现）。
  * <p>
- * 装配面清单见红设计报告 §三（5 项）——mock 覆盖不到的真实面经真实
+ * 装配面清单（5 项）——mock 覆盖不到的真实面经真实
  * Spring 装配 + MockMvc 全链验证：
  * <ol>
- *     <li><b>安全链放行</b>（本 WU 核心装配面）：无 token 直达内部端点
+ *     <li><b>安全链放行</b>（核心装配面）：无 token 直达内部端点
  *         （SecurityConfig {@code /internal/**} permitAll）——孤儿回调
  *         直达编排返回 404 业务码证明「放行 + 端点 + 编排」全链可达；</li>
  *     <li><b>PAY 回调真链</b>：端点 → 渠道校验 → 支付回调编排事务——支付
@@ -62,7 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 class MockGatewayCallbackAcTest {
 
-    /** 回调送达端点路径（安全链放行面本 WU 核心）。 */
+    /** 回调送达端点路径（安全链放行面核心）。 */
     private static final String ENDPOINT = "/internal/mock-gateway/callback";
 
     /** PAY 链店铺（子单/库存 tenant 锚点，975xx 段）。 */

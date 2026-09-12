@@ -43,7 +43,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 取消订单编排用例场景测试（B8.6 ① 主动取消 + B8.3 支付超时取消，
+ * 取消订单编排用例场景测试（主动取消 + 支付超时取消，
  * 红阶段契约）。
  * <p>
  * 覆盖：happy——待支付主单取消全链路（归属校验 → 订单取消 → 逐子单
@@ -208,7 +208,7 @@ class CancelOrderUseCaseUnitTest {
     }
 
     /**
-     * happy-2 支付超时入口：reason = TIMEOUT 自动落位（B8.3 超时调度
+     * happy-2 支付超时入口：reason = TIMEOUT 自动落位（超时调度
      * 复用面），编排与主动取消共用（订单取消 + 逐子单回滚 + 支付关单）。
      */
     @Test
@@ -265,7 +265,7 @@ class CancelOrderUseCaseUnitTest {
     }
 
     /**
-     * critical-2 超时重扫命中已取消订单：幂等短路成功（B8.3 超时 handler
+     * critical-2 超时重扫命中已取消订单：幂等短路成功（超时 handler
      * 幂等语义——closePay 对已关闭幂等 + 编排短路双重兜底）。
      */
     @Test
@@ -372,7 +372,7 @@ class CancelOrderUseCaseUnitTest {
     }
 
     /**
-     * fail-4 聚合守卫拒绝（已支付走退款 B8.6② / 已发货不可取消 B8.6③）：
+     * fail-4 聚合守卫拒绝（已支付走退款 / 已发货不可取消）：
      * 订单侧非法迁移异常原样透传——库存回滚与支付关单不执行（同事务
      * 整体回滚，杜绝半程副作用）。
      */

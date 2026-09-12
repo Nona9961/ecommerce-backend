@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * RefundOrder/SubOrder/MasterOrder/PaymentOrder 仓储 JPA 实现 +
  * RefundUseCase/RefundCallbackUseCase/OrderFacadeImpl Spring 注册落地）。
  * <p>
- * 装配面清单见红设计报告——真实事务三域原子（申请全链 + 回调成功全链 +
+ * 装配面清单——真实事务三域原子（申请全链 + 回调成功全链 +
  * 失败链 + 编排回滚实测）/ 提权写段真实面 / 幂等重放真实面 / 发货超时
  * 复用链 / 仓储链路 + 留痕从表装载。
  * <p>

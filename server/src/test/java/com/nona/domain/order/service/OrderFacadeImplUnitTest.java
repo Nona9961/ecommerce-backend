@@ -296,7 +296,7 @@ class OrderFacadeImplUnitTest {
         verify(masterOrderRepository, never()).save(org.mockito.ArgumentMatchers.any(MasterOrder.class));
     }
 
-    /* ================= autoComplete（完成推进接线，本 WU） ================= */
+    /* ================= autoComplete（完成推进接线） ================= */
 
     /**
      * happy-3 完成推进全链路：已发货子单标记完成（真实聚合迁移）＋主单

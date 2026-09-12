@@ -22,12 +22,12 @@ import java.time.LocalDateTime;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 平台物流视图真实装配验收测试（P5.1：真实装配面——PG 镜像表读取
- * 链路/列投影/状态文字映射/超时列数据面逐一验证；WU-49 按 javadoc 启用
- * 契约改写，红阶段降级声明已解除——WU-61 CDC 三库同步链路已就绪，
+ * 平台物流视图真实装配验收测试（真实装配面——PG 镜像表读取
+ * 链路/列投影/状态文字映射/超时列数据面逐一验证；按 javadoc 启用
+ * 契约改写，红阶段降级声明已解除——CDC 三库同步链路已就绪，
  * test 库 PG 镜像（ecommerce_test）含 waybill / sub_order / shop 三张镜像表）。
  * <p>
- * 装配面清单见红设计报告——真实 replica 查询链路 / 超时标记数据面 /
+ * 装配面清单：真实 replica 查询链路 / 超时标记数据面 /
  * 镜像同步核对动作。
  * <p>
  * 数据准备：直插 MySQL test 业务表（waybill / sub_order / shop）→ poll-until

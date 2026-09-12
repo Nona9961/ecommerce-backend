@@ -35,13 +35,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 商品搜索端点契约测试（WU-59：GET /mall/search ——路径/查询参数绑定/
- * 卡片形状，与前端 searchApi.ts 约定逐字段锁定；复用 WU-41
- * ProductSearchService 领域契约，web 面本 WU 回注）。
+ * 商品搜索端点契约测试（GET /mall/search ——路径/查询参数绑定/
+ * 卡片形状，与前端 searchApi.ts 约定逐字段锁定；复用
+ * ProductSearchService 领域契约（服务真链面在领域服务集成测试落位）。
  * <p>
  * 装配策略：搜索用例 bean 以 {@code @MockitoBean} 替换为 mock（容器仅
  * 验证路由/MVC 装配与形状投影——搜索真实链（PG 镜像/product_search_view）
- * 受 test 库无真视图约束归 walkthrough 分支（见红报告未决 4 决策标准）；
+ * 受 test 库无真视图约束归 walkthrough 分支（真链面留待部署位验证）；
  * 认证沿用 AddressBookApiIntegrationAcTest 先例。
  * <p>
  * 红阶段状态：controller 方法体为 UOE 契约占位——本类全部用例红

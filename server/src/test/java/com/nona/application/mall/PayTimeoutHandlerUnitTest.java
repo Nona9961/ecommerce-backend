@@ -18,7 +18,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 支付超时处理器（ORDER_PAY：30 分钟待支付自动关单回滚，B8.3）场景测试
+ * 支付超时处理器（ORDER_PAY：30 分钟待支付自动关单回滚）场景测试
  * ——红阶段契约。
  * <p>
  * 覆盖：happy——fire 按类型路由到 {@link CancelOrderUseCase#cancelByTimeout}
@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * 重扫重放：每次 fire 都路由用例一次，业务幂等由用例短路承担）与 target
  * 参数透传正确；fail——用例抛异常原样传播。
  * <p>
- * 装配纪律：处理器为普通类（红阶段不注册 Spring，WU-032 决策 9 降级先例），
+ * 装配纪律：处理器为普通类（红阶段不注册 Spring，遵循既有降级先例），
  * 构造器直接装配（@BeforeEach 重建，禁字段初始化）；对应用例以 mock 承载；
  * 桩纪律——红阶段以 lenient 豁免 UOE 挡道面，绿实现后已按断言面逐桩
  * 收回精确桩（零豁免，doThrow 桩经 assertThatThrownBy 消费）。

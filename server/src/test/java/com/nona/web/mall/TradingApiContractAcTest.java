@@ -61,7 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 买家交易端点契约测试（WU-59：TradingApi 10 端点——路径/方法/参数
+ * 买家交易端点契约测试（TradingApi 10 端点——路径/方法/参数
  * 绑定/响应形状，与前端 tradingApi.ts 约定逐字段锁定）。
  * <p>
  * 装配策略：全部交易用例 bean 以 {@code @MockitoBean} 替换为 mock

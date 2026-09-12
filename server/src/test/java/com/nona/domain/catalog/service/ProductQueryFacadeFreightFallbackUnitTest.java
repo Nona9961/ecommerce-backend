@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 /**
- * 商品查询门面运费回退契约测试（非空设计 §2.5 查询侧落点）：买家详情
+ * 商品查询门面运费回退契约测试（非空设计查询侧落点）：买家详情
  * 读 freight 恒非空——商品未绑定模板 → 回退店铺默认模板概要；绑定 → 绑定
  * 模板概要；绑定悬挂（模板行缺失，脏数据）→ 宽容回退默认概要（详情不
  * 404）；默认模板被编辑后回退值同步（新规则）；默认模板缺失（开店必建

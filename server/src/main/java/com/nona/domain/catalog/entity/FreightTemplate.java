@@ -17,7 +17,7 @@ import com.nona.exceptions.EcommerceBusinessCode;
  *         （{@code FreightCalculator} 对停用模板拒绝计费）；</li>
  *     <li>启用/停用二态切换幂等（重复设置同一状态无副作用）；</li>
  *     <li>默认模板身份（店铺兜底回退锚点）：开店自动创建且恒存在（非空设计
- *         §2.5——商品未绑定模板时回退该店默认模板，不存在 null 语义）；
+ *         （商品未绑定模板时回退该店默认模板，不存在 null 语义）；
  *         身份创建后不可变（final）；默认模板禁停用（{@code disable()} 拒绝
  *         {@code catalog.freight_default_template_frozen} 400）与禁删除
  *         （删除守卫收敛在商家端用例层），但规则可编辑（{@code updateRules}
