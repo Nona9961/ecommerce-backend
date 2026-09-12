@@ -17,6 +17,13 @@ import java.util.Optional;
  * 表级约束兜底（uk_inventory_item_sku，并发重复初始化拒绝——直插第二
  * 行抛 {@link org.springframework.dao.DataIntegrityViolationException}，
  * 首个写入行保持）。
+ * <p>
+ * <b>条件更新（cas*）租户条件形态</b>：{@code (:tenantId is null or
+ * p.tenantID = :tenantId)}——请求上下文有租户（商家路径）保持租户条件
+ * 显式注入（跨店 fail-closed）；提权段内无请求租户（买家取消回滚/支付
+ * 确认扣减/退款回补/超时调度上下文）实现层传 {@code null} → 按主键全局
+ * 唯一定位（Snowflake 主键跨店无碰撞，sub_order 超时 claim/clear 同先例），
+ * 跨店语义由用例层归属校验 + 提权写门禁承载。
  *
  * @author nona9961
  */
@@ -49,7 +56,8 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update InventoryItemPO p set p.available = p.available - :demand, "
             + "p.held = p.held + :demand, p.version = p.version + 1 "
-            + "where p.id = :itemId and p.available >= :demand and p.tenantID = :tenantId")
+            + "where p.id = :itemId and p.available >= :demand"
+            + " and (:tenantId is null or p.tenantID = :tenantId)")
     int casPreoccupy(@Param("itemId") Long itemId, @Param("demand") int demand,
                      @Param("tenantId") String tenantId);
 
@@ -67,7 +75,8 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update InventoryItemPO p set p.held = p.held - :quantity, "
             + "p.sold = p.sold + :quantity, p.version = p.version + 1 "
-            + "where p.id = :itemId and p.held >= :quantity and p.tenantID = :tenantId")
+            + "where p.id = :itemId and p.held >= :quantity"
+            + " and (:tenantId is null or p.tenantID = :tenantId)")
     int casConfirmDeduct(@Param("itemId") Long itemId, @Param("quantity") int quantity,
                          @Param("tenantId") String tenantId);
 
@@ -84,7 +93,8 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update InventoryItemPO p set p.held = p.held - :quantity, "
             + "p.available = p.available + :quantity, p.version = p.version + 1 "
-            + "where p.id = :itemId and p.held >= :quantity and p.tenantID = :tenantId")
+            + "where p.id = :itemId and p.held >= :quantity"
+            + " and (:tenantId is null or p.tenantID = :tenantId)")
     int casRollback(@Param("itemId") Long itemId, @Param("quantity") int quantity,
                     @Param("tenantId") String tenantId);
 
@@ -105,7 +115,8 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update InventoryItemPO p set p.available = p.available + :delta, "
             + "p.version = p.version + 1 "
-            + "where p.id = :itemId and p.available + :delta >= 0 and p.tenantID = :tenantId")
+            + "where p.id = :itemId and p.available + :delta >= 0"
+            + " and (:tenantId is null or p.tenantID = :tenantId)")
     int casAdjust(@Param("itemId") Long itemId, @Param("delta") int delta,
                   @Param("tenantId") String tenantId);
 
@@ -126,7 +137,8 @@ public interface InventoryItemJpaRepository extends JpaRepository<InventoryItemP
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update InventoryItemPO p set p.sold = p.sold - :quantity, "
             + "p.available = p.available + :quantity, p.version = p.version + 1 "
-            + "where p.id = :itemId and p.sold >= :quantity and p.tenantID = :tenantId")
+            + "where p.id = :itemId and p.sold >= :quantity"
+            + " and (:tenantId is null or p.tenantID = :tenantId)")
     int casRestore(@Param("itemId") Long itemId, @Param("quantity") int quantity,
                    @Param("tenantId") String tenantId);
 }

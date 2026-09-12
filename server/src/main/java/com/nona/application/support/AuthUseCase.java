@@ -30,9 +30,9 @@ import java.util.List;
  * 登录编排：按门户定向查单表账号（type 匹配）→ 凭证校验（BCrypt，失败统一消息
  * 防账号存在性泄露）→ 账号状态校验（BANNED 拒绝登录，{@code auth.forbidden} → HTTP 403，
  * 封禁边界：买家封禁禁止一切操作且不造成经济损失；商家封禁仅停新交易，已支付订单继续履约）→
- * 读取账号-店铺关联组装 shopIds（商家登录返回其店铺列表，一期空列表合法）→ 回填 Redis 用户上下文
+ * 读取账号-店铺关联组装 shopIds（商家登录返回其店铺列表，空列表合法）→ 回填 Redis 用户上下文
  * （status/roles/shopIds）→ 签发 JWT {uid, portal, exp}。平台运营（admin）账号
- * 无落点（RBAC 属 Phase-II），portal=ADMIN 拒绝（fail-closed）。
+ * 无落点（RBAC 扩展位），portal=ADMIN 拒绝（fail-closed）。
  * 事务边界 = 本用例方法。
  *
  * @author nona9961

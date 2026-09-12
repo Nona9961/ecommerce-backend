@@ -14,7 +14,7 @@ import java.util.Optional;
 
 /**
  * Redis 用户上下文缓存：key 按 uid 定位（{@code auth:user:{uid}}），JSON 存储
- * {@link AuthUserContext}，TTL 由配置兜底（一期 1 小时）。
+ * {@link AuthUserContext}，TTL 由配置兜底（当前 1 小时）。
  * <p>
  * <b>可用性不依赖 Redis</b>：连接/执行故障（{@link DataAccessException}）一律降级——
  * 读取按 miss 处理（走 DB 回填），写入静默失败（尽力而为），

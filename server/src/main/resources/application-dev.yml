@@ -1,22 +1,46 @@
 spring:
-  h2:
-    console:
-      enabled: true
-      path: /h2
   datasource:
-    url: jdbc:h2:mem:mydb
-    username: root
-    password: password
-#    driver-class-name: com.mysql.cj.jdbc.Driver
-    driver-class-name: org.h2.Driver
+    # 主库 = 宿主 MySQL 8.4.8（宿主 3306 经 localtunnel 隧道 13306）
+    # 密码零明文：占位符 ${ECOM_DB_PASSWORD}，运行命令模板从 /opt/data-stack/.env
+    # 的 MYSQL_ECOM_PW 映射导出（见 WU-53 决策表 D11 命令模板）
+    url: jdbc:mysql://127.0.0.1:13306/ecommerce?connectTimeout=5000&socketTimeout=8000&useSSL=false&allowPublicKeyRetrieval=true
+    username: ecom_app
+    password: ${ECOM_DB_PASSWORD}
+    # driver 交由 Boot 从 URL 推导（与 test.yml 同形；显式声明会干扰测试内嵌 H2 override 面）
     hikari:
       maximum-pool-size: 20
       connection-timeout: 30000
       idle-timeout: 300000
       connection-test-query: SELECT 1
+  flyway:
+    # DDL 版本化（WU-53，D1/D2 决策 + 绿阶段预案触发）：flyway-core + flyway-mysql
+    # （Boot 4.1 BOM 管版本 = 12.4.0）；默认启用，迁移脚本 classpath:db/migration
+    # （V1__baseline.sql）。
+    # baseline-on-migrate=true + baseline-version=0（绿阶段实证触发 D2 预案）：
+    # Flyway 12 对「非空 schema + 无 history 表」默认拒绝迁移（Found non-empty schema
+    # but no schema history table）——ecommerce 库含部署位自建探针表 cdc_probe
+    # （永久存在、不入 V1），库永为非空，不开 baseline 则 Flyway 完全不可用。
+    # 基线化于版本 0 = 声明「V1 之前的库状态（仅探针表）不纳入 Flyway 管理」；
+    # V1 作为首个真实迁移完整应用（注意 baseline-version 默认 1 会占用 V1 版本号
+    # 导致 V1 被跳过——显式归零是必要配套）。
+    # 红线：Flyway clean 永久禁止——本库是 CDC（Debezium）源库，clean 清空业务表
+    # 即炸整条 binlog 同步链路；任何脚本/命令不得执行 flyway clean 或手工
+    # DROP / DROP DATABASE（清理一律走 scripts/test-db-reset.sh 数据级 DELETE）。
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    # 测试面 R 迁移（R__tenant_test_tables 仅 test locations）与 dev 共库：
+    # test profile 应用后 history 含该记录，dev 启动校验报 missing（
+    # 「Detected applied migration not resolved locally」）——忽略 repeatable
+    # 类型的 missing（版本化 V 迁移仍严格校验，误删即拒启）。
+    ignore-migration-patterns: repeatable:missing
   jpa:
     hibernate:
-      ddl-auto: create
+      # schema 校验：hbm2ddl 只验不建，schema 真源 = Flyway V1（24 表 PO 映射全集）。
+      # validate 对全部注册 PO 校验表/列/可空/类型——WU-54 注册新 PO 而 V2 未落库时
+      # 启动即失败 = 天然契约闸门（D3）
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -36,6 +60,12 @@ nona:
   mock-gateway:
     # mock 支付渠道默认剧本（无标记单号走此剧本；SUCCESS/FAIL/NOCALLBACK）
     default-script: SUCCESS
+  scheduling:
+    # 调度激活：推进器/超时引擎按真实节奏走（demo 验收面）
+    enabled: true
+  logistics:
+    # 推进器扫描周期，javadoc 默认 5000ms
+    scan-interval-ms: 5000
 
 # replica 读库（WU-41 双数据源基建，顶层命名空间 replica.datasource.*）：
 # dev 无宿主 PG 直连（沙箱隔离），以 H2 内存库模拟 product_search_view
@@ -57,3 +87,6 @@ change-tracking:
     com.nona.domain.catalog.entity.ProductAttribute: getId
     com.nona.domain.catalog.entity.Sku: getId
     com.nona.domain.catalog.entity.ProductShopCategoryRef: id
+    com.nona.domain.payment.entity.PaymentCallbackRecord: getId
+    com.nona.domain.payment.entity.RefundCallbackRecord: getId
+    com.nona.domain.logistics.entity.WaybillTrack: getId

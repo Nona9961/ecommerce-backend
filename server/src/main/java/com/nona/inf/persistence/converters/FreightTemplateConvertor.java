@@ -31,6 +31,7 @@ public class FreightTemplateConvertor extends AbstractConvertor<FreightTemplate,
         po.setBaseFreight(root.getBaseFreight());
         po.setFreeThreshold(root.getFreeThreshold());
         po.setStatus(root.getStatus());
+        po.setIsDefault(root.isDefault());
         return po;
     }
 
@@ -40,6 +41,7 @@ public class FreightTemplateConvertor extends AbstractConvertor<FreightTemplate,
     @Override
     protected FreightTemplate safedConvertToRoot(FreightTemplatePO po, Void other) {
         return new FreightTemplate(po.getId(), po.getShopId(), po.getName(), po.getRuleType(),
-                po.getPerItemPrice(), po.getBaseFreight(), po.getFreeThreshold(), po.getStatus());
+                po.getPerItemPrice(), po.getBaseFreight(), po.getFreeThreshold(), po.getStatus(),
+                Boolean.TRUE.equals(po.getIsDefault()));
     }
 }

@@ -26,11 +26,7 @@
     <Loggers>
         <Root level="INFO" includeLocation="true">
             <AppenderRef ref="Console"/>
-        </Root>
-
-        <AsyncLogger name="asyncFileLogger" level="INFO" includeLocation="true">
             <AppenderRef ref="RollingFileAsync"/>
-            <property name="batchSize">100</property>
-        </AsyncLogger>
+        </Root>
     </Loggers>
 </Configuration>

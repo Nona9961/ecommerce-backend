@@ -13,7 +13,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import javax.sql.DataSource;
 
 /**
- * replica 读库装配（WU-41 一期：PG 读库双数据源基建，TD-08）。
+ * replica 读库装配（PG 读库双数据源基建）。
  * <p>
  * 装配形态决策：<b>replica 以 JdbcTemplate 直连形态暴露</b>，不注册
  * DataSource bean、不建第二套 EntityManagerFactory：
@@ -47,7 +47,7 @@ import javax.sql.DataSource;
  *         限定隔离；</li>
  *     <li>只读纪律：本数据源不暴露任何写路径（无事务管理器、无
  *         Repository 直连，访问收敛在 search 读模型仓储），镜像表只读
- *         语义由结构保证（§3.3：PG 镜像表只服务读场景）。</li>
+ *         语义由结构保证（PG 镜像表只服务读场景）。</li>
  * </ul>
  * 配置位：{@code replica.datasource.*}（dev/test 指向 H2 内存模拟库跑
  * 服务语义；prod 指向 PG 读库，见部署位联调说明）。
@@ -113,7 +113,7 @@ public class ReplicaDataSourceConfig {
         DataSourceProperties properties = Binder.get(environment)
                 .bind("replica.datasource", DataSourceProperties.class)
                 .orElseThrow(() -> new IllegalStateException(
-                        "缺少 replica.datasource 配置（WU-41 replica 读库）："
+                        "缺少 replica.datasource 配置（replica 读库）："
                                 + "请在当前 profile 配置 replica.datasource.url/username/password"));
         DataSource dataSource = properties.initializeDataSourceBuilder().build();
         return new JdbcTemplate(dataSource);

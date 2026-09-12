@@ -314,6 +314,42 @@ public class ProductController implements ProductApi {
     }
 
     /**
+     * {@inheritDoc}
+     * <p>
+     * SKU 集回显端点（约定回显 GET，接线段）。
+     */
+    @Override
+    @GetMapping("/seller/products/{productId}/skus")
+    public HttpResponse<List<SkuItem>> listSkus(
+            @PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.listSkus(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 规格模板回显端点（约定回显 GET，接线段）。
+     */
+    @Override
+    @GetMapping("/seller/products/{productId}/spec-template")
+    public HttpResponse<SpecTemplateRequest> getSpecTemplate(
+            @PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.getSpecTemplate(productId));
+    }
+
+    /**
+     * {@inheritDoc}
+     * <p>
+     * 运费模板绑定回显端点（约定回显 GET，接线段）。
+     */
+    @Override
+    @GetMapping("/seller/products/{productId}/freight-template")
+    public HttpResponse<FreightTemplateBindRequest> getFreightTemplateBind(
+            @PathVariable("productId") Long productId) {
+        return HttpResponse.ok(productUseCase.getFreightTemplateBind(productId));
+    }
+
+    /**
      * 当前店铺 ID（认证过滤器写入跟踪作用域 tenantID 的租户值=当前店铺 ID）。
      *
      * @return 店铺 ID

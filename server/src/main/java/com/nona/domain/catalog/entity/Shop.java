@@ -44,7 +44,7 @@ public class Shop {
     private String description;
 
     /**
-     * 店铺状态（一期仅建状态位，冻结联动后续阶段）
+     * 店铺状态（状态位；冻结联动由用例层守卫）
      */
     private ShopStatus status;
 

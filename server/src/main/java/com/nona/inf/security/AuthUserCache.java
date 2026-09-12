@@ -3,7 +3,7 @@ package com.nona.inf.security;
 import java.util.Optional;
 
 /**
- * 用户上下文缓存端口：按 uid 存取 {@link AuthUserContext}（一期 Redis 实现，TTL 兜底）。
+ * 用户上下文缓存端口：按 uid 存取 {@link AuthUserContext}（Redis 实现，TTL 兜底）。
  * <p>
  * 契约语义：
  * <ul>

@@ -1,53 +1,89 @@
 package com.nona.inf.timeout;
 
+import com.nona.inf.context.TenantPrivilege;
+import com.nona.inf.context.TrackingContext;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 超时任务处理器：单条候选「认领 → 执行 → 清除」的同事务编排。
+ * 超时任务处理器：认领 → 触发 → 清除 deadline 三步编排（调度面消费入口）。
  * <p>
- * 事务边界（引擎的关键架构点）：认领更新与处理器执行在同一本地事务内
- * ——处理器抛异常/崩溃则整体回滚，认领位回到 0，候选在下轮扫描被再次
- * 认领处理；恢复依赖重扫闭环，无需额外补偿。处理成功才清除截止时间
- * （清除后行退出候选），失败路径不产生滞留的认领位——两种路径都不
- * 存在「死认领行」。
+ * 事务边界（修订）：三步同 <b>提权事务</b>（REQUIRES_NEW）——认领行锁
+ * （业务表行更新）与业务写（fire 内目标用例的提权写段）同连接执行：若认领在
+ * 外层普通事务而业务写在 REQUIRES_NEW 新连接，新连接对认领行锁的等待会触发
+ * MySQL socketTimeout（8s）级联失败。fire 内目标用例（如 cancelByTimeout）的
+ * 嵌套提权经 {@link TenantPrivilege#elevatedInTransaction} 嵌套去重同事务执行。
+ * 回滚语义：任一步失败 → 内层事务整体回滚（含认领位）→ 异常透传 → 调度侧下轮
+ * 重扫自然重试（不残留死认领行）。
  * <p>
- * 处理器实现内调用的业务用例方法以默认传播加入本事务；本类的事务
- * 注解经 Spring 代理生效，直接手工装配的单元测试验证纯编排逻辑。
+ * 跟踪作用域：本类是调度面消费入口（{@code @Scheduled} 线程无入口组件绑定
+ * TRACKING scope，而 fire 内目标用例的仓储操作（装载登记/变更集计算）要求
+ * {\@code TrackingContext.withScope}——fail-closed）→ 方法内绑定系统上下文
+ * （与测试手触 withScope 同形态；嵌套绑定安全，web/装饰器已绑定场景无副作用）。
+ *
+ * @author nona9961
  */
 @Component
 public class TimeoutTaskProcessor {
 
     /**
-     * 处理器注册表（按类型路由到期处理动作）。
+     * 处理器注册表（按超时类型路由）
      */
     private final TimeoutHandlerRegistry registry;
 
     /**
-     * @param registry 处理器注册表
+     * 提权工具（提权事务边界：无请求租户上下文写放行 + 嵌套去重）
      */
-    public TimeoutTaskProcessor(TimeoutHandlerRegistry registry) {
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
+     * 事务模板（REQUIRES_NEW：提权作用域 = 事务边界）
+     */
+    private final TransactionTemplate transactionTemplate;
+
+    /**
+     * 构造超时任务处理器。
+     *
+     * @param registry            超时处理器注册表
+     * @param tenantPrivilege     提权工具
+     * @param transactionTemplate 事务模板（REQUIRES_NEW）
+     */
+    public TimeoutTaskProcessor(TimeoutHandlerRegistry registry,
+                                TenantPrivilege tenantPrivilege,
+                                TransactionTemplate transactionTemplate) {
         this.registry = registry;
+        this.tenantPrivilege = tenantPrivilege;
+        this.transactionTemplate = transactionTemplate;
     }
 
     /**
-     * 处理单条候选：认领成功才执行，执行成功才清除；认领失败立即跳过
-     * （他方已处理或状态已迁移，不重复执行）；处理器缺失属装配错误，
-     * 在认领前即拒绝（不触碰数据）。
+     * 认领 → 触发 → 清除 deadline 同提权事务执行；认领失败（并发抢占/
+     * 状态不匹配）返回 false 无副作用。
      *
-     * @param store 该候选所属的数据端口
-     * @param task  到期候选
-     * @param <T>   业务对象引用类型
-     * @return true = 认领并处理完成；false = 认领失败（本轮放弃）
+     * @param store 超时任务存储（认领/清除落地面）
+     * @param task  到期任务（id + 业务目标引用）
+     * @param <T>   任务目标类型
+     * @return 是否处理成功（认领失败返回 false）
      */
-    @Transactional
     public <T> boolean processOne(TimeoutTaskStore<T> store, TimeoutTask<T> task) {
-        TimeoutHandler<T> handler = registry.get(store.type());
-        if (!store.claim(task)) {
-            return false;
-        }
-        handler.fire(task.target());
-        store.clearDeadline(task);
-        return true;
+        final TimeoutHandler<T> handler = registry.get(store.type());
+        final boolean[] handled = new boolean[1];
+        TrackingContext.withScope(() -> {
+            try {
+                handled[0] = tenantPrivilege.elevatedInTransaction(transactionTemplate, () -> {
+                    if (!store.claim(task)) {
+                        return false;
+                    }
+                    handler.fire(task.target());
+                    store.clearDeadline(task);
+                    return true;
+                });
+            } catch (final RuntimeException e) {
+                throw e;
+            } catch (final Exception e) {
+                throw new IllegalStateException("超时任务处理提权事务失败", e);
+            }
+        });
+        return handled[0];
     }
 }

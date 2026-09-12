@@ -8,7 +8,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * 写后窗口判定默认实现（Redis 剩余 TTL 判定，TD-08 3s 业务窗口）。
+ * 写后窗口判定默认实现（Redis 剩余 TTL 判定，3s 业务窗口）。
  * <p>
  * 实现契约：
  * <ul>

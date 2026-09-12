@@ -4,6 +4,7 @@ import com.nona.inf.persistence.po.catalog.FreightTemplatePO;
 import org.springframework.data.repository.ListCrudRepository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 运费模板 JPA 仓储（freight_template 表，模板聚合根根行，tenant=shopId）。
@@ -23,4 +24,13 @@ public interface FreightTemplateJpaRepository extends ListCrudRepository<Freight
      * @return 模板列表；无模板返回空列表
      */
     List<FreightTemplatePO> findByShopIdOrderByIdDesc(Long shopId);
+
+    /**
+     * 按所属店铺定位默认模板（is_default=true 行；同店铺至多一条由创建
+     * 入口守卫保证）。租户过滤同一切面——跨店铺定位不到行（fail-closed）。
+     *
+     * @param shopId 店铺 ID
+     * @return 默认模板行；无行返回 empty
+     */
+    Optional<FreightTemplatePO> findByShopIdAndIsDefaultTrue(Long shopId);
 }

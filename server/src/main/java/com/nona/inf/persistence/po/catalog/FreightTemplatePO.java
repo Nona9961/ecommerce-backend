@@ -73,6 +73,14 @@ public class FreightTemplatePO extends TenantScopedBasePO {
     private FreightTemplateStatus status;
 
     /**
+     * 默认模板身份标记（店铺兜底回退锚点；普通模板恒 false，默认模板
+     * 由开店编排唯一创建入口定型 true——同店铺至多一条由创建入口守卫
+     * 保证，DB 唯一约束不做）
+     */
+    @Column(nullable = false, name = "is_default")
+    private Boolean isDefault;
+
+    /**
      * 所属店铺 ID。
      *
      * @return 店铺 ID
@@ -196,5 +204,23 @@ public class FreightTemplatePO extends TenantScopedBasePO {
      */
     public void setStatus(FreightTemplateStatus status) {
         this.status = status;
+    }
+
+    /**
+     * 默认模板身份标记。
+     *
+     * @return true 默认模板
+     */
+    public Boolean getIsDefault() {
+        return isDefault;
+    }
+
+    /**
+     * 设置默认身份标记。
+     *
+     * @param isDefault 默认身份标记
+     */
+    public void setIsDefault(Boolean isDefault) {
+        this.isDefault = isDefault;
     }
 }

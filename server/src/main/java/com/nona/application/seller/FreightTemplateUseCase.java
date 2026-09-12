@@ -125,14 +125,22 @@ public class FreightTemplateUseCase {
     }
 
     /**
-     * 删除模板（物理删除；商品引用守卫随商品域后补）。
+     * 删除模板：默认模板禁删守卫——加载后 isDefault →
+     * {@code catalog.freight_default_template_frozen} 400 拒绝且不落删除
+     * （回退锚点恒可用）；普通模板按既有语义物理删除（商品引用守卫随
+     * 商品域后补）。
      *
      * @param templateId 模板 ID（必须属于当前店铺，否则 404）
      */
     @Transactional
     public void delete(Long templateId) {
         final FreightTemplate template = requireTemplate(templateId);
-        freightTemplateRepository.deleteByID(template.getId());
+        if (template.isDefault()) {
+            throw new BusinessException(
+                    EcommerceBusinessCode.CATALOG_FREIGHT_DEFAULT_TEMPLATE_FROZEN.code(),
+                    "默认运费模板禁删除");
+        }
+        freightTemplateRepository.deleteByID(templateId);
     }
 
     /**

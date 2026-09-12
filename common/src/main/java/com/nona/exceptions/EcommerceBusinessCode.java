@@ -161,6 +161,19 @@ public enum EcommerceBusinessCode {
     CATALOG_FREIGHT_INPUT_INVALID("catalog.freight_input_invalid", 400),
 
     /**
+     * 商品域：店铺默认运费模板缺失（开店必建故正常不可达——系统数据损坏面，
+     * 防御性拒绝，不静默降级为 null/包邮语义；非空设计 §2.5）。
+     */
+    CATALOG_FREIGHT_DEFAULT_TEMPLATE_NOT_FOUND(
+            "catalog.freight_default_template_not_found", 500),
+
+    /**
+     * 商品域：默认运费模板冻结操作拒绝（禁停用/禁删除——回退锚点恒可用守卫）。
+     */
+    CATALOG_FREIGHT_DEFAULT_TEMPLATE_FROZEN(
+            "catalog.freight_default_template_frozen", 400),
+
+    /**
      * 商品域：草稿商品不存在（按 ID 操作命中不存在的商品或不属于当前店铺的商品）。
      */
     CATALOG_PRODUCT_NOT_FOUND("catalog.product_not_found", 404),
@@ -420,6 +433,119 @@ public enum EcommerceBusinessCode {
     ORDER_SNAPSHOT_AMOUNT_INVALID("order.snapshot_amount_invalid", 400),
 
     /**
+     * 订单域：主订单不存在（按 ID 操作命中不存在的买家主单）。
+     */
+    ORDER_MASTER_NOT_FOUND("order.master_not_found", 404),
+
+    /**
+     * 订单域：子订单不存在（按 ID 操作命中不存在的店铺子订单）。
+     */
+    ORDER_SUB_NOT_FOUND("order.sub_not_found", 404),
+
+    /**
+     * 订单域：子订单非法状态迁移（状态机守卫拒绝——重复支付/末发货直接
+     * 完成/终态再迁移/未支付退款等违例，由聚合状态机守卫抛出）。
+     */
+    ORDER_SUB_STATUS_ILLEGAL("order.sub_status_illegal", 400),
+
+    /**
+     * 订单域：子订单店铺归属不符（发货操作者店铺与子单归属店铺不一致——
+     * 聚合内归属校验拒绝；fail-closed 的租户过滤先行，本码为提权/装配
+     * 路径的第二道防线，越权语义 403）。
+     */
+    ORDER_SUB_SHOP_MISMATCH("order.sub_shop_mismatch", 403),
+
+    /**
+     * 订单域：子订单金额与订单项合计不自洽（商品总额必须等于 Σ 订单项
+     * 小计——装配守卫，正常路径不可达：金额来自下单用例装配）。
+     */
+    ORDER_SUB_AMOUNT_MISMATCH("order.sub_amount_mismatch", 400),
+
+    /**
+     * 订单域：主订单金额摘要与子订单金额合计不自洽（商品额/运费/优惠/
+     * 实付四维必须各自等于 Σ 子单——装配守卫，正常路径不可达：金额摘要
+     * 来自下单用例按子单合计装配）。
+     */
+    ORDER_AMOUNT_MISMATCH("order.amount_mismatch", 400),
+
+    /**
+     * 订单域：订单内容为空（子单无订单项/主单无子单——拆单装配错误，
+     * 空订单无业务意义）。
+     */
+    ORDER_SUB_EMPTY("order.sub_empty", 400),
+
+    /**
+     * 物流域占位基码：资源不存在。
+     */
+    LOGISTICS_NOT_FOUND("logistics.not_found", 404),
+
+    /**
+     * 物流域：运单装配形态非法（缺失子单引用/轨迹集合为空/轨迹末条
+     * 状态与运单当前状态不一致——构造与装载路径的形态守卫，自相矛盾
+     * 的运单无业务意义）。
+     */
+    LOGISTICS_WAYBILL_INVALID("logistics.waybill_invalid", 400),
+
+    /**
+     * 物流域：轨迹行形态非法（轨迹主键/归属运单/状态/发生时间缺失——
+     * 轨迹是 append-only 审计时间线，缺关键字段的时间线条目无业务意义）。
+     */
+    LOGISTICS_TRACK_INVALID("logistics.track_invalid", 400),
+
+    /**
+     * 物流域：物流公司不能为空（商家录单必填承运公司）。
+     */
+    LOGISTICS_COMPANY_BLANK("logistics.company_blank", 400),
+
+    /**
+     * 物流域：运单号不能为空（录单必填；仓配信息的唯一业务凭证）。
+     */
+    LOGISTICS_TRACKING_NO_BLANK("logistics.tracking_no_blank", 400),
+
+    /**
+     * 物流域：运单非法状态迁移（跳级/重复/回退/终态再推进等违例，由
+     * 聚合状态机守卫抛出；轨迹归属其他运单的装配错误同码拒绝）。
+     */
+    LOGISTICS_STATUS_ILLEGAL("logistics.status_illegal", 400),
+
+    /**
+     * 物流域：一子单一在途运单冲突（子单已存在在途运单再创建——重复
+     * 发货拒绝，由发货编排按在途查询命中拒绝，冲突语义 409）。
+     */
+    LOGISTICS_SUB_ORDER_CONFLICT("logistics.sub_order_conflict", 409),
+
+    /**
+     * 订单域：下单条目为空（请求 skuIds 为空，或与购物车勾选集求交后
+     * 无条目——空订单无业务意义，拒绝提交）。
+     */
+    ORDER_PLACE_EMPTY("order.place_empty", 400),
+
+    /**
+     * 订单域：买家不可下单（账号不存在或封禁统一拒绝——不区分提示，
+     * 防账号存在性泄露，与登录防枚举同哲学）。
+     */
+    ORDER_BUYER_NOT_PURCHASABLE("order.buyer_not_purchasable", 403),
+
+    /**
+     * 订单域：下单地址不存在（目标地址不在当前买家地址簿中——归属
+     * 校验拒绝，防越权使用他人地址）。
+     */
+    ORDER_ADDRESS_NOT_FOUND("order.address_not_found", 404),
+
+    /**
+     * 订单域：下单条目不在购物车勾选集中（提交的 SKU 未勾选或已不在
+     * 购物车——B7.2 未勾选项不进订单的服务端强制；冲突语义提示回购物
+     * 车重新选择）。
+     */
+    ORDER_ITEM_NOT_CHECKED("order.item_not_checked", 409),
+
+    /**
+     * 订单域：下单条目的 SKU 不属于请求商品（请求与商品内容不匹配，
+     * 请求构造错误；非在售商品统一由目录侧 404 语义透传，不判本码）。
+     */
+    ORDER_PLACE_SKU_INVALID("order.place_sku_invalid", 400),
+
+    /**
      * 支付域占位基码：资源不存在。
      */
     PAYMENT_NOT_FOUND("payment.not_found", 404),
@@ -433,6 +559,59 @@ public enum EcommerceBusinessCode {
      * 支付域：渠道回调非法（缺字段、金额非正、类型与字段不配套）——渠道自身防御。
      */
     PAYMENT_GATEWAY_CALLBACK_INVALID("payment.gateway_callback_invalid", 400),
+
+    /**
+     * 支付域：发起支付校验不通过（主单不可支付——已支付/已取消/已关闭等非待支付
+     * 状态再发起；或同主单已存在非待支付支付单不可复用）——支付发起前的
+     * 主单状态防线（C1 历史遗留接线）。
+     */
+    PAYMENT_ORDER_INVALID("payment.order_invalid", 400),
+
+    /**
+     * 支付域：支付单非法状态迁移（TD-11 防线二状态守卫——终态再迁移、已支付
+     * 关单、同号重复回调幂等命中等违例；同号重复回调由编排捕获后按已处理
+     * 应答渠道，B8.2 重复回调只生效一次）。
+     */
+    PAYMENT_STATUS_ILLEGAL("payment.status_illegal", 400),
+
+    /**
+     * 支付域：回调金额与支付单金额不符（回调金额必须 = 支付单金额 = 主单实付；
+     * 渠道事故优先显式拒绝，不做半额/超额入账）。
+     */
+    PAYMENT_AMOUNT_MISMATCH("payment.amount_mismatch", 400),
+
+    /**
+     * 支付域：渠道流水号异号冲突（channel_txn_no 已被占用且与本次回调不同——
+     * 渠道事故，冲突语义 409，优先于状态守卫诊断）。
+     */
+    PAYMENT_CALLBACK_DUPLICATE("payment.callback_duplicate", 409),
+
+    /**
+     * 支付域：退款单不存在（按退款单号/ID 操作命中不存在的退款单——孤儿
+     * 退款回调不产生处理路径，防存在性泄露）。
+     */
+    PAYMENT_REFUND_NOT_FOUND("payment.refund_not_found", 404),
+
+    /**
+     * 支付域：退款单非法状态迁移（状态机守卫——终态再迁移、重复受理、
+     * 非失败态重试、同号重复退款回调幂等命中等违例；同号重复回调由编排
+     * 捕获后按已处理应答，不重放订单/库存编排）。
+     */
+    PAYMENT_REFUND_STATUS_ILLEGAL("payment.refund_status_illegal", 400),
+
+    /**
+     * 支付域：退款单创建形态非法（退款单必须关联子单与支付单号、退款金额
+     * 必须为正——一子单一退款单，操作单元子单必填，冲突语义按 400
+     * 呈现请求构造错误）。
+     */
+    PAYMENT_REFUND_INVALID("payment.refund_invalid", 400),
+
+    /**
+     * 支付域：重复申请退款（一子单一生至多一个退款单——已存在退款单
+     * （含 FAILED 可重试态）再申请拒绝，重试走既有退款单重试路径，
+     * 冲突语义 409）。
+     */
+    PAYMENT_REFUND_DUPLICATE("payment.refund_duplicate", 409),
 
     /**
      * 搜索域：价格区间非法（下界或上界为负值，或区间倒挂即上界小于下界；

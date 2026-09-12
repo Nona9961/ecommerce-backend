@@ -1,43 +1,28 @@
 package com.nona.application.support;
 
 import com.nona.domain.inventory.entity.InventoryItem;
-import com.nona.domain.inventory.entity.InventoryLog;
-import com.nona.domain.inventory.entity.InventoryLogType;
-import com.nona.domain.inventory.repo.InventoryItemRepository;
-import com.nona.domain.inventory.repo.InventoryLogRepository;
-import com.nona.domain.inventory.service.InventoryEventRouter;
-import com.nona.exceptions.BusinessException;
-import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.domain.inventory.service.InventoryReservationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.function.Supplier;
-
 /**
- * 库存保留用例（跨端共用编排层）：订单驱动的库存保留生命周期三操作——
- * 下单预占 / 支付确认扣减 / 取消与超时回滚（同一订单同一 SKU 的同一
- * 类型变动只允许一次：幂等键 (order_id, sku_id, type) 拒绝重复请求）。
+ * 库存保留用例（跨端共用编排层薄壳）：订单驱动的库存保留生命周期四
+ * 操作——下单预占 / 支付确认扣减 / 取消与超时回滚 / 退款回补。
  * <p>
- * 编排面（事务边界 + 流水同事务原子性 + 防超卖双守卫）：
+ * 本类保留两样契约面（既有消费方/验收链引用不变）：
  * <ol>
- *     <li>校验订单上下文（订单 ID 必填、变动数量为正——幂等判定与
- *         条件更新的前置形状校验）；</li>
- *     <li>幂等判定（预查询快速拒绝 + 流水表唯一约束兜底并发窗口，
- *         重复请求以 409 冲突拒绝）；</li>
- *     <li>按 SKU 定位库存行（租户过滤 fail-closed：不存在或跨店铺按
- *         不存在拒绝，归属不泄露），再经 getByID 加载聚合建立快照
- *         基线（接缝移交：条件更新前必须经主键加载保持快照一致）；</li>
- *     <li>仓储条件更新（并发防线：SQL 算术相对更新 + 业务量条件，
- *         受影响行数 0 即容量不足拒绝——翻译为业务异常并明确不足项）；</li>
- *     <li>聚合方法做领域前置守卫并内嵌构造流水（before/after 三态
- *         快照与 delta 在聚合内组装，基于加载快照的请求视角口径）；</li>
- *     <li>流水 append-only 追加——与条件更新同事务落库（任一失败整体
- *         回滚：不可追踪的库存变更不可能）；</li>
- *     <li>事件统一触发点判定（售罄/恢复）——变更后调用，与流水同事务
- *         （发布动作不落库，事务提交后投递）。</li>
+ *     <li>原 {@code @Transactional} 事务边界——编排方法体已下沉库存域
+ *         服务（{@link InventoryReservationService}），本类方法体仅委托
+ *         （application → domain 单向依赖，红线内合法形态）；事务仍由
+ *         本类边界承载，域服务不持事务注解；</li>
+ *     <li>签名兼容面：同签名调用方（既有 InventoryReservation*AcTest
+ *         真链断言、后续编排面）语义不变——幂等键/条件更新/流水/事件
+ *         语义由下游域服务承载，行为等价。</li>
  * </ol>
- * 三个动作均为用例方法（事务边界）：域内编排（订单/支付用例同在应用
- * 层事务内调用时随 REQUIRED 语义并入）。
+ * 编排语义说明（下沉前为类内实现，现归 {@link InventoryReservationService}
+ * 承载——见其 javadoc：校验订单上下文 → 幂等判定 → 定位加载聚合
+ * （fail-closed）→ 仓储条件更新 → 聚合变更方法产流水 → 流水 append-only
+ * 追加 → 事件统一触发点判定，同事务语义由本类事务边界并入）。
  *
  * @author nona9961
  */
@@ -45,38 +30,23 @@ import java.util.function.Supplier;
 public class InventoryReservationUseCase {
 
     /**
-     * 库存聚合根仓储（定位、快照加载与条件更新）
+     * 库存保留领域服务（编排方法体下沉面）
      */
-    private final InventoryItemRepository inventoryItemRepository;
+    private final InventoryReservationService inventoryReservationService;
 
     /**
-     * 库存流水仓储（幂等判定与流水追加）
-     */
-    private final InventoryLogRepository inventoryLogRepository;
-
-    /**
-     * 售罄/恢复事件统一触发点（订单驱动三操作路径接入）
-     */
-    private final InventoryEventRouter inventoryEventRouter;
-
-    /**
-     * 构造库存保留用例。
+     * 构造库存保留用例（薄壳）。
      *
-     * @param inventoryItemRepository 库存聚合根仓储
-     * @param inventoryLogRepository  库存流水仓储
-     * @param inventoryEventRouter    事件统一触发点
+     * @param inventoryReservationService 库存保留领域服务（必填）
      */
-    public InventoryReservationUseCase(InventoryItemRepository inventoryItemRepository,
-                                       InventoryLogRepository inventoryLogRepository,
-                                       InventoryEventRouter inventoryEventRouter) {
-        this.inventoryItemRepository = inventoryItemRepository;
-        this.inventoryLogRepository = inventoryLogRepository;
-        this.inventoryEventRouter = inventoryEventRouter;
+    public InventoryReservationUseCase(InventoryReservationService inventoryReservationService) {
+        this.inventoryReservationService = inventoryReservationService;
     }
 
     /**
-     * 预占（下单驱动）：可售减少、预占增加——并发防线为仓储条件更新
-     * （available >= demand），恰好 M 份库存只放行 M 笔预占（防超卖）。
+     * 预占（下单驱动）：可售减少、预占增加——并发防线为下游域服务转
+     * 发仓储条件更新（available >= demand），恰好 M 份库存只放行 M 笔
+     * 预占（防超卖）。
      *
      * @param orderId 订单 ID（必填；幂等键组成）
      * @param skuId   预占 SKU（必填）
@@ -85,17 +55,12 @@ public class InventoryReservationUseCase {
      */
     @Transactional
     public InventoryItem preoccupy(Long orderId, Long skuId, int demand) {
-        requireOrderContext(orderId, demand, "预占数量必须为正");
-        rejectDuplicate(orderId, skuId, InventoryLogType.PREOCCUPY);
-        final InventoryItem item = loadItem(skuId);
-        final int affected = inventoryItemRepository.casPreoccupy(item.getId(), demand);
-        return commitChange(item, affected, "可售库存不足，无法预占",
-                () -> item.preoccupy(orderId, demand));
+        return inventoryReservationService.preoccupy(orderId, skuId, demand);
     }
 
     /**
-     * 确认扣减（支付成功驱动）：预占减少、已售增加——并发防线为仓储
-     * 条件更新（held >= quantity，防扣减超预占）。
+     * 确认扣减（支付成功驱动）：预占减少、已售增加——并发防线为下游
+     * 域服务转发仓储条件更新（held >= quantity，防扣减超预占）。
      *
      * @param orderId  订单 ID（必填；幂等键组成）
      * @param skuId    扣减 SKU（必填）
@@ -104,17 +69,12 @@ public class InventoryReservationUseCase {
      */
     @Transactional
     public InventoryItem confirmDeduct(Long orderId, Long skuId, int quantity) {
-        requireOrderContext(orderId, quantity, "扣减数量必须为正");
-        rejectDuplicate(orderId, skuId, InventoryLogType.CONFIRM);
-        final InventoryItem item = loadItem(skuId);
-        final int affected = inventoryItemRepository.casConfirmDeduct(item.getId(), quantity);
-        return commitChange(item, affected, "预占库存不足，无法确认扣减",
-                () -> item.confirmDeduct(orderId, quantity));
+        return inventoryReservationService.confirmDeduct(orderId, skuId, quantity);
     }
 
     /**
      * 预占回滚（取消/超时释放驱动）：预占减少、可售增加——并发防线为
-     * 仓储条件更新（held >= quantity，防回滚超预占）。
+     * 下游域服务转发仓储条件更新（held >= quantity，防回滚超预占）。
      *
      * @param orderId  订单 ID（必填；幂等键组成）
      * @param skuId    回滚 SKU（必填）
@@ -123,28 +83,14 @@ public class InventoryReservationUseCase {
      */
     @Transactional
     public InventoryItem rollback(Long orderId, Long skuId, int quantity) {
-        requireOrderContext(orderId, quantity, "回滚数量必须为正");
-        rejectDuplicate(orderId, skuId, InventoryLogType.ROLLBACK);
-        final InventoryItem item = loadItem(skuId);
-        final int affected = inventoryItemRepository.casRollback(item.getId(), quantity);
-        return commitChange(item, affected, "预占库存不足，无法回滚",
-                () -> item.rollback(orderId, quantity));
+        return inventoryReservationService.rollback(orderId, skuId, quantity);
     }
 
     /**
      * 退款回补（未发货退款/发货超时关单驱动：已售减少、可售增加——
      * 货未出库退回可售；已发货/已完成不回补由退款编排层按子单状态
-     * 判定保障，本用例只承载域能力）。并发防线为仓储条件更新
-     * （sold >= quantity，防回补超已售——安全保证不回补多于已售）。
-     * 幂等键 (order_id, sku_id, type) 同三操作复用：同一订单同一 SKU 的
-     * REFUND_RESTORE 只允许一次（重复退款回调/重复请求不重复回补，
-     * 预查询快速拒绝 + 流水表唯一约束兜底并发窗口）。编排面同三操作
-     * 定式：校验订单上下文 → 幂等判定 → 定位加载聚合（租户过滤
-     * fail-closed）→ 仓储条件更新（受影响行数 0 即已售不足拒绝）→
-     * 聚合方法做领域前置守卫并内嵌构造 REFUND_RESTORE 流水 → 流水
-     * append-only 追加 → 事件统一触发点判定（售罄/恢复——回补路径
-     * 接入统一触发点，售罄态 SKU 经回补恢复可售发布恢复事件，一期
-     * 日志消费）。
+     * 判定保障，本契约只承载域能力）。幂等键 (order_id, sku_id, type)
+     * 同三操作复用：同一订单同一 SKU 的 REFUND_RESTORE 只允许一次。
      *
      * @param orderId  订单 ID（必填；幂等键组成）
      * @param skuId    回补 SKU（必填）
@@ -153,100 +99,6 @@ public class InventoryReservationUseCase {
      */
     @Transactional
     public InventoryItem restore(Long orderId, Long skuId, int quantity) {
-        requireOrderContext(orderId, quantity, "回补数量必须为正");
-        rejectDuplicate(orderId, skuId, InventoryLogType.REFUND_RESTORE);
-        final InventoryItem item = loadItem(skuId);
-        final int affected = inventoryItemRepository.casRestore(item.getId(), quantity);
-        return commitChange(item, affected, "已售数量不足，无法回补",
-                () -> item.restoreSold(orderId, quantity));
-    }
-
-    /**
-     * 变更落库定式（订单驱动四操作共用的收尾形态）：条件更新命中判断 + 流水追加 + 事件判定。
-     * <p>
-     * 受影响行数 0 即容量/数量不足拒绝（翻译为业务异常，明确失败语义）——
-     * 此时聚合变更方法不执行（流水构造不产），库存与流水均不动；命中时
-     * 由聚合变更方法构造流水（before/after 三态快照与 delta 在聚合内组装），
-     * 流水 append-only 追加与事件统一触发点判定（售罄/恢复）同事务落库。
-     *
-     * @param item           已加载的库存聚合（快照基线）
-     * @param affected       仓储条件更新受影响行数（1=命中；0=拒绝）
-     * @param failureMessage 受影响行数 0 时的拒绝消息
-     * @param logFactory     聚合变更方法（流水构造；仅在条件更新命中后执行）
-     * @return 变更后的库存聚合（本请求视角三态与版本）
-     */
-    private InventoryItem commitChange(InventoryItem item, int affected, String failureMessage,
-                                       Supplier<InventoryLog> logFactory) {
-        if (affected == 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_INSUFFICIENT.code(), failureMessage);
-        }
-        final InventoryLog log = logFactory.get();
-        inventoryLogRepository.append(log);
-        inventoryEventRouter.publishIfNeeded(log);
-        return item;
-    }
-
-    /**
-     * 校验订单上下文（幂等判定与条件更新的前置形状校验）：订单 ID 必填
-     * （幂等键组成）、变动数量必须为正；形状非法直接拒绝，不进入查询
-     * 与更新路径。
-     *
-     * @param orderId  订单 ID
-     * @param quantity 变动数量
-     * @param invalidMessage 数量非正时的拒绝消息
-     */
-    private void requireOrderContext(Long orderId, int quantity, String invalidMessage) {
-        if (orderId == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_INVALID.code(),
-                    "订单驱动库存操作必须携带订单 ID");
-        }
-        if (quantity <= 0) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_QUANTITY_INVALID.code(), invalidMessage);
-        }
-    }
-
-    /**
-     * 幂等预查：同幂等键 (order_id, sku_id, type) 已有流水行 → 重复变更
-     * 请求快速拒绝（409 冲突；并发窗口由流水表唯一约束兜底，兜底路径
-     * 的异常在流水仓储转换为同一业务异常）。
-     *
-     * @param orderId 订单 ID
-     * @param skuId   SKU ID
-     * @param type    流水类型
-     */
-    private void rejectDuplicate(Long orderId, Long skuId, InventoryLogType type) {
-        if (inventoryLogRepository.existsByIdempotencyKey(orderId, skuId, type)) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_LOG_DUPLICATE.code(),
-                    "重复变更请求：同订单同 SKU 同类型的库存变动已存在");
-        }
-    }
-
-    /**
-     * 定位并加载库存聚合：先按 SKU 业务键定位（租户过滤 fail-closed——
-     * 不存在或跨店铺按不存在拒绝），再经主键加载聚合建立快照基线
-     * （接缝移交：变迁前的快照一致性与条件更新的行定位共同收敛于主键
-     * 加载路径）。
-     *
-     * @param skuId 归属 SKU ID
-     * @return 库存聚合（快照基线就位）
-     */
-    private InventoryItem loadItem(Long skuId) {
-        final InventoryItem located = inventoryItemRepository.getBySkuId(skuId);
-        if (located == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_NOT_FOUND.code(),
-                    "SKU 库存不存在，库存操作被拒绝");
-        }
-        final InventoryItem item = inventoryItemRepository.getByID(located.getId());
-        if (item == null) {
-            throw new BusinessException(
-                    EcommerceBusinessCode.INVENTORY_NOT_FOUND.code(),
-                    "SKU 库存不存在，库存操作被拒绝");
-        }
-        return item;
+        return inventoryReservationService.restore(orderId, skuId, quantity);
     }
 }

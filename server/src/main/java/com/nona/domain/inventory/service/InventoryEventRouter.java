@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
  *         预占/扣减/调整任一操作路径致此状态均触发（回滚路径可售只增
  *         不减，从语义上不会落入售罄——统一调用点天然覆盖，无需特判）；</li>
  *     <li>恢复：变更前已售罄（available=0 且 held=0）且变更后未售罄 →
- *         发布 {@link RestockEvent}（一期日志消费）；「此前已售罄」由
+ *         发布 {@link RestockEvent}（日志消费）；「此前已售罄」由
  *         before 快照直接判定——不依赖事件序推导或持久化状态列。</li>
  * </ol>
  * 调用时机：用例层在流水 append 之后、同事务内调用（发布动作本身不

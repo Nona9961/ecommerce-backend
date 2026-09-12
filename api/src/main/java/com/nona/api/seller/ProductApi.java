@@ -235,6 +235,32 @@ public interface ProductApi {
     HttpResponse<List<ShopCategoryItem>> listShopCategories(Long productId);
 
     /**
+     * SKU 集回显（编辑页 SKU 矩阵初始值；WU-47 前端约定端点——本接口
+     * 既有写面（configureSpecTemplate/updateSkuPrice/setSkuEnabled）
+     * 无读面，接线 WU 补只读回显，形状与写面响应共用 {@link SkuItem}）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return SKU 条目列表（按模板展开序）；未配置模板为空列表
+     */
+    HttpResponse<List<SkuItem>> listSkus(Long productId);
+
+    /**
+     * 规格模板回显（编辑页模板编辑区初始值；WU-47 前端约定端点）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 规格模板（维度按配置序；未配置模板 = 空维度列表的请求体形态）
+     */
+    HttpResponse<SpecTemplateRequest> getSpecTemplate(Long productId);
+
+    /**
+     * 商品运费模板绑定回显（编辑页下拉初始值；WU-47 前端约定端点）。
+     *
+     * @param productId 商品 ID（必须属于当前店铺，否则 404）
+     * @return 当前绑定模板 ID（null = 未绑定）
+     */
+    HttpResponse<FreightTemplateBindRequest> getFreightTemplateBind(Long productId);
+
+    /**
      * 绑定/解绑商品运费模板（模板必须存在且属于商品所属店铺，
      * 跨店铺模板 404；停用模板允许绑定）。待审核期/已下架态绑定拒绝
      * （写面冻结）。模板绑定属运营配置，在售态直改免审。

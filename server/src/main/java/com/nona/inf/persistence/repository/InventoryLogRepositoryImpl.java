@@ -5,7 +5,9 @@ import com.nona.domain.inventory.entity.InventoryLogType;
 import com.nona.domain.inventory.repo.InventoryLogRepository;
 import com.nona.exceptions.BusinessException;
 import com.nona.exceptions.EcommerceBusinessCode;
+import com.nona.inf.context.TenantPrivilege;
 import com.nona.inf.persistence.converters.InventoryLogConvertor;
+import com.nona.inf.persistence.po.TenantScopedBasePO;
 import com.nona.inf.persistence.po.inventory.InventoryLogPO;
 import com.nona.inf.persistence.repository.jpa.InventoryLogJpaRepository;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -50,29 +52,40 @@ public class InventoryLogRepositoryImpl implements InventoryLogRepository {
     private final InventoryLogConvertor convertor;
 
     /**
+     * 提权工具（提权保存前显式租户归属定型：TenantWriteGate 提权+空归属
+     * fail-closed 拒绝——流水行 tenant=shopId 归属必得，不依赖请求上下文；
+     * SubOrderRepositoryImpl ownedBy 同先例形态）
+     */
+    private final TenantPrivilege tenantPrivilege;
+
+    /**
      * 构造流水仓储。
      *
      * @param jpaRepository 流水表 JPA 仓储
      * @param convertor     流水行转换器
+     * @param tenantPrivilege 提权工具（提权保存显式租户归属定型）
      */
     public InventoryLogRepositoryImpl(InventoryLogJpaRepository jpaRepository,
-                                      InventoryLogConvertor convertor) {
+                                      InventoryLogConvertor convertor,
+                                      TenantPrivilege tenantPrivilege) {
         this.jpaRepository = jpaRepository;
         this.convertor = convertor;
+        this.tenantPrivilege = tenantPrivilege;
     }
 
     /**
      * {@inheritDoc}
      * <p>
      * 追加插入（append-only：save 即插一行，无更新路径）；租户归属由写
-     * 门禁按请求上下文注入。同一 (order_id, sku_id, type) 重复追加被
-     * DB 唯一约束拒绝——约束冲突按幂等键约束名精确判定后转换为业务
-     * 异常（重复变更请求 409），其余约束异常保持原样上抛（不遮其他
-     * 异常）。
+     * 门禁按请求上下文注入，提权写路径（买家/回调/调度上下文）经
+     * {@link #ownedBy} 显式锚定 tenant=shopId。同一 (order_id, sku_id,
+     * type) 重复追加被 DB 唯一约束拒绝——约束冲突按幂等键约束名精确判
+     * 定后转换为业务异常（重复变更请求 409），其余约束异常保持原样上
+     * 抛（不遮其他异常）。
      */
     @Override
     public InventoryLog append(InventoryLog log) {
-        final InventoryLogPO po = convertor.toPO(log);
+        final InventoryLogPO po = ownedBy(convertor.toPO(log), log);
         try {
             return convertor.toDomain(jpaRepository.save(po));
         } catch (final DataIntegrityViolationException ex) {
@@ -82,6 +95,25 @@ public class InventoryLogRepositoryImpl implements InventoryLogRepository {
             }
             throw ex;
         }
+    }
+
+    /**
+     * 流水行租户承载：提权写路径（买家取消回滚/支付确认扣减/退款回补等
+     * 无请求视角上下文）显式锚定 tenant=shopId——归属必得，不依赖请求
+     * 上下文（提权写门禁语义：TenantWriteGate 提权+空归属
+     * fail-closed 拒绝）；非提权商家路径保持既有注入语义（行租户由写门
+     * 禁按请求上下文注入）。
+     *
+     * @param po  流水行 PO
+     * @param log 流水聚合（租户锚点）
+     * @param <T> 行 PO 类型
+     * @return 承载租户后的 PO
+     */
+    private <T extends TenantScopedBasePO> T ownedBy(T po, InventoryLog log) {
+        if (tenantPrivilege.isActive()) {
+            po.setTenantID(String.valueOf(log.getShopId()));
+        }
+        return po;
     }
 
     /**

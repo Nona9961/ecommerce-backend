@@ -3,6 +3,7 @@ package com.nona.inf.events;
 import com.nona.domain.inventory.ports.RestockEvent;
 import com.nona.domain.inventory.ports.SelloutEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -42,7 +43,7 @@ public class InventoryEventLogListener {
      *
      * @param stockEventExecutor 事件异步执行器
      */
-    public InventoryEventLogListener(Executor stockEventExecutor) {
+    public InventoryEventLogListener(@Qualifier("stockEventExecutor") Executor stockEventExecutor) {
         this.stockEventExecutor = stockEventExecutor;
     }
 

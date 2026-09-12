@@ -21,6 +21,31 @@ import org.springframework.stereotype.Component;
 public class FreightTemplateFactory {
 
     /**
+     * 店铺默认运费模板名称（开店编排自动创建时的初始命名；可编辑——
+     * 名称可改，回退定位由默认身份标记承载，不依赖名称）。
+     */
+    public static final String DEFAULT_TEMPLATE_NAME = "默认运费模板";
+
+    /**
+     * 创建店铺默认运费模板（开店编排唯一创建入口）：
+     * 初始规则=包邮 FREE（无计费参数）、初始状态 ENABLED、默认身份标记
+     * true、归属店铺必填（{@code catalog.shop_required} 400，与既有
+     * {@link #createFreightTemplate} 同形态）。默认模板与普通模板同构
+     * （同表同实体，可编辑），身份创建后不可变。
+     *
+     * @param shopId 归属店铺 ID（必填非空；tenant=shopId）
+     * @return 新建默认模板（启用 + 包邮 + 默认身份）
+     */
+    public FreightTemplate createDefaultFreightTemplate(Long shopId) {
+        if (shopId == null) {
+            throw new BusinessException(EcommerceBusinessCode.CATALOG_SHOP_REQUIRED.code(),
+                    "店铺不能为空");
+        }
+        return new FreightTemplate(IDUtils.generateID(), shopId, DEFAULT_TEMPLATE_NAME,
+                FreightRuleType.FREE, null, null, null, FreightTemplateStatus.ENABLED, true);
+    }
+
+    /**
      * 创建运费模板：生成 Snowflake ID、初始状态 ENABLED。
      *
      * @param shopId        归属店铺 ID（必填非空）

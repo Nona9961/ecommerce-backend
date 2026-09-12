@@ -8,7 +8,7 @@ package com.nona.domain.identity.entity;
  * 持久化为单表 {@code account} 的 type 列（与 username 组成联合唯一约束）；
  * 安全链角色映射：BUYER → {@code ROLE_BUYER}、SELLER → {@code ROLE_SELLER}。
  * <b>平台运营（admin）账号不属于本模型</b>——admin 账号与角色是 RBAC 问题
- * （Role/Permission/Assignment，属 Phase-II），本枚举不为其设计落点；
+ * （Role/Permission/Assignment，后续扩展），本枚举不为其设计落点；
  * portal=ADMIN 的查询按 type 定向查不到即拒绝（fail-closed）。
  *
  * @author nona9961

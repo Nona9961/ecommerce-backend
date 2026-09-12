@@ -5,7 +5,7 @@ package com.nona.domain.identity.entity;
  * <p>
  * 迁移规则（收敛在 {@link MerchantApplication} 聚合方法内）：提交即
  * pending → 审核通过 approved（终态，不可再迁移） / 审核驳回 rejected
- * （可编辑，重提后回到 pending）。一期单行模型下任意时刻同一提交实体
+ * （可编辑，重提后回到 pending）。单行模型下任意时刻同一提交实体
  * 至多一个 pending 申请（account_id 唯一约束兜底）。
  *
  * @author nona9961

@@ -14,7 +14,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * 搜索主库通道实现（写后窗口命中时的强一致查询，TD-08 主库覆盖）。
+ * 搜索主库通道实现（写后窗口命中时的强一致查询，主库覆盖）。
  * <p>
  * 实现契约：
  * <ul>

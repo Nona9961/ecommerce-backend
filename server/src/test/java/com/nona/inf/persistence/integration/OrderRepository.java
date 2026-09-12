@@ -20,14 +20,14 @@ import java.util.*;
  * 继承 DifferRepository，实现完整的变更追踪和持久化
  */
 @ScaffoldGenerated
-class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIntegrationTest.OrderPO, Map<String, Object>> {
+class OrderRepository extends DifferRepository<FullIntegrationUnitTest.Order, FullIntegrationUnitTest.OrderPO, Map<String, Object>> {
 
     private final JdbcTemplate jdbc;
     private final ConverterRegistry converterRegistry;
 
     public OrderRepository(
-            ListCrudRepository<FullIntegrationTest.OrderPO, Long> repository,
-            RdbGeneralConvertor<FullIntegrationTest.Order, FullIntegrationTest.OrderPO, Map<String, Object>> convertor,
+            ListCrudRepository<FullIntegrationUnitTest.OrderPO, Long> repository,
+            RdbGeneralConvertor<FullIntegrationUnitTest.Order, FullIntegrationUnitTest.OrderPO, Map<String, Object>> convertor,
             ChangeTrackerProvider changeTrackerProvider,
             JdbcTemplate jdbc,
             ConverterRegistry converterRegistry) {
@@ -37,21 +37,21 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
     }
 
     @Override
-    protected Long retrieveIDFromRoot(FullIntegrationTest.Order root) {
+    protected Long retrieveIDFromRoot(FullIntegrationUnitTest.Order root) {
         return root.getId();
     }
 
     @Override
-    protected Map<String, Object> getOther(FullIntegrationTest.OrderPO po) {
+    protected Map<String, Object> getOther(FullIntegrationUnitTest.OrderPO po) {
         Map<String, Object> childData = new HashMap<>();
 
         // 加载 items
-        List<FullIntegrationTest.OrderItem> items = jdbc.query(
+        List<FullIntegrationUnitTest.OrderItem> items = jdbc.query(
                 "SELECT * FROM t_order_item WHERE order_id = ?",
                 (rs, rowNum) -> {
-                    FullIntegrationTest.Money price = rs.getBigDecimal("unit_price") != null
-                            ? new FullIntegrationTest.Money(rs.getBigDecimal("unit_price"), rs.getString("unit_currency")) : null;
-                    FullIntegrationTest.OrderItem item = new FullIntegrationTest.OrderItem(
+                    FullIntegrationUnitTest.Money price = rs.getBigDecimal("unit_price") != null
+                            ? new FullIntegrationUnitTest.Money(rs.getBigDecimal("unit_price"), rs.getString("unit_currency")) : null;
+                    FullIntegrationUnitTest.OrderItem item = new FullIntegrationUnitTest.OrderItem(
                             rs.getLong("id"),
                             rs.getString("sku"),
                             rs.getString("product_name"),
@@ -59,17 +59,17 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
                             price);
 
                     // 加载 subItems
-                    List<FullIntegrationTest.SubItem> subItems = jdbc.query(
+                    List<FullIntegrationUnitTest.SubItem> subItems = jdbc.query(
                             "SELECT * FROM t_sub_item WHERE order_item_id = ?",
                             (rs2, rn2) -> {
-                                FullIntegrationTest.SubItem sub = new FullIntegrationTest.SubItem(
+                                FullIntegrationUnitTest.SubItem sub = new FullIntegrationUnitTest.SubItem(
                                         rs2.getLong("id"),
                                         rs2.getString("name"));
 
                                 // 加载 specs
-                                List<FullIntegrationTest.Spec> specs = jdbc.query(
+                                List<FullIntegrationUnitTest.Spec> specs = jdbc.query(
                                         "SELECT * FROM t_spec WHERE sub_item_id = ?",
-                                        (rs3, rn3) -> new FullIntegrationTest.Spec(
+                                        (rs3, rn3) -> new FullIntegrationUnitTest.Spec(
                                                 rs3.getString("spec_key"),
                                                 rs3.getString("spec_value")),
                                         sub.getId());
@@ -81,23 +81,23 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
                 }, po.getId());
 
         // 加载 customer
-        FullIntegrationTest.Customer customer = null;
-        List<FullIntegrationTest.Customer> customers = jdbc.query(
+        FullIntegrationUnitTest.Customer customer = null;
+        List<FullIntegrationUnitTest.Customer> customers = jdbc.query(
                 "SELECT * FROM t_customer WHERE order_id = ?",
                 (rs, rowNum) -> {
-                    FullIntegrationTest.Customer c = new FullIntegrationTest.Customer(
+                    FullIntegrationUnitTest.Customer c = new FullIntegrationUnitTest.Customer(
                             rs.getLong("id"),
                             rs.getString("name"));
                     String phone = rs.getString("contact_phone");
                     String email = rs.getString("contact_email");
                     if (phone != null || email != null) {
-                        c.setContact(new FullIntegrationTest.ContactInfo(phone, email));
+                        c.setContact(new FullIntegrationUnitTest.ContactInfo(phone, email));
                     }
 
                     // 加载 addresses
-                    List<FullIntegrationTest.Address> addresses = jdbc.query(
+                    List<FullIntegrationUnitTest.Address> addresses = jdbc.query(
                             "SELECT * FROM t_address WHERE customer_id = ?",
-                            (rs2, rn2) -> new FullIntegrationTest.Address(
+                            (rs2, rn2) -> new FullIntegrationUnitTest.Address(
                                     rs2.getLong("id"),
                                     rs2.getString("type"),
                                     rs2.getString("city")),
@@ -117,13 +117,13 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
     // ==================== doInsert 实现 ====================
 
     @Override
-    protected void doInsert(FullIntegrationTest.Order root) {
+    protected void doInsert(FullIntegrationUnitTest.Order root) {
         // 插入主表
-        FullIntegrationTest.OrderPO po = convertor.convertToPO(root);
+        FullIntegrationUnitTest.OrderPO po = convertor.convertToPO(root);
         repository.save(po);
 
         // 插入子表：items
-        for (FullIntegrationTest.OrderItem item : root.getItems()) {
+        for (FullIntegrationUnitTest.OrderItem item : root.getItems()) {
             insertOrderItem(item, root.getId());
         }
 
@@ -133,7 +133,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void insertOrderItem(FullIntegrationTest.OrderItem item, Long orderId) {
+    private void insertOrderItem(FullIntegrationUnitTest.OrderItem item, Long orderId) {
         jdbc.update("""
             INSERT INTO t_order_item (id, order_id, sku, product_name, quantity, unit_price, unit_currency)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -142,23 +142,23 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
            item.getUnitPrice() != null ? item.getUnitPrice().currency() : null);
 
         // 插入 subItems
-        for (FullIntegrationTest.SubItem sub : item.getSubItems()) {
+        for (FullIntegrationUnitTest.SubItem sub : item.getSubItems()) {
             insertSubItem(sub, item.getId());
         }
     }
 
-    private void insertSubItem(FullIntegrationTest.SubItem sub, Long itemId) {
+    private void insertSubItem(FullIntegrationUnitTest.SubItem sub, Long itemId) {
         jdbc.update("INSERT INTO t_sub_item (id, order_item_id, name) VALUES (?, ?, ?)",
                 sub.getId(), itemId, sub.getName());
 
         long specId = sub.getId() * 100;
-        for (FullIntegrationTest.Spec spec : sub.getSpecs()) {
+        for (FullIntegrationUnitTest.Spec spec : sub.getSpecs()) {
             jdbc.update("INSERT INTO t_spec (id, sub_item_id, spec_key, spec_value) VALUES (?, ?, ?, ?)",
                     specId++, sub.getId(), spec.getKey(), spec.getValue());
         }
     }
 
-    private void insertCustomer(FullIntegrationTest.Customer customer, Long orderId) {
+    private void insertCustomer(FullIntegrationUnitTest.Customer customer, Long orderId) {
         jdbc.update("""
             INSERT INTO t_customer (id, order_id, name, contact_phone, contact_email)
             VALUES (?, ?, ?, ?, ?)
@@ -166,7 +166,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
            customer.getContact() != null ? customer.getContact().phone() : null,
            customer.getContact() != null ? customer.getContact().email() : null);
 
-        for (FullIntegrationTest.Address addr : customer.getAddresses()) {
+        for (FullIntegrationUnitTest.Address addr : customer.getAddresses()) {
             jdbc.update("INSERT INTO t_address (id, customer_id, type, city) VALUES (?, ?, ?, ?)",
                     addr.getId(), customer.getId(), addr.getType(), addr.getCity());
         }
@@ -175,8 +175,8 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
     // ==================== doUpdate 实现 ====================
 
     @Override
-    protected void doUpdate(FullIntegrationTest.Order root, ChangeSet changeSet) {
-        Map<String, PoConverter<?, ?>> childConverters = converterRegistry.getChildConverters(FullIntegrationTest.Order.class);
+    protected void doUpdate(FullIntegrationUnitTest.Order root, ChangeSet changeSet) {
+        Map<String, PoConverter<?, ?>> childConverters = converterRegistry.getChildConverters(FullIntegrationUnitTest.Order.class);
 
         // 分类变更
         List<Change> mainTableChanges = new ArrayList<>();
@@ -235,7 +235,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleMainTableChanges(FullIntegrationTest.Order root, List<Change> changes) {
+    private void handleMainTableChanges(FullIntegrationUnitTest.Order root, List<Change> changes) {
         StringBuilder sql = new StringBuilder("UPDATE t_order SET ");
         List<Object> params = new ArrayList<>();
         int fieldCount = 0;
@@ -264,7 +264,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
                 fieldCount++;
             } else if ("totalAmount".equals(fieldName)) {
                 sql.append("total_amount = ?, total_currency = ?");
-                FullIntegrationTest.Money money = (FullIntegrationTest.Money) vc.newValue();
+                FullIntegrationUnitTest.Money money = (FullIntegrationUnitTest.Money) vc.newValue();
                 params.add(money != null ? money.amount() : null);
                 params.add(money != null ? money.currency() : null);
                 fieldCount++;
@@ -288,7 +288,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
      * newNode 为 ValueNode 表示：NullNode=清空；PrimitiveNode=值；
      * ObjectNode/CollectionNode/ArrayNode 无法表达为单列业务值，跳过（不炸库）。
      */
-    private void handleMainTableObjectFieldChange(FullIntegrationTest.Order root, ObjectFieldChange ofc) {
+    private void handleMainTableObjectFieldChange(FullIntegrationUnitTest.Order root, ObjectFieldChange ofc) {
         if (!"customer".equals(ofc.path())) {
             return;
         }
@@ -299,7 +299,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleChildAdditions(FullIntegrationTest.Order root, String fieldName, List<ItemAddedChange> additions) {
+    private void handleChildAdditions(FullIntegrationUnitTest.Order root, String fieldName, List<ItemAddedChange> additions) {
         if ("items".equals(fieldName)) {
             for (ItemAddedChange change : additions) {
                 String path = change.path();
@@ -308,7 +308,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
                 } else {
                     ObjectNode itemNode = (ObjectNode) change.addedItem();
                     Object identifier = itemNode.identifier();
-                    FullIntegrationTest.OrderItem item = root.getItems().stream()
+                    FullIntegrationUnitTest.OrderItem item = root.getItems().stream()
                             .filter(i -> i.getId().equals(identifier))
                             .findFirst()
                             .orElseThrow(() -> new IllegalStateException("聚合根中找不到 identifier=" + identifier));
@@ -329,13 +329,13 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleNestedCollectionAddition(FullIntegrationTest.Order root, String path, ItemAddedChange change) {
+    private void handleNestedCollectionAddition(FullIntegrationUnitTest.Order root, String path, ItemAddedChange change) {
         if (path.contains(".specs")) {
             ObjectNode specNode = (ObjectNode) change.addedItem();
             String specKey = (String) specNode.identifier();
-            for (FullIntegrationTest.OrderItem item : root.getItems()) {
-                for (FullIntegrationTest.SubItem subItem : item.getSubItems()) {
-                    FullIntegrationTest.Spec spec = subItem.getSpecs().stream()
+            for (FullIntegrationUnitTest.OrderItem item : root.getItems()) {
+                for (FullIntegrationUnitTest.SubItem subItem : item.getSubItems()) {
+                    FullIntegrationUnitTest.Spec spec = subItem.getSpecs().stream()
                             .filter(s -> s.getKey().equals(specKey))
                             .findFirst().orElse(null);
                     if (spec != null) {
@@ -349,8 +349,8 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         } else if (path.contains(".subItems")) {
             ObjectNode subItemNode = (ObjectNode) change.addedItem();
             Long subItemId = (Long) subItemNode.identifier();
-            for (FullIntegrationTest.OrderItem item : root.getItems()) {
-                FullIntegrationTest.SubItem subItem = item.getSubItems().stream()
+            for (FullIntegrationUnitTest.OrderItem item : root.getItems()) {
+                FullIntegrationUnitTest.SubItem subItem = item.getSubItems().stream()
                         .filter(s -> s.getId().equals(subItemId))
                         .findFirst().orElse(null);
                 if (subItem != null) {
@@ -361,11 +361,11 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleCustomerAddressAddition(FullIntegrationTest.Order root, ItemAddedChange change) {
+    private void handleCustomerAddressAddition(FullIntegrationUnitTest.Order root, ItemAddedChange change) {
         if (root.getCustomer() == null) return;
         ObjectNode addressNode = (ObjectNode) change.addedItem();
         Long addressId = (Long) addressNode.identifier();
-        FullIntegrationTest.Address address = root.getCustomer().getAddresses().stream()
+        FullIntegrationUnitTest.Address address = root.getCustomer().getAddresses().stream()
                 .filter(a -> a.getId().equals(addressId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("customer.addresses 中找不到 identifier=" + addressId));
@@ -373,7 +373,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
                 address.getId(), root.getCustomer().getId(), address.getType(), address.getCity());
     }
 
-    private void handleChildRemovals(FullIntegrationTest.Order root, String fieldName, List<ItemRemovedChange> removals) {
+    private void handleChildRemovals(FullIntegrationUnitTest.Order root, String fieldName, List<ItemRemovedChange> removals) {
         if ("items".equals(fieldName)) {
             for (ItemRemovedChange change : removals) {
                 ObjectNode itemNode = (ObjectNode) change.removedItem();
@@ -388,7 +388,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleChildFieldChanges(FullIntegrationTest.Order root, List<Change> changes) {
+    private void handleChildFieldChanges(FullIntegrationUnitTest.Order root, List<Change> changes) {
         for (Change change : changes) {
             if (!(change instanceof ValueChange vc)) {
                 // ObjectFieldChange：子表对象/集合字段整体替换，无业务值可提取，暂不处理（保持既有行为）
@@ -403,7 +403,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleOrderItemFieldChange(FullIntegrationTest.Order root, String path, ValueChange vc) {
+    private void handleOrderItemFieldChange(FullIntegrationUnitTest.Order root, String path, ValueChange vc) {
         String[] parts = path.split("\\.");
         Long itemId = extractId(parts[0]);
 
@@ -414,7 +414,7 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
             } else if ("productName".equals(field)) {
                 jdbc.update("UPDATE t_order_item SET product_name = ? WHERE id = ?", vc.newValue(), itemId);
             } else if ("unitPrice".equals(field)) {
-                FullIntegrationTest.Money money = (FullIntegrationTest.Money) vc.newValue();
+                FullIntegrationUnitTest.Money money = (FullIntegrationUnitTest.Money) vc.newValue();
                 jdbc.update("UPDATE t_order_item SET unit_price = ?, unit_currency = ? WHERE id = ?",
                         money.amount(), money.currency(), itemId);
             }
@@ -434,11 +434,11 @@ class OrderRepository extends DifferRepository<FullIntegrationTest.Order, FullIn
         }
     }
 
-    private void handleCustomerFieldChange(FullIntegrationTest.Order root, String path, ValueChange vc) {
+    private void handleCustomerFieldChange(FullIntegrationUnitTest.Order root, String path, ValueChange vc) {
         if ("customer.name".equals(path)) {
             jdbc.update("UPDATE t_customer SET name = ? WHERE order_id = ?", vc.newValue(), root.getId());
         } else if (path.startsWith("customer.contact")) {
-            FullIntegrationTest.ContactInfo contact = (FullIntegrationTest.ContactInfo) vc.newValue();
+            FullIntegrationUnitTest.ContactInfo contact = (FullIntegrationUnitTest.ContactInfo) vc.newValue();
             jdbc.update("UPDATE t_customer SET contact_phone = ?, contact_email = ? WHERE order_id = ?",
                     contact != null ? contact.phone() : null,
                     contact != null ? contact.email() : null,
