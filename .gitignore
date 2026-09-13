@@ -26,6 +26,9 @@ replay_pid*
 # Scaffold self-maintenance issues
 /issues/
 
+# CodeGraph local index (build artifact, host watcher maintains)
+.codegraph/
+
 target/
 .mvn/maven.config
 
