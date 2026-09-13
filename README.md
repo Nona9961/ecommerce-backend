@@ -23,8 +23,6 @@ mvn spring-boot:run -pl server  # 启动（默认 H2 内存库）
 curl http://localhost:19891/actuator/health   # 健康检查
 ```
 
-结构（模块、包地图、依赖方向）见 `structure.md`。
-
 ## 许可证
 
 MIT
