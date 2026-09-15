@@ -28,7 +28,7 @@ import java.util.List;
  *     <li>执行：{@link NamedParameterJdbcTemplateExtensions} 统一渲染
  *         （SPRING_NAMED_PARAMETER + 命名参数绑定），不手写参数包装；</li>
  *     <li>视图语义依赖：在售/有货过滤与销量/价格聚合由 PG 视图
- *         product_search_view（部署位 DDL）承载，本实现不重复实现。</li>
+ *         product_search_view（外部 DDL）承载，本实现不重复实现。</li>
  * </ul>
  * 事务：纯读路径，不开写事务。
  *

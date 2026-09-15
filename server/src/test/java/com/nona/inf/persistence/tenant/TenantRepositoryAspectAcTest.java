@@ -736,7 +736,7 @@ class TenantRepositoryAspectAcTest {
 
     /**
      * 同事务保写契约（验收钉住点）：同事务内「读放行作用域写当前租户 → 作用域退出 flush+clear →
-     * 事务提交落库」——验证 design D4 顺序承诺「flush 先行防 clear 丢挂起写」。
+     * 事务提交落库」——验证顺序承诺「flush 先行防 clear 丢挂起写」。
      * <p>
      * TransactionTemplate 开外层事务（EM 绑定）；事务内 {@code withReadBypass} 作用域写当前租户实体
      * （挂起态）；作用域退出时 EM 仍绑定 → {@code JpaTenantScopeExitHandler} 真实执行

@@ -30,10 +30,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code XxxSmokeTest}）不允许残留：冒烟概念已废弃，原冒烟类按命名映射改名为
  * {@code XxxAcTest}。
  * <p>
- * 执行（红阶段红态验证 / 绿阶段验收同形）：
+ * 执行（失败态验证与验收同形）：
  * <pre>
- * cd /opt/code/ecommerce-backend &amp;&amp; mvn -o -llr -s /opt/code/.m2/settings.xml \
- *   -Pfull -Dtest=TestFoundationContractAcTest \
+ * mvn -Pfull -Dtest=TestFoundationContractAcTest \
  *   -Dsurefire.failIfNoSpecifiedTests=false test
  * </pre>
  *
@@ -142,7 +141,7 @@ class TestFoundationContractAcTest {
      * {@code XxxAcTest} 结尾；任何旧形态后缀（{@code XxxTest}/{@code XxxTests}/
      * {@code XxxIntegrationTest}/{@code XxxSmokeTest}）均为违规。
      * <p>
-     * 分类锚点：文件基名 = 分类来源（红阶段机械检查与验收检查同口径）；支撑类
+     * 分类锚点：文件基名 = 分类来源（机械检查与验收检查同口径）；支撑类
      * （fixture/探针/测试服务，无 {@code @Test} 方法）不参与分类判定。
      */
     @Test

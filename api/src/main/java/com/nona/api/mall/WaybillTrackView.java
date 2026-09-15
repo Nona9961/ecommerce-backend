@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 物流轨迹视图（运单追加记录，WU-59 回注——形状钉死前端
+ * 物流轨迹视图（运单追加记录，形状钉死前端
  * mall-trading.types.ts {@code WaybillTrackView}）。
  * <p>
  * 时间形态：occurredAt 为 ISO-8601 字符串（WaybillTrack.occurredAt

@@ -7,7 +7,7 @@ import com.nona.api.common.PageResult;
 import java.util.Collection;
 
 /**
- * 商家端本店订单契约（/seller/orders…，SELLER 角色，WU-47 约定端点）：
+ * 商家端本店订单契约（/seller/orders…，SELLER 角色，约定端点）：
  * 本店子订单列表（状态筛选 + 分页）/ 详情（商品快照/金额明细/地址/物流
  * 信息）/ 发货（物流公司+运单号 → 运单创建 + 子单发货推进同事务）。
  * <p>

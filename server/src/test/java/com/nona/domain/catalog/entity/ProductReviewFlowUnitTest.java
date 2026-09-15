@@ -11,7 +11,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Product 聚合审核状态机契约测试（红阶段）：提交上架/审核通过/审核驳回
+ * Product 聚合审核状态机契约测试：提交上架/审核通过/审核驳回
  * 三迁移 + 敏感字段编辑分流（stageSensitiveEdit）的全量守卫契约——
  * 状态机合法迁移、提交完整性校验逐项边界、待审期内容冻结、在售主图不
  * 变量、驳回可修改重提、已下架态无合法迁移。

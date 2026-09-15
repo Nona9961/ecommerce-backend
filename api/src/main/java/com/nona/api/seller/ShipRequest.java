@@ -3,7 +3,7 @@ package com.nona.api.seller;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * 商家发货请求体（WU-47 约定形状：POST /seller/sub-orders/{subOrderId}
+ * 商家发货请求体（约定形状：POST /seller/sub-orders/{subOrderId}
  * /ship，对齐 ShipOrderUseCase.shipByMerchant——商家填物流公司+运单号
  * → 运单创建 + 子单发货推进同事务；幂等：已 SHIPPED 返回成功；归属/
  * 在途守卫由服务端承载）。

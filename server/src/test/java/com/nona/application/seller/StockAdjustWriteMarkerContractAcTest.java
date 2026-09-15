@@ -27,7 +27,7 @@ import static org.mockito.Mockito.verify;
  * 本人即搜索调用者）——商家调库存后 3s 内搜索立即可见有货态变化。
  * <p>
  * fixture：真实仓储链路（H2 + 真实 Repository，同
- * InventoryUseCaseAdjustIntegrationAcTest）。红阶段：埋点调用待落实
+ * InventoryUseCaseAdjustIntegrationAcTest）。埋点调用待落实
  * （markWrite 未被调用），失败原因 = 实现缺失（埋点缺失）。
  *
  * @author nona9961

@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 取消订单编排用例场景测试（主动取消 + 支付超时取消，
- * 红阶段契约）。
+ * 契约测试）。
  * <p>
  * 覆盖：happy——待支付主单取消全链路（归属校验 → 订单取消 → 逐子单
  * 库存回滚 → 支付关单，reason 透传）与超时入口（reason=TIMEOUT）；
@@ -54,7 +54,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：全部端口/仓储以 mock 承载（编排契约断言面）；提权事务
  * 以 mock 直执行（事务边界属应用层，由用例注解与提权包装承载，绿期
- * 集成测试验证真实回滚）。红阶段失败原因 = 实现缺失（用例方法体 UOE）。
+ * 集成测试验证真实回滚）。失败原因 = 实现缺失（用例方法体 UOE）。
  *
  * @author nona9961
  */
@@ -103,7 +103,7 @@ class CancelOrderUseCaseUnitTest {
     private TransactionTemplate transactionTemplate;
 
     /**
-     * 被测用例（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测用例（不注册 Spring；依赖全 mock，setUp 装配）。
      */
     private CancelOrderUseCase useCase;
 

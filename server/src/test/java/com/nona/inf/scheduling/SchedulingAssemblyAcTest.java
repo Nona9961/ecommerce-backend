@@ -117,7 +117,7 @@ class SchedulingAssemblyAcTest {
      * 存在任何带 {@code @EnableScheduling} 的配置类，也不得注册
      * {@link TaskScheduler}（Boot 仅在有调度装配时经
      * ScheduledAnnotationBeanPostProcessor 提供调度器）——两断言合起来
-     * 锁死「test 侧调度装配不激活」；若绿阶段门控配置类放错位置（绕开
+     * 锁死「test 侧调度装配不激活」；若门控配置类放错位置（绕开
      * @ConditionalOnProperty 或属性误激活），本断言首先红。
      */
     @Test

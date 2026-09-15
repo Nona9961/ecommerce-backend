@@ -26,7 +26,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * mock 网关回调送达控制器场景测试（回调 HTTP 送达面接线契约，红阶段）。
+ * mock 网关回调送达控制器场景测试（回调 HTTP 送达面接线契约）。
  * <p>
  * 覆盖：happy——合法 PAY 回调分发到支付回调编排（回调事件字段逐项透
  * 传不改写）、合法 REFUND 回调分发到退款回调编排；critical——REFUND
@@ -42,7 +42,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
  * <p>
  * 时间断言：本单元无时间语义面（回调事件无时间字段），不适用相对窗口
  * 约束；留痕时刻断言归装配面 AcTest（相对窗口）。
- * 红阶段失败原因 = 实现缺失（handleCallback 方法体 UOE）。
+ * 失败原因 = 实现缺失（handleCallback 方法体 UOE）。
  *
  * @author nona9961
  */
@@ -155,7 +155,7 @@ class MockGatewayCallbackControllerUnitTest {
     /**
      * critical：编排业务异常（支付单不存在 404）原样透传——controller 为
      * 薄壳不 try/catch（AuthController 先例同构），应答映射归全局异常
-     * 处理；退款编排不触达。桩 lenient 化：红阶段占位 UOE 抢先抛出，
+     * 处理；退款编排不触达。桩 lenient 化：占位 UOE 抢先抛出，
      * stub 未消费不触发 UnnecessaryStubbing（项目先例同款豁免）。
      */
     @Test

@@ -18,16 +18,16 @@ import static org.mockito.Mockito.verify;
 
 /**
  * 发货超时处理器（ORDER_SHIP：已支付 3 天未发货自动关单退款）
- * 场景测试——红阶段契约。
+ * 场景测试——契约测试。
  * <p>
  * 覆盖：happy——fire 按类型路由到 {@link RefundUseCase#refundByShipTimeout}
  * 并以 target（子订单 ID）透传；critical——幂等契约（重复 fire = 引擎恢复
  * 重扫重放：每次 fire 都路由用例一次，业务幂等由用例短路承担，短路成功
  * 返回 null 不重复建单）与 target 参数透传正确；fail——用例抛异常原样传播。
  * <p>
- * 装配纪律：处理器为普通类（红阶段不注册 Spring，遵循既有降级先例），
+ * 装配纪律：处理器为普通类（不注册 Spring，遵循既有降级先例），
  * 构造器直接装配（@BeforeEach 重建，禁字段初始化）；对应用例以 mock 承载；
- * 桩纪律——红阶段以 lenient 豁免 UOE 挡道面，绿实现后已按断言面逐桩
+ * 桩纪律——以 lenient 豁免 UOE 挡道面，实现后已按断言面逐桩
  * 收回精确桩（零豁免，doThrow 桩经 assertThatThrownBy 消费）。
  *
  * @author nona9961

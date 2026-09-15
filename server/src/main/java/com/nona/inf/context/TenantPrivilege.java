@@ -17,7 +17,7 @@ import java.util.concurrent.Callable;
  *   <li>{@link #elevated(Runnable)} — 提权：作用域内写门禁放行实体显式异租户，读路径由持久化适配层自行放行</li>
  *   <li>{@link #withReadBypass(Runnable)} — 读放行：作用域内读路径关闭租户过滤（{@code @CrossTenant} 注解使用），写门禁不受影响</li>
  * </ul>
- * 持久化适配层通过 {@link #isAnyReadBypassActive()} 在每次数据访问时自查状态决定过滤行为（设计 D1/D2）。
+ * 持久化适配层通过 {@link #isAnyReadBypassActive()} 在每次数据访问时自查状态决定过滤行为。
  * 基于 ScopedValue：出作用域自动恢复、块内不可篡改、默认不跨线程传播。
  * <p>
  * 形态说明：本类为 Spring 单例 bean，作用域退出处理器与租户上下文访问器均经

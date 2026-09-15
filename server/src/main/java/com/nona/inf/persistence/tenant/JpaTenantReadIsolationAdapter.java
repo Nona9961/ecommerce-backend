@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * JPA/Hibernate 读隔离适配层（设计 D2）：数据访问前按当前租户状态启停 Hibernate 租户 filter。
+ * JPA/Hibernate 读隔离适配层：数据访问前按当前租户状态启停 Hibernate 租户 filter。
  * <p>
  * 覆盖两种 session 时序（原双保险合流于此，行为零变化）：
  * <ul>

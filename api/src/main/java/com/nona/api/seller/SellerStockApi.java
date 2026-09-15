@@ -5,7 +5,7 @@ import com.nona.api.common.PageQuery;
 import com.nona.api.common.PageResult;
 
 /**
- * 商家端库存契约（/seller/inventory…，SELLER 角色，WU-47 约定端点）：
+ * 商家端库存契约（/seller/inventory…，SELLER 角色，约定端点）：
  * 库存三态分页查看（商品维度展示字段后端经 catalog join）/ 手工调整
  * 可售（每笔必记流水）/ 流水查看（append-only）。
  * <p>

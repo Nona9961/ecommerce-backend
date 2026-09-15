@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 物流状态（线上契约枚举，接口层冻结——WU-59 回注，形状钉死前端
+ * 物流状态（线上契约枚举，接口层冻结，形状钉死前端
  * mall-trading.types.ts {@code MallWaybillStatus} 4 值逐名对应，与
  * 后端 WaybillStatus 状态机一致：待发货→已发货→运输中→已签收）。
  * <p>

@@ -2,7 +2,7 @@ package com.nona.api.seller;
 
 /**
  * 库存三态展示行响应体（SKU 维度；商家库存列表页行与手工调整响应共用，
- * WU-47 约定形状：GET /seller/inventory?pageNum=&amp;pageSize= 与
+ * 约定形状：GET /seller/inventory?pageNum=&amp;pageSize= 与
  * PUT /seller/inventory/{skuId}）。
  * <p>
  * 形态契约：库存数量为整数件，无金额换算；productId/productName/

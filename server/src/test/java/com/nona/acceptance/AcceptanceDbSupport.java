@@ -25,11 +25,9 @@ import java.util.function.Supplier;
 /**
  * E2E 验收真链断言共享数据面工具（纯 JDBC，无 Spring 上下文）。
  * <p>
- * 装配面：双连宿主隧道——MySQL {@code ecommerce_test}（localtunnel
- * 13306→3306，业务主库）与 PostgreSQL {@code ecommerce_test}（localtunnel
- * 15432→5432，CDC 镜像读库）。凭证从环境变量读取（运行命令模板从
- * /opt/data-stack/.env 映射导出：{@code ECOM_DB_PASSWORD} /
- * {@code ECOM_PG_PASSWORD}），本文件及任何测试文件不得出现密码明文。
+ * 装配面：双连本地隧道——MySQL 业务主库与 PostgreSQL CDC 镜像读库。
+ * 凭证从环境变量读取（{@code ECOM_DB_PASSWORD} / {@code ECOM_PG_PASSWORD}），
+ * 本文件及任何测试文件不得出现密码明文。
  * <p>
  * 职责边界：直插/直查/poll 等待/幂等清理的工具函数——CDC 真链
  * AcTest 共用；业务断言仍写在各自测试类（断言
@@ -42,10 +40,10 @@ import java.util.function.Supplier;
  */
 public final class AcceptanceDbSupport {
 
-    /** MySQL 隧道端口（宿主 3306）。 */
+    /** MySQL 隧道端口（本地转发）。 */
     public static final int MYSQL_PORT = 13306;
 
-    /** PG 隧道端口（宿主 5432）。 */
+    /** PG 隧道端口（本地转发）。 */
     public static final int PG_PORT = 15432;
 
     /** 业务主库（验收面测试库，独立可 reset）。 */
@@ -153,7 +151,7 @@ public final class AcceptanceDbSupport {
         return Timestamp.valueOf(LocalDateTime.now(ZoneOffset.UTC));
     }
 
-    /** 相对窗口时刻（now ± offsetMinutes 分钟；UTC 字面——与部署位对齐）。 */
+    /** 相对窗口时刻（now ± offsetMinutes 分钟；UTC 字面）。 */
     public static Timestamp utcOffset(int offsetMinutes) {
         return Timestamp.valueOf(LocalDateTime.now(ZoneOffset.UTC).plusMinutes(offsetMinutes));
     }

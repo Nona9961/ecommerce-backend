@@ -3,7 +3,7 @@ package com.nona.api.mall;
 import java.util.List;
 
 /**
- * 运单视图（物流跟踪页，WU-59 回注——形状钉死前端
+ * 运单视图（物流跟踪页，形状钉死前端
  * mall-trading.types.ts {@code WaybillView}）。
  * <p>
  * 关联子单商品行由后端装配（子单快照 items 原样呈现）；subOrderNo /

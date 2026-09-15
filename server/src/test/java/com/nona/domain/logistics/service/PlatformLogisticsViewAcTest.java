@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 平台物流视图真实装配验收测试（真实装配面——PG 镜像表读取
  * 链路/列投影/状态文字映射/超时列数据面逐一验证；按 javadoc 启用
- * 契约改写，红阶段降级声明已解除——CDC 三库同步链路已就绪，
+ * 契约改写，降级声明已解除——CDC 三库同步链路已就绪，
  * test 库 PG 镜像（ecommerce_test）含 waybill / sub_order / shop 三张镜像表）。
  * <p>
  * 装配面清单：真实 replica 查询链路 / 超时标记数据面 /
@@ -155,7 +155,7 @@ class PlatformLogisticsViewAcTest {
 
     /** 直插店铺/主单/子单/运单到 MySQL test（CDC 源 → 镜像自动同步）。
      *  createTimeOffsetMinutes：子单创建时间相对窗口（<b>本地墙钟字面</b>——
-     *  与部署位 MySQL 服务器 NOW() 语义对齐：DATETIME 无时区、读侧按 JVM
+     *  与 MySQL NOW() 语义对齐：DATETIME 无时区、读侧按 JVM
      *  本地时区解析，fixture 须与业务写入同字面语义；禁用绝对日期魔法值，
      *  默认 0 = 当前时刻）。 */
     private void insertRows(Connection conn, long shopId, String shopName,
@@ -205,7 +205,7 @@ class PlatformLogisticsViewAcTest {
 
     /**
      * 冒烟-1 真实 replica 查询链路（核心）：fixture 在 MySQL test 建
-     * 三张镜像表（waybill / sub_order / shop，列形与部署位 DDL 对齐——
+     * 三张镜像表（waybill / sub_order / shop，列形与视图 DDL 对齐——
      * 子单含 shop_id/status/sub_order_no/master_order_id/waybill_id/timeout_at 列，
      * status 按枚举名文字存储）并填充跨店铺行集 → 经真实装配
      * （服务 @Component + 仓储 @Repository + replica 命名参数模板限名注入）

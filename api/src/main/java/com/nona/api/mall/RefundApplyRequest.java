@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 退款申请请求体（WU-59 回注——形状钉死前端
+ * 退款申请请求体（形状钉死前端
  * mall-trading.types.ts {@code RefundApplyRequest}：POST
  * /mall/sub-orders/{subOrderId}/refunds）。
  * <p>

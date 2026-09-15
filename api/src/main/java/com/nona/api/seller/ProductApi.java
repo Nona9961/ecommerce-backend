@@ -235,7 +235,7 @@ public interface ProductApi {
     HttpResponse<List<ShopCategoryItem>> listShopCategories(Long productId);
 
     /**
-     * SKU 集回显（编辑页 SKU 矩阵初始值；WU-47 前端约定端点——本接口
+     * SKU 集回显（编辑页 SKU 矩阵初始值；前端约定端点——本接口
      * 既有写面（configureSpecTemplate/updateSkuPrice/setSkuEnabled）
      * 无读面，接线 WU 补只读回显，形状与写面响应共用 {@link SkuItem}）。
      *
@@ -245,7 +245,7 @@ public interface ProductApi {
     HttpResponse<List<SkuItem>> listSkus(Long productId);
 
     /**
-     * 规格模板回显（编辑页模板编辑区初始值；WU-47 前端约定端点）。
+     * 规格模板回显（编辑页模板编辑区初始值；前端约定端点）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @return 规格模板（维度按配置序；未配置模板 = 空维度列表的请求体形态）
@@ -253,7 +253,7 @@ public interface ProductApi {
     HttpResponse<SpecTemplateRequest> getSpecTemplate(Long productId);
 
     /**
-     * 商品运费模板绑定回显（编辑页下拉初始值；WU-47 前端约定端点）。
+     * 商品运费模板绑定回显（编辑页下拉初始值；前端约定端点）。
      *
      * @param productId 商品 ID（必须属于当前店铺，否则 404）
      * @return 当前绑定模板 ID（null = 未绑定）

@@ -1,7 +1,7 @@
 package com.nona.api.seller;
 
 /**
- * 库存流水行响应体（商家库存流水查看分页行，WU-47 约定形状：GET
+ * 库存流水行响应体（商家库存流水查看分页行，约定形状：GET
  * /seller/inventory/{skuId}/logs?pageNum=&amp;pageSize=，对齐 InventoryLog
  * 实体：append-only 不可变行，前后三态快照全量呈现——任意一行可复现
  * 该 SKU 该时点库存全貌）。

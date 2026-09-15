@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 退款单视图（申请/重试路径返回，WU-59 回注——形状钉死前端
+ * 退款单视图（申请/重试路径返回，形状钉死前端
  * mall-trading.types.ts {@code RefundView}）。
  * <p>
  * 金额纪律：amount 为分（= 子单实付，api-client 换算为元下行）。

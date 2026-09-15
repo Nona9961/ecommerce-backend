@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 装配守卫（版本号为正/快照与操作人非空/归属商品必填）与触发类型枚举
  * 取值（EDIT/ROLLBACK 本期产生；REVIEW_PASS/REJECT 属后续阶段预留）。
  * <p>
- * 红状态说明：实体为数据载体（装配底座，构造/读取在红阶段实现，本文件
+ * 状态说明：实体为数据载体（装配底座，构造/读取在实现期，本文件
  * 断言为绿底座）；版本链领域语义（保存留痕/版本号递增分配/回滚编排）
  * 为用例层契约声明（抛 UnsupportedOperationException），由
  * ProductVersionUseCaseIntegrationAcTest / ProductRestoreContentUnitTest 以

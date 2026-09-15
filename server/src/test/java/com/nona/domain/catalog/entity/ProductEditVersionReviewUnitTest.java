@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 审核结论版本行契约测试（红阶段）：审核结论（通过/驳回）落版本行的
+ * 审核结论版本行契约测试：审核结论（通过/驳回）落版本行的
  * 构造形态——驳回原因随行承载（商家据此修改重提），原因与触发类型一致
  * 性由构造路径守卫。
  * <p>

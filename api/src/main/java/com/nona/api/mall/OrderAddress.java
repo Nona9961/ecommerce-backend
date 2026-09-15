@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 订单收货地址快照视图（订单视图嵌套地址，WU-59 回注）。
+ * 订单收货地址快照视图（订单视图嵌套地址）。
  * <p>
  * <b>字段名契约（与地址簿 AddressResponse 的 recipient 不同名）</b>：
  * 订单消费面由前端 order.types.ts {@code AddressSnapshot} 冻结——

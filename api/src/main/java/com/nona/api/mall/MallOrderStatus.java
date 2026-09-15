@@ -4,7 +4,7 @@ import com.nona.exceptions.BusinessCode;
 import com.nona.exceptions.BusinessException;
 
 /**
- * 买家订单状态（线上契约枚举，接口层冻结——WU-59 回注，形状钉死前端
+ * 买家订单状态（线上契约枚举，接口层冻结，形状钉死前端
  * mall-trading.types.ts {@code MallOrderStatus} 9 值逐名对应）。
  * <p>
  * 值域 = 主单状态派生枚举（MasterOrderStatus 9 值）与子单履约状态
@@ -12,7 +12,7 @@ import com.nona.exceptions.BusinessException;
  * 交易面视图（OrderView / SubOrderView.status）统一承载；枚举名即线上
  * JSON 值（Jackson 同名序列化，前端类型对齐）。
  * <p>
- * 查询语义（GET /mall/orders 状态 tab——WU-44 前端 ORDER_TABS：
+ * 查询语义（GET /mall/orders 状态 tab——前端 ORDER_TABS：
  * 全部 + 六态，REFUNDING / PARTIALLY_SHIPPED / CLOSED 归「全部」不
  * 传参）：本枚举仅承载「tab 值」语义，tab → 仓储过滤枚举集合的映射
  * 收敛在消费编排层（BuyerOrderQuery，冻结 javadoc 内固化映射表）。

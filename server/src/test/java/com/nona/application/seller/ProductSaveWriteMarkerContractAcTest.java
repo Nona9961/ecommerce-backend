@@ -36,7 +36,7 @@ import static org.mockito.Mockito.verify;
  * <p>
  * fixture：真实仓储链路（H2 + 真实 Repository，同
  * ProductUseCaseVersionTraceIntegrationAcTest）；上下文身份以 mock
- * 返回固定商家账号。红阶段：埋点调用待落实（markWrite 未被调用），
+ * 返回固定商家账号。埋点调用待落实（markWrite 未被调用），
  * 失败原因 = 实现缺失（埋点缺失）。
  *
  * @author nona9961

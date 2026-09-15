@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * 买家商品搜索用例（GET /mall/search 承载，端点契约冻结——形状钉死
- * 前端约定清单，复用 search 域 ProductSearchService（PG 镜像读，
+ * 前端约定，复用 search 域 ProductSearchService（PG 镜像读，
  * 只读无写路径）。
  * <p>
  * 编排语义：

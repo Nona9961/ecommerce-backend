@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 待支付支付单视图（订单视图嵌套，WU-59 回注——形状钉死前端
+ * 待支付支付单视图（订单视图嵌套，形状钉死前端
  * mall-trading.types.ts {@code PaymentView}）。
  * <p>
  * 语义：主单待支付时非空（收银台金额/超时/状态收敛数据源——

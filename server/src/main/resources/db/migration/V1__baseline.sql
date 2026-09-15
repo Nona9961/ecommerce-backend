@@ -1,18 +1,18 @@
 -- =============================================================================
--- WU-53 Baseline: 24-table PO 映射全集（identity 9 / catalog 11 / inventory 2 / order 2）
+-- Baseline: 24-table PO 映射全集（identity 9 / catalog 11 / inventory 2 / order 2）
 -- =============================================================================
 -- 【导出途径】本脚本以 Hibernate 6（MySQL 8.4 方言）schema-generation scripts
 --   一次性导出（jakarta.persistence.schema-generation.scripts.action=create，
 --   临时运行期参数覆盖，未改动任何配置文件）为真源，手审改造后落地。
 -- 【手审结论】
 --   ① 24 表 = 既有冻结 PO 映射全集（表名/列/类型/nullable 与 @Table/@Column 一致）；
---      探针表 cdc_probe 不入本脚本（部署位自建，Flyway 不管理）。
+--      探针表 cdc_probe 不入本脚本（自建探针表，Flyway 不管理）。
 --   ② 唯一约束 18（uk_*）+ 索引 11（idx_*），与 PO @UniqueConstraint/@Index 逐条对应；
 --      独立显式命名语句（ALTER TABLE ... ADD CONSTRAINT / CREATE INDEX），
 --      便于 CDC 与索引审计对齐。
---   ③ 表名与 CDC 白名单修订后一致：account / address_book / cart（部署位三处同步见
---      用户执行清单）；role / permission / assignment 直写无引号——MySQL 8.4.8
---      实测为非保留字（红阶段探针闭合 WU-10 遗留）。
+--   ③ 表名与 CDC 白名单修订后一致：account / address_book / cart；
+--      role / permission / assignment 直写无引号——MySQL 8.4.8
+--      实测为非保留字。
 --   ④ create_time / update_time / review_time 使用 datetime(6)，无 DB DEFAULT：
 --      审计时间由应用侧 JPA auditing（@CreatedDate/@LastModifiedDate）赋值。
 --   ⑤ 类型细节同源保真：枚举列 enum(...)（@Enumerated(STRING)）、布尔列 bit
@@ -22,7 +22,7 @@
 --      not null（@TenantId 租户列）。
 -- 【CDC 白名单契约】修正后白名单 = 29 业务表 + cdc_probe = 30 项；本脚本 24 表
 --   全部落入白名单（其余 5 张交易域表 master_order/sub_order/order_item/... 由
---   WU-54 V2 落库后入白名单）。
+--   V2 落库后入白名单）。
 -- 【红线】Flyway clean 永久禁止：本库是 CDC（Debezium）源库，clean 清空业务表即
 --   炸整条 binlog 同步链路；任何脚本/命令不得执行 flyway clean 或手工
 --   DROP / DROP DATABASE（清理一律走 scripts/test-db-reset.sh 数据级 DELETE）。

@@ -46,7 +46,7 @@ public class SubOrderConvertor
      * <p>
      * 字段逐列映射（含地址/金额快照扁平化）；超时三列
      * （timeoutAt/timeoutType/claimed）不触碰——由仓储实现侧维护
-     * （D11，领域对象无对应字段）。
+     * （领域对象无对应字段）。
      */
     @Override
     protected SubOrderPO safedConvertToPO(SubOrder root) {

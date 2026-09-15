@@ -4,9 +4,9 @@ import com.nona.api.HttpResponse;
 import com.nona.api.common.PageResult;
 
 /**
- * 商品搜索契约（GET /mall/search，BUYER 角色）——WU-59 回注冻结：
- * 端点形态由前端 WU-43 约定清单钉死（searchApi.ts 逐参数对应），
- * 复用后端 search 域 ProductSearchService（WU-41，PG 镜像读），
+ * 商品搜索契约（GET /mall/search，BUYER 角色）——冻结：
+ * 端点形态由前端约定钉死（searchApi.ts 逐参数对应），
+ * 复用后端 search 域 ProductSearchService（PG 镜像读），
  * 后端按同形状接入，字段不再演进。
  * <p>
  * 参数语义：

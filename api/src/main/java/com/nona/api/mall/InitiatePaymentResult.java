@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 发起支付结果（WU-59 回注——形状钉死前端 tradingApi.ts
+ * 发起支付结果（形状钉死前端 tradingApi.ts
  * {@code InitiatePaymentWire} 7 字段逐名对应，金额折分为元下行）。
  * <p>
  * 字段语义 = domain/payment/ports {@code PaymentAcquireView}（PendingPayment

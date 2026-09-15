@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 审核结论版本工厂契约测试（红阶段）：审核通过/驳回结论行的创建入口——
+ * 审核结论版本工厂契约测试：审核通过/驳回结论行的创建入口——
  * 触发类型定型（REVIEW_PASS / REJECT）+ 行 ID 生成，驳回行携原因。
  * <p>
  * 红状态说明：工厂结论创建方法为设计契约（方法体抛

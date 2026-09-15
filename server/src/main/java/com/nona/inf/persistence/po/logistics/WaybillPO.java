@@ -59,7 +59,7 @@ public class WaybillPO extends BasePO {
     /**
      * 在途派生态（status != DELIVERED 即在途；转换器由状态推导写入，
      * 唯一约束组成——NULL 行允许多条历史，1 行每子单至多一张）。
-     * 可空承载 D7 定案：NULL = 历史行（签收释放锚点），MySQL 唯一索引
+     * 可空承载：NULL = 历史行（签收释放锚点），MySQL 唯一索引
      * NULL 多行放行。
      */
     @Column(name = "in_transit")

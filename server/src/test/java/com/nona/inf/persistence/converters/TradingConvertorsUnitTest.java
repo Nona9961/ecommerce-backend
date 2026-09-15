@@ -103,7 +103,7 @@ class TradingConvertorsUnitTest {
                 List.of(item), SubOrderStatus.PAID, 7001L);
 
         final SubOrderPO po = SUB.convertToPO(root);
-        Assertions.assertNull(po.getTimeoutAt(), "超时三列 convertor 不触碰（D11）");
+        Assertions.assertNull(po.getTimeoutAt(), "超时三列 convertor 不触碰");
         Assertions.assertNull(po.getTimeoutType());
         Assertions.assertEquals(Boolean.FALSE, po.getClaimed(), "claimed 保持字段初始化值");
 

@@ -1,7 +1,7 @@
 package com.nona.api.seller;
 
 /**
- * 本店子订单列表行响应体（商家订单列表 tab + 分页的返回行，WU-47
+ * 本店子订单列表行响应体（商家订单列表 tab + 分页的返回行，
  * 约定形状：GET /seller/orders?status=&amp;pageNum=&amp;pageSize=）。
  * <p>
  * 形态契约：行单元 = SubOrder 聚合（店铺维度履约单元）；status 为

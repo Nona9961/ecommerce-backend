@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * 契约测试：写门禁边界行为（两条件判定 × 写操作形态分类）：
  * <ul>
- *   <li>D1（PO 形态 → 门禁）：非提权 {@code deleteAllInBatch(集合)} 传异租户 PO → 门禁先拒（实验 D 转正）</li>
+ *   <li>D1（PO 形态 → 门禁）：非提权 {@code deleteAllInBatch(集合)} 传异租户 PO → 门禁先拒</li>
  *   <li>D2（ID/无参形态 → filter）：非提权无参 {@code deleteAllInBatch()} 仅删本租户行（bulk filter 契约）</li>
  *   <li>E（归属不可变）：managed 实体改 tenantID + flush 后库中仍为原值</li>
  *   <li>F（红线实证，{@code @Disabled}）：注解内读异租户实体改业务字段 + flush 会落库越权写——

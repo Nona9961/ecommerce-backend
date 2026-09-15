@@ -1,36 +1,35 @@
 -- =============================================================================
--- WU-54 Trading Tables: 9-table 交易域映射（order 3 / payment 4 / logistics 2）
+-- Trading Tables: 9-table 交易域映射（order 3 / payment 4 / logistics 2）
 -- =============================================================================
 -- 【导出途径】同 V1：以 Hibernate 6（MySQL 8.4 方言）schema-generation scripts
 --   一次性导出（jakarta.persistence.schema-generation.scripts.action=create，
 --   临时运行期参数覆盖，未改动任何配置文件）为真源，手审改造后落地；列序为
 --   手审编排（validate 逐列核对表名/列名/类型/nullable，与导出同源保真）。
 -- 【手审结论】
---   ① 9 表 = 红阶段 9 个新 PO 映射全集（master_order / sub_order / order_item /
+--   ① 9 表 = 9 个新 PO 映射全集（master_order / sub_order / order_item /
 --      payment_order / payment_callback_log / refund_order / refund_callback_log /
 --      waybill / waybill_track，表名/列/类型/nullable 与 @Table/@Column 一致）。
 --   ② 唯一约束 9（uk_*）+ 索引 7（idx_*），与 PO @UniqueConstraint/@Index 逐条
 --      对应；独立显式命名语句（ALTER TABLE ... ADD CONSTRAINT / CREATE INDEX），
---      便于 CDC 与索引审计对齐（D6 清单权威，报告注明 D6 计数行勘误）。
+--      便于 CDC 与索引审计对齐。
 --   ③ 租户表 2 张（sub_order / order_item，TenantScopedBasePO 子类）含
 --      tenant_id varchar(64) not null（@TenantId 租户列）；交易域其余 7 表 global。
 --   ④ 枚举列 enum(...)（@Enumerated(STRING) 全值导出）；布尔列 bit；金额/数量
 --      bigint/integer；order_item 两 JSON 扩展列 longtext（@JdbcTypeCode
 --      SqlTypes.LONGVARCHAR，V1.2 定稿终态同型）。
 --   ⑤ claimed 位（sub_order / payment_order）为超时引擎 SQL 面列，非空列无 DB
---      DEFAULT：应用侧默认值由 PO 字段初始化（Boolean.FALSE）落地（D11）。
---   ⑥ waybill.in_transit 可空（D7 定案 + 主会话批准 PO 注解修复）：TRUE = 在途
+--      DEFAULT：应用侧默认值由 PO 字段初始化（Boolean.FALSE）落地。
+--   ⑥ waybill.in_transit 可空（PO 注解修复）：TRUE = 在途
 --      活动行（每子单至多一张，uk_waybill_sub_order_in_transit 复合唯一防线）、
 --      NULL = 历史行（签收释放锚点，MySQL 唯一索引 NULL 多行放行）、FALSE 永不写。
 --   ⑦ 超时 SQL 面三列（sub_order / payment_order 的 timeout_at / timeout_type /
 --      claimed）承载超时引擎扫描/认领面（领域实体不承载）——(status, timeout_at)
 --      复合索引与接口 javadoc 扫描面一致。
 -- 【CDC 白名单契约】本脚本 9 表全部落入补齐后白名单（30 业务表 + cdc_probe）：
---   部署位 4 文件（mysql-source.properties / pg-sink.properties / verify.sh /
---   reset-sync.sh）的 refund_callback_log 补位与 verify.sh SKIP 逻辑修正见
---   绿阶段报告；生效命令 = 用户宿主执行 reset-sync.sh 或重启 connect。
+--   连接器侧（source/sink 属性、verify.sh）的 refund_callback_log 补位与
+--   SKIP 逻辑修正随白名单同步生效。
 -- 【版本序】v1 < v1.1 < v1.2 < v2（Flyway 数值比较，与已应用脚本无冲突）；
---   后续接线 WU 用 V3 起命名。
+--   后续迁移用 V3 起命名。
 -- 【红线】Flyway clean 永久禁止：本库是 CDC（Debezium）源库，clean 清空业务表即
 --   炸整条 binlog 同步链路；任何脚本/命令不得执行 flyway clean 或手工
 --   DROP / DROP DATABASE（清理一律走 scripts/test-db-reset.sh 数据级 DELETE）。
@@ -220,7 +219,7 @@ CREATE INDEX idx_refund_callback_log_refund_order ON refund_callback_log (refund
 -- =============================================================================
 
 -- 运单聚合根主表（global，租户中立）：(sub_order_id, in_transit) 复合唯一承载
--- 「一子单一在途」DB 防线（D7）——TRUE=在途活动行（每子单至多一张）、NULL=
+-- 「一子单一在途」DB 防线——TRUE=在途活动行（每子单至多一张）、NULL=
 -- 历史行（签收释放锚点，NULL 多行并存，子单可再次发货）、FALSE 永不写；
 -- in_transit 由转换器按状态派生写入（!= DELIVERED → TRUE / 签收 → NULL）。
 CREATE TABLE IF NOT EXISTS waybill (

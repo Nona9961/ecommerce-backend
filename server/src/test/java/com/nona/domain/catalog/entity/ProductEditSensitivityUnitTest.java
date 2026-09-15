@@ -8,7 +8,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 编辑分流判定契约测试（红阶段）：字段级审核白名单——交易敏感字段集
+ * 编辑分流判定契约测试：字段级审核白名单——交易敏感字段集
  * {标题, 平台类目, 品牌, SKU 价格, SKU 规格构成} 与增删 SKU 集合 → 转
  * 待审核；展示类字段 {描述, 详情图, 自定义属性}（含 SKU 启停等集外
  * 字段）→ 直接生效；无变更 → 不路由。
