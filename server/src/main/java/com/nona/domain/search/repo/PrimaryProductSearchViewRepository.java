@@ -14,9 +14,9 @@ import java.util.List;
  *     <li><b>同构查询</b>：同一 SQL 构建（共享 support 类/statement
  *         构建，行为等价 replica SQL）——窗口路由只换
  *         执行通道，查询语义零漂移；</li>
- *     <li><b>查询物</b>：主库侧 {@code product_search_view}（部署位
+ *     <li><b>查询物</b>：主库侧 {@code product_search_view}（外部
  *         DDL 基于源表的实时视图，与 PG 镜像视图同构同规则——视图 DDL
- *         归属部署位、不入业务仓库（既有先例）；CDC 未同步的新写
+ *         归属外部资产、不入业务仓库（既有先例）；CDC 未同步的新写
  *         内容经主库通道立即可见（read-your-writes）；</li>
  *     <li><b>静态绑定</b>：本实现仅持有主库 NamedParameterJdbcTemplate
  *         （{@code @Primary} 回填 bean，无运行时路由）——「静态装配

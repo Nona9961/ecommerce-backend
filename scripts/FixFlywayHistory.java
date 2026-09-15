@@ -1,8 +1,8 @@
 import java.sql.*;
 
 /**
- * Flyway repair 语义（部署位 README 排障 2 先例）：备份并删除 ecommerce_test
- * flyway_schema_history 中已应用但 dev locations 解析不到的 R__tenant_test_tables
+ * Flyway repair 语义：备份并删除库中
+ * flyway_schema_history 已应用但 dev locations 解析不到的 R__tenant_test_tables
  * 记录（test 面重放幂等——R 迁移 IF NOT EXISTS）。
  * 步骤：备份行(输出) → DELETE → 复查剩余行。
  */

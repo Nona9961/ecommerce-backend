@@ -25,8 +25,8 @@ import java.util.List;
  *     <li>SQL：与 replica 通道同一共享构建器
  *         {@link SearchViewQuerySupport}（同构查询，语句构建唯一位）——
  *         窗口路由只换执行通道，查询语义零漂移；查询物 = 主库侧
- *         {@code product_search_view}（部署位 DDL 基于源表的实时视图，
- *         与 PG 镜像视图同构同规则——视图 DDL 归属部署位、不入业务仓库
+ *         {@code product_search_view}（外部 DDL 基于源表的实时视图，
+ *         与 PG 镜像视图同构同规则——视图 DDL 归属外部资产、不入业务仓库
  *         （既有先例）；CDC 未同步的新写内容经主库通道立即可见
  *         （read-your-writes）；</li>
  *     <li>行映射：与 replica 通道同一 {@code CARD_ROW_MAPPER}（列契约

@@ -30,7 +30,7 @@ import static org.mockito.Mockito.verify;
  * <p>
  * fixture：真实仓储链路（H2 + 真实 Repository，同
  * ProductVersionUseCaseIntegrationAcTest）；身份经真实请求作用域绑定
- * （不 mock 上下文）。红阶段：埋点调用待落实（markWrite 未被调用），
+ * （不 mock 上下文）。埋点调用待落实（markWrite 未被调用），
  * 失败原因 = 实现缺失（埋点缺失）。
  *
  * @author nona9961

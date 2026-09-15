@@ -3,7 +3,7 @@ package com.nona.api.mall;
 import java.util.List;
 
 /**
- * 子订单视图（店铺维度履约单元，WU-59 回注——形状钉死前端
+ * 子订单视图（店铺维度履约单元，形状钉死前端
  * mall-trading.types.ts {@code SubOrderView}）。
  * <p>
  * 金额四维扁平承载（goodsAmount/freightAmount/discount/paidAmount，

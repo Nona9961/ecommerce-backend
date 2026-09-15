@@ -34,8 +34,8 @@ import static org.mockito.Mockito.when;
  * 故不可达的系统损坏）→ 防御拒绝（catalog.freight_default_template_not_found
  * 500，不静默降级为 null/包邮）。
  * <p>
- * 红阶段：getBuyerView 为签名冻结（实现缺失）——全部用例红于
- * UnsupportedOperationException，绿阶段实现后转为断言期验证。
+ * getBuyerView 为签名冻结（实现缺失）——全部用例红于
+ * UnsupportedOperationException，实现后转为断言期验证。
  */
 @ExtendWith(MockitoExtension.class)
 class ProductQueryFacadeFreightFallbackUnitTest {

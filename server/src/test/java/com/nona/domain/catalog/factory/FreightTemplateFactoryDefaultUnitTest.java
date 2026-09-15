@@ -15,8 +15,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 默认身份 true、归属店铺定型；归属缺失拒绝（catalog.shop_required 400，
  * 与既有 createFreightTemplate 同形态）。
  * <p>
- * 红阶段：createDefaultFreightTemplate 为签名冻结（实现缺失）——
- * 两用例红于 UnsupportedOperationException，绿阶段实现后转为断言期
+ * createDefaultFreightTemplate 为签名冻结（实现缺失）——
+ * 两用例红于 UnsupportedOperationException，实现后转为断言期
  * 验证。
  */
 class FreightTemplateFactoryDefaultUnitTest {

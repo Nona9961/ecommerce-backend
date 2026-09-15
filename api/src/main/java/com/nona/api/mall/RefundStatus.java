@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 退款单状态（线上契约枚举，接口层冻结——WU-59 回注，形状钉死前端
+ * 退款单状态（线上契约枚举，接口层冻结，形状钉死前端
  * mall-trading.types.ts {@code RefundStatus} 3 值逐名对应，与后端
  * RefundOrderStatus 状态机一致：FAILED 可重试）。
  * <p>

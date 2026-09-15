@@ -17,9 +17,9 @@ import java.util.List;
  * 主表行 = 聚合根身份（id = 支付单主键，payNo 唯一业务单号，order_id
  * 一对一锚点，channel_txn_no 唯一渠道流水 = 重复回调 DB 防线）；timeout_at
  * 领域 Instant 以 UTC 字面往返（datetime(6) 无时区字面语义，防服务器
- * 时区漂移改变已存值——D4 定案）；status/channelTxnNo 为持久化变更位。
+ * 时区漂移改变已存值）；status/channelTxnNo 为持久化变更位。
  * 超时 SQL 面两列（timeout_type/claimed）为仓储实现侧维护，转换器不
- * 读写（D11）。other 参数为从表留痕行集合（读路径由仓储 getOther
+ * 读写。other 参数为从表留痕行集合（读路径由仓储 getOther
  * 提供）。
  *
  * @author nona9961

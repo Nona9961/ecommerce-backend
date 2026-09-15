@@ -8,14 +8,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 测试数据清理（WU-53 F6）：数据级 DELETE，绝不 DROP / DROP DATABASE / Flyway clean。
+ * 测试数据清理：数据级 DELETE，绝不 DROP / DROP DATABASE / Flyway clean。
  * <p>
  * 由 {@code test-db-reset.sh} 以 JDK 单文件源码模式调用（JEP 330，零编译步骤）；
  * 凭证走环境变量（ECOM_DB_PASSWORD 必填，host/port/db/user 可选覆盖），零落盘零打印。
  * <p>
  * 语义：
  * <ul>
- * <li>{@code information_schema} 动态枚举 ecommerce_test 库 BASE TABLE，排除部署位探针表
+ * <li>{@code information_schema} 动态枚举目标库 BASE TABLE，排除自建探针表
  *     {@code cdc_probe} 与 Flyway 元数据表 {@code flyway_schema_history}——未来 V2+ 新表
  *     自动纳入，无表清单硬编码；</li>
  * <li>{@code SET FOREIGN_KEY_CHECKS=0} 双保险（PO 零关联注解、库中本无 FK，属过防御）；

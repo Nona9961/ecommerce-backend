@@ -3,7 +3,7 @@ package com.nona.api.mall;
 import java.util.Map;
 
 /**
- * 订单项视图（订单展示行，WU-59 回注——形状钉死前端
+ * 订单项视图（订单展示行，形状钉死前端
  * mall-trading.types.ts {@code OrderItemView}，与 OrderItem 实体快照
  * 逐字段对应；订单列表/详情/运单三个消费面共用）。
  * <p>

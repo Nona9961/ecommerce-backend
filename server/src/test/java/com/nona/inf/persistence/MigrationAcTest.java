@@ -20,26 +20,21 @@ import static org.assertj.core.api.Assertions.fail;
  * 迁移冒烟（契约：Flyway V1 落库前 schema 断言）。
  * <p>
  * 装配面：<b>纯 JDBC</b>（DriverManager + mysql-connector-j），不依赖 Spring 上下文——
- * 避免 ddl-auto / Flyway 自动迁移干扰被测面；连接宿主 MySQL 8.4.8 的 ecommerce 库
- * （localtunnel 13306→3306 隧道），not-null 主键、审计列、唯一约束、索引四组断言。
+ * 避免 ddl-auto / Flyway 自动迁移干扰被测面；连接 MySQL 8.4.8 业务库（本地隧道），
+ * not-null 主键、审计列、唯一约束、索引四组断言。
  * <p>
- * 凭证注入：环境变量 {@code ECOM_DB_PASSWORD}（运行命令模板从 /opt/data-stack/.env 的
- * MYSQL_ECOM_PW 映射导出；本文件及任何配置文件不得出现密码明文）。
+ * 凭证注入：环境变量 {@code ECOM_DB_PASSWORD}（本文件及任何配置文件不得出现密码明文）。
  * <p>
- * 运行（冒烟形态）：
+ * 运行（需先建立到数据库的隧道，凭证经环境变量注入）：
  * <pre>
- * rm -f /tmp/localtunnel.pids; pkill socat 2>/dev/null
- * set -a; . /opt/data-stack/.env; set +a
- * export ECOM_DB_PASSWORD="$MYSQL_ECOM_PW"
- * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend \
- *   &amp;&amp; mvn -o -llr -s /opt/code/.m2/settings.xml -Pfull -Dtest=MigrationAcTest test'
+ * mvn -Pfull -Dtest=MigrationAcTest test
  * </pre>
  * 测试分类：AcTest（surefire 默认排除，-Pfull 或 -Dtest 显式执行）。
  * <p>
  * <b>基线契约</b>：Flyway V1/V2 落库后 ecommerce 库
  * schema = 33 张 PO 映射表 + 探针表 cdc_probe 共存（精确集：33 张
  * PO 映射表全部存在且无多余业务表，cdc_probe 保留不受 V1/V2/
- * Flyway 触碰——探针表不入迁移脚本的部署位契约），其余用例保持常绿
+ * Flyway 触碰——探针表不入迁移脚本的契约），其余用例保持常绿
  */
 class MigrationAcTest {
 
@@ -153,7 +148,7 @@ class MigrationAcTest {
 
     /**
      * 迁移基线断言（基线契约）：V1/V2 落库后 ecommerce 库
-     * schema = 33 张 PO 映射表 + 部署位探针表 cdc_probe + Flyway 元数据表
+     * schema = 33 张 PO 映射表 + 自建探针表 cdc_probe + Flyway 元数据表
      * flyway_schema_history 的必备集——33 表全存在、cdc_probe 仍保留（迁移脚本不管理、
      * Flyway migrate 不触碰）；并断言无上述集合与测试支撑表之外的任何多余业务表
      * （测试支撑表随 test profile R 迁移存在与否均可，两种运行形态都绿）。
@@ -244,7 +239,7 @@ class MigrationAcTest {
 
     /**
      * MySQL 8.4 保留字核对：role / permission / assignment 三表名
-     * 在宿主 MySQL 8.4.8 实测可无引号建表（非保留字；探针实证），引号形态亦可。
+     * 在 MySQL 8.4.8 实测可无引号建表（非保留字；探针实证），引号形态亦可。
      * V1 脚本按此结论直接书写表名（可带反引号以显式表达意图）。
      * 临时表不进 binlog、会话结束自动清理，无 CDC 污染。
      */

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
  * append-only）。
  * <p>
  * 字段逐列一一对应；occurred_at 领域即 {@link java.time.LocalDateTime}
- * （simulator 本机时钟语义），直映射零转换（D4 例外注记）；description
+ * （simulator 本机时钟语义），直映射零转换；description
  * 可空直透。PO 行 id 与领域 id 一一对应。
  *
  * @author nona9961

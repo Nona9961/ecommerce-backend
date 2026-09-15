@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 搜索结果卡片（搜索列表项视图，WU-59 回注——形状钉死前端
+ * 搜索结果卡片（搜索列表项视图，形状钉死前端
  * searchApi.ts {@code SearchCardWire} 8 字段逐名对应，金额折分为元
  * 下行；与 search 域 ProductCard 字段原样对齐）。
  * <p>

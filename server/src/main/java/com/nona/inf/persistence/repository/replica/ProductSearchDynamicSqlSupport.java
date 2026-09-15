@@ -93,7 +93,7 @@ public final class ProductSearchDynamicSqlSupport {
     }
 
     /**
-     * product_search_view 视图表定义（部署位 DDL 同名同列；
+     * product_search_view 视图表定义（视图 DDL 同名同列；
      * 列名/JDBCType 与视图定义对齐，H2 模拟表同形）。
      */
     public static final class ProductSearchView extends AliasableSqlTable<ProductSearchView> {

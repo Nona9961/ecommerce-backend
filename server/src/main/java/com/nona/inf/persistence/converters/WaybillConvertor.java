@@ -15,7 +15,7 @@ import java.util.List;
  * 主表行 = 聚合根身份（id = 运单主键，sub_order_id 业务关联锚点，
  * company/tracking_no 录单必填）；status 状态机唯一可变位（单向相邻
  * 推进收敛在聚合方法 advanceTo）。<b>in_transit 派生态列</b>由本转换器
- * 按状态推导写入（D7/D10）：status != DELIVERED → TRUE（每子单至多
+ * 按状态推导写入：status != DELIVERED → TRUE（每子单至多
  * 一张在途行，uk_waybill_sub_order_in_transit 唯一防线）；DELIVERED
  * （签收）→ NULL（历史行承载，释放锚点后子单可再次发货）；FALSE 永
  * 不写。读路径以 status 重建，in_transit 列值不参与装载。other 参数

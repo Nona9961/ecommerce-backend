@@ -18,10 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * poll-until 断言 PG ecommerce_test 镜像基表行一致（三库同步链路
  * 已就绪后的写后读一致性自动化载体）。
  * <p>
- * 装配面：<b>纯 JDBC</b>（DriverManager 双连 MySQL 13306 → MySQL test、
- * PG 15432 → PG test），不依赖 Spring 上下文——MigrationAcTest 同构。
- * 凭证从环境变量读取（运行命令模板从 /opt/data-stack/.env 映射导出：
- * {@code ECOM_DB_PASSWORD} / {@code ECOM_PG_PASSWORD}），零落盘零打印。
+ * 装配面：<b>纯 JDBC</b>（DriverManager 双连 MySQL 主库与 PG 镜像库），
+ * 不依赖 Spring 上下文——MigrationAcTest 同构。
+ * 凭证从环境变量读取（{@code ECOM_DB_PASSWORD} / {@code ECOM_PG_PASSWORD}），
+ * 零落盘零打印。
  * <p>
  * 场景（probe-cdc.sh 链路同构，进程内独立断言）：
  * <ol>
@@ -38,13 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 不属于「红因不明」。红态判定：poll 超时/断言不满足 = 红（链路未就绪），
  * 全绿 = 链路就绪实证。
  * <p>
- * 运行（需 localtunnel 隧道，worktree 目录下执行）：
+ * 运行（需先建立到数据库的隧道，凭证经环境变量注入）：
  * <pre>
- * timeout 900 /opt/code/.pi/scripts/localtunnel.sh exec bash -c 'cd /opt/code/ecommerce-backend
- *   && set -a && . /opt/data-stack/.env && set +a
- *   && export ECOM_DB_PASSWORD="$MYSQL_ECOM_PW"
- *   && export ECOM_PG_PASSWORD="$ECOM_PG_PASSWORD"
- *   && mvn -o -llr -s /opt/code/.m2/settings.xml -Pfull -Dtest=CdcMirrorChainAcTest test'
+ * mvn -Pfull -Dtest=CdcMirrorChainAcTest test
  * </pre>
  *
  * @author nona9961

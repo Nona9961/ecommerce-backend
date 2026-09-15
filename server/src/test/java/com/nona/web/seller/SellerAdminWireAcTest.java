@@ -69,7 +69,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *         形状；SKU 移除后 join 缺失按数据异常呈现 fail-closed）。</li>
  * </ul>
  * 测试数据自清理（@BeforeEach 清本测试用表后直插）；运行渠道 =
- * test profile + MySQL 真库（ecommerce_test，宿主隧道 + -Pfull -Dtest
+ * test profile + MySQL 真库（本地隧道 + -Pfull -Dtest
  * 显式执行，同既有 AcTest 纪律）。
  *
  * @author nona9961

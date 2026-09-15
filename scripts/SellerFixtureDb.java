@@ -4,27 +4,25 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 
 /**
- * 商家/平台侧 walkthrough 数据库后门（WU-60 seller-fixture 自带文件，
- * 仅共享测试库 ecommerce_test 与账号/店铺造数约定——59/60 并行域
- * 无文件冲突）。
+ * 商家/平台侧 walkthrough 数据库后门（seller-fixture 自带文件，
+ * 仅共享测试库与账号/店铺造数约定）。
  * <p>
  * 用途：对测试库直插库存行/子单/订单项/运单 fixture（确定性造数面——
- * 库存行初始化链路无端点接线（红报告未决项 1）、60 分支无买家下单端点
- * （59 并行域未合入），walkthrough 订单面以本后门造数为准，真实买家
- * 链路登记未决）。发货端点（POST /seller/sub-orders/{id}/ship）走真实
+ * 库存行初始化链路无端点接线、买家下单端点未就绪），walkthrough 订单面以本
+ * 后门造数为准。发货端点（POST /seller/sub-orders/{id}/ship）走真实
  * 用例链路，不经本后门。
  * <p>
  * 运行形态（JDK 25 JEP 330 单文件源码模式，与 TestDbReset 同款：
  * 零编译产物，凭证走环境变量零落盘零打印）：
  * <pre>
- *   export ECOM_DB_PASSWORD="$MYSQL_ECOM_PW"
- *   CONN=$(find /opt/code/.m2/repository/com/mysql/mysql-connector-j \
+ *   export ECOM_DB_PASSWORD=...
+ *   CONN=$(find "$M2_REPO/com/mysql/mysql-connector-j" \
  *       -name 'mysql-connector-j-*.jar' 2>/dev/null | sort -V | tail -1)
  *   java --class-path "$CONN" scripts/SellerFixtureDb.java \
  *       seed-inventory &lt;shopId&gt; &lt;skuId&gt; &lt;available&gt; &lt;held&gt; &lt;sold&gt;
  * </pre>
  * 可选覆盖：ECOM_DB_HOST / ECOM_DB_PORT / ECOM_DB_NAME / ECOM_DB_USER
- * （默认 127.0.0.1:13306/ecommerce_test/ecom_app，同 TestDbReset）。
+ * （默认值同 TestDbReset）。
  * <p>
  * 命令：
  * <ul>
@@ -38,7 +36,7 @@ import java.sql.SQLException;
  *         直插运单 + 初始轨迹行（global 表；一子单一在途位 TRUE）。</li>
  * </ul>
  * 约束：本工具只做 INSERT / UPDATE 幂等修正，不 DELETE、不 DROP
- * （清理走 scripts/test-db-reset.sh 前置，同 WU-53 红线）。
+ * （清理走 scripts/test-db-reset.sh 前置，同清理红线）。
  *
  * @author nona9961
  */

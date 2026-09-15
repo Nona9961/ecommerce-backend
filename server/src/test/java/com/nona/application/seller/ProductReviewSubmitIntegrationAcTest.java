@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 商品审核流卖家侧接线集成测试（红阶段）：提交上架、完整性校验失败拒绝、
+ * 商品审核流卖家侧接线集成测试：提交上架、完整性校验失败拒绝、
  * 字段级编辑分流（在售改价转待审且生效内容保持旧价、待审不插编辑版本行）
  * 与展示字段直改不回归（绿色底座断言）、待审期冻结、在售回滚分流、非草稿
  * 删除拒绝。

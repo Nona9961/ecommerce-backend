@@ -58,7 +58,7 @@ class OrderFacadeRefundContractUnitTest {
     private SubOrderRepository subOrderRepository;
 
     /**
-     * 被测订单门面（红阶段不注册 Spring；依赖全 mock，setUp 装配）。
+     * 被测订单门面（不注册 Spring；依赖全 mock，setUp 装配）。
      */
     private OrderFacadeImpl facade;
 

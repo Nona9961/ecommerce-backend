@@ -23,7 +23,7 @@ import static org.mockito.Mockito.when;
  * 普通模板同构——列表/详情读通道不区分模板身份，开店后默认模板行经
  * 既有读路径正常呈现（恒非空契约的读面落点）。
  * <p>
- * 红阶段锚点：list/detail 为既有实现（未触碰），本文件用例应保持
+ * 契约锚点：list/detail 为既有实现（未触碰），本文件用例应保持
  * 绿色——证明读契约与模板身份正交、既有 CRUD 读面零破坏。
  */
 @ExtendWith(MockitoExtension.class)

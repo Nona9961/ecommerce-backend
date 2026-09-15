@@ -1,7 +1,7 @@
 package com.nona.api.admin;
 
 /**
- * 平台物流视图行响应体（平台运营物流监督列表行，WU-48 约定形状：GET
+ * 平台物流视图行响应体（平台运营物流监督列表行，约定形状：GET
  * /admin/logistics?shopId=&amp;status=&amp;pageNum=&amp;pageSize=，行单元 =
  * 子单）。
  * <p>

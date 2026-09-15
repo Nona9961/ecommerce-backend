@@ -12,8 +12,8 @@ import java.time.ZoneOffset;
  * 支付回调留痕实体 ↔ 支付回调留痕 PO 转换器（payment_callback_log 从表
  * 行映射，append-only）。
  * <p>
- * 六字段逐列映射；occurred_at（收到时间）领域 Instant 以 UTC 字面往返
- * （D4 定案）；refundNo 可空直透（PAY 回调不携带，领域构造器以类型/
+ * 六字段逐列映射；occurred_at（收到时间）领域 Instant 以 UTC 字面往返；
+ * refundNo 可空直透（PAY 回调不携带，领域构造器以类型/
  * 字段配套约束守卫）。PO 行 id 与领域 id 一一对应（留痕为标识实体）。
  *
  * @author nona9961

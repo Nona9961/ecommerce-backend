@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 而非规则形态）；默认模板禁停用（frozen 400）；普通模板（8 参构造）
  * 恒非默认。
  * <p>
- * 红阶段：9 参构造器/isDefault()/disable() 为签名冻结（实现缺失）——
- * 四用例红于 UnsupportedOperationException（或断言期），绿阶段实现后
+ * 9 参构造器/isDefault()/disable() 为签名冻结（实现缺失）——
+ * 四用例红于 UnsupportedOperationException（或断言期），实现后
  * 转为断言期验证。
  */
 class FreightTemplateDefaultContractUnitTest {

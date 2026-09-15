@@ -70,8 +70,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * AddressBookApiIntegrationAcTest 先例（注册落库 + 真实 JWT + 缓存
  * miss 回填真实状态）。
  * <p>
- * 红阶段状态：controller 方法体为 UOE 契约占位——全部用例红（500
- * generic 兜底）；绿阶段实现 controller 委托后按本矩阵转绿（mock 形
+ * 契约状态：controller 方法体为 UOE 契约占位——全部用例红（500
+ * generic 兜底）；实现 controller 委托后按本矩阵转绿（mock 形
  * 状不变，断言面不变）。
  */
 @SpringBootTest(properties = "management.health.redis.enabled=false")
@@ -258,7 +258,7 @@ class TradingApiContractAcTest {
     }
 
     /* ------------------------------------------------------------------ */
-    /* 端点契约用例（红阶段全红 = controller UOE；绿阶段实现后逐条转绿）   */
+    /* 端点契约用例（实现前全红 = controller UOE；实现后逐条转绿）   */
     /* ------------------------------------------------------------------ */
 
     @Test

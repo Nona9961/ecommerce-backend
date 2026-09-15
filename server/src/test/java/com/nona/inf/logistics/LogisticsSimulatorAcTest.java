@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 同款手触入口）；运单为 global 表（无租户过滤面），本类以自有数据
  * 锚定（固定 ID 段 66101/76101/86101），不触碰库中其他在途运单——
  * 手触扫描会推进全部到期在途运单，故本类造数后立即手触并断言自有行，
- * 其余到期行副作用登记装配面清单（宿主复核项）。
+ * 其余到期行副作用登记装配面清单（人工复核项）。
  * <p>
  * 单测（LogisticsSimulatorUnitTest / WaybillDeliveredReceiptListenerUnitTest）
  * 已锁推进与联动语义；本类只验证 mock 覆盖不到的装配面，不重复业务
@@ -252,7 +252,7 @@ class LogisticsSimulatorAcTest {
      * 断言面：以短节奏配置（秒级）跑真实时间推进——到期运单在配置
      * 间隔内推进落库，未到期保持原状；配置缺省回落默认值（30s/60s）
      * 语义由上下文装配面核对（本类以默认节奏 + 过去时刻轨迹验证到期
-     * 推进面，配置覆盖面登记装配面清单宿主复核项）。
+     * 推进面，配置覆盖面登记装配面清单人工复核项）。
      */
     @Test
     @DisplayName("冒烟-2 节奏配置生效：配置覆盖真实推进间隔")

@@ -1,5 +1,5 @@
 -- =============================================================================
--- V1.2 修正（WU-53 绿阶段完成面）：LONGVARCHAR 对齐——三 JSON 列定稿 longtext
+-- V1.2 修正：LONGVARCHAR 对齐——三 JSON 列定稿 longtext
 -- =============================================================================
 -- 【事由】V1.1 的 text 中间态经实测被 Hibernate validate 拒收：@Lob String 的
 --   期望类型 = tinytext (Types#CLOB)，表列 text (Types#LONGVARCHAR) → wrong

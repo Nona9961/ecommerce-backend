@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 支付单状态（线上契约枚举，接口层冻结——WU-59 回注，形状钉死前端
+ * 支付单状态（线上契约枚举，接口层冻结，形状钉死前端
  * mall-trading.types.ts {@code PaymentStatus} 4 值逐名对应，与后端
  * PaymentOrderStatus 状态机一致）。
  * <p>

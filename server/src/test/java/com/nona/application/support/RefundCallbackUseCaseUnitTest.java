@@ -61,7 +61,7 @@ import static org.mockito.Mockito.when;
  * <p>
  * 依赖装配：仓库/门面/提权/事务全部 mock 承载（编排契约断言面）；提权
  * 事务以 mock 直执行（真实事务回滚属应用层注解面，冒烟清单覆盖）。
- * 红阶段失败原因 = 实现缺失（handleRefundCallback 方法体 UOE）。
+ * 失败原因 = 实现缺失（handleRefundCallback 方法体 UOE）。
  *
  * @author nona9961
  */

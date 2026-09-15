@@ -37,10 +37,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * （PAID 已到期标 / 已发货残留 deadline 不标）；未登录取数 401。
  * <p>
  * 镜像表数据面说明：waybill/sub_order/shop 三表为 CDC 镜像（PG 侧
- * 结构由部署位迁移塑造）——本测试以 fixture 直插镜像行验证查询链路
+ * 结构由外部迁移塑造）——本测试以 fixture 直插镜像行验证查询链路
  * 与判定语义（镜像同步链路本身的行数核对属验收前人工动作，见
  * PlatformLogisticsViewAcTest 冒烟-3）。运行渠道 = test profile +
- * 宿主隧道（PG 15432），-Pfull -Dtest 显式执行。
+ * 本地隧道（PG），-Pfull -Dtest 显式执行。
  *
  * @author nona9961
  */

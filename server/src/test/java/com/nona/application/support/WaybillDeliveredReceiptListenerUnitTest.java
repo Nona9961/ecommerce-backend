@@ -40,7 +40,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 签收自动完成消费方场景测试（物流签收事件 → 订单完成联动，红阶段
+ * 签收自动完成消费方场景测试（物流签收事件 → 订单完成联动
  * 契约）：
  * <p>
  * happy——事件到达提交异步任务 / 任务执行完成联动（提权段内子单推进
@@ -52,9 +52,9 @@ import static org.mockito.Mockito.when;
  * 装配纪律：@BeforeEach 重建被测监听（禁字段初始化 new X(mock)）；
  * 提权事务桩直执行（lenient——短路/静默路径不触达提权段，先例同
  * 形）；Waybill/Sellout 同款事件使用真实构造（事件契约豁免）；桩
- * 纪律：红阶段 UOE 挡道（onWaybillDelivered/autoCompleteOnDelivered
+ * 纪律：UOE 挡道（onWaybillDelivered/autoCompleteOnDelivered
  * 未接线），提权/执行器通用桩 lenient 豁免，红因纯净 = 100% 实现
- * 缺失；绿阶段实现后收回精确桩。
+ * 缺失；实现后收回精确桩。
  *
  * @author nona9961
  */
@@ -88,7 +88,7 @@ class WaybillDeliveredReceiptListenerUnitTest {
     private Executor waybillEventExecutor;
 
     /**
-     * 被测消费方（红阶段不注册 Spring；依赖全 mock，setUp 装配）
+     * 被测消费方（不注册 Spring；依赖全 mock，setUp 装配）
      */
     private WaybillDeliveredReceiptListener listener;
 

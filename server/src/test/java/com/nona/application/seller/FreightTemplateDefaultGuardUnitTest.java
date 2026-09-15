@@ -21,7 +21,7 @@ import static org.mockito.Mockito.when;
 /**
  * 默认运费模板冻结守卫契约测试（回退锚点恒可用）：默认模板禁删除——
  * 删除入口（商家端用例 delete）对默认模板拒绝（frozen 400）且不落
- * 删除；普通模板删除不受影响（回归锚点）。红阶段：delete 行为签名
+ * 删除；普通模板删除不受影响（回归锚点）。delete 行为签名
  * 冻结（实现缺失）——两类契约测试红于 UnsupportedOperationException。
  */
 @ExtendWith(MockitoExtension.class)

@@ -41,11 +41,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>
  * 装配策略：搜索用例 bean 以 {@code @MockitoBean} 替换为 mock（容器仅
  * 验证路由/MVC 装配与形状投影——搜索真实链（PG 镜像/product_search_view）
- * 受 test 库无真视图约束归 walkthrough 分支（真链面留待部署位验证）；
+ * 受 test 库无真视图约束归 walkthrough 分支（真链面留待真实部署验证）；
  * 认证沿用 AddressBookApiIntegrationAcTest 先例。
  * <p>
- * 红阶段状态：controller 方法体为 UOE 契约占位——本类全部用例红
- * （500 generic 兜底；auth-1 为恒绿锚点）；绿阶段实现 controller
+ * 契约状态：controller 方法体为 UOE 契约占位——本类全部用例红
+ * （500 generic 兜底；auth-1 为恒绿锚点）；实现 controller
  * 委托后按本矩阵转绿（mock 形状不变，断言面不变）。
  */
 @SpringBootTest(properties = "management.health.redis.enabled=false")

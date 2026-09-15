@@ -37,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 买家交易 REST 控制器（路由前缀 /mall：estimate/orders/payments/
  * sub-orders/refunds，仅买家角色可访问）——端点契约冻结，
- * 形状钉死前端约定清单（tradingApi.ts 10 端点逐名对应）。
+ * 形状钉死前端约定（tradingApi.ts 10 端点逐名对应）。
  * <p>
  * 控制器保持薄壳：参数校验（JSR-380）+ 委托用例，不承载业务逻辑；
  * 当前买家账号 ID 从跟踪上下文取（认证过滤器已填充，买家维度由此

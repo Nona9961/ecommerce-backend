@@ -5,8 +5,8 @@ import com.nona.api.common.PageResult;
 
 /**
  * 买家交易契约（/mall/estimate、/mall/orders、/mall/payments、
- * /mall/sub-orders、/mall/refunds，BUYER 角色）——WU-59 回注冻结：
- * 端点形态（路径/方法/参数/响应形状）由前端 WU-44 约定清单钉死
+ * /mall/sub-orders、/mall/refunds，BUYER 角色）——冻结：
+ * 端点形态（路径/方法/参数/响应形状）由前端约定钉死
  * （tradingApi.ts 10 端点逐名对应），后端按同形状接入，字段不再演进。
  * <p>
  * 请求/响应语义：

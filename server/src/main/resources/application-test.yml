@@ -1,10 +1,6 @@
-# 测试装配：-Dspring.profiles.active=test 激活（system property
-# 优先于根配置 active: dev）。
-# 主库 = 独立测试库 MySQL ecommerce_test（宿主 3306 经 localtunnel 隧道
-# 13306，Flyway V1 从零塑造）——验收面与开发/演示库 ecommerce 分库隔离，
-# 测试数据独立可 reset；
-# replica 读库面切真实 PostgreSQL（ecommerce_test 库，localtunnel 隧道
-# 15432），消除 H2 模拟与真库的方言不一致面。
+# 测试装配：-Dspring.profiles.active=test 激活（system property 优先于根配置）。
+# 主库为独立测试库，Flyway 从零塑造——验收面与开发/演示面分库隔离，测试数据
+# 独立可 reset；replica 读库面切真实 PostgreSQL，消除 H2 模拟与真库的方言不一致。
 # nona.security / nona.storage 等根 application.yml 段无 profile 依赖，自动继承。
 spring:
   datasource:
@@ -12,10 +8,10 @@ spring:
     username: ecom_app
     password: ${ECOM_DB_PASSWORD}
     hikari:
-      # 池上限 5：宿主 MySQL max_connections=151（实测），-Pfull 全量下多个不同
-      # 配置的 Spring 上下文并存（surefire 单进程顺序跑，上下文缓存直到 JVM 尾）
-      # 各建独立 Hikari 池——池 20 × 并存上下文数 > 151 触顶（Too many connections
-      # 级联失败）；池 5 × ~15 上限 ≈ 75 + 部署位占用，余量充足
+      # 池上限 5：全量测试下多个不同配置的 Spring 上下文并存（surefire 单进程
+      # 顺序跑，上下文缓存直到 JVM 尾）各建独立 Hikari 池——池 20 × 并存上下文数
+      # 会触顶数据库 max_connections=151（实测）而级联失败（Too many connections）；
+      # 池 5 × ~15 上限 ≈ 75，余量充足
       maximum-pool-size: 5
       connection-timeout: 30000
       idle-timeout: 300000
@@ -59,8 +55,8 @@ nona:
     # 调度关闭：-Pfull 验收面确定性，不因调度节奏抖动
     enabled: false
 
-# replica 测试装配：真实 PostgreSQL（ecommerce_test 库）承载 product_search_view
-# 搜索读模型与平台物流视图镜像表，消除 H2 模拟的方言不一致
+# replica 测试装配：真实 PostgreSQL 承载 product_search_view 搜索读模型与
+# 平台物流视图镜像表，消除 H2 模拟的方言不一致
 replica:
   datasource:
     url: jdbc:postgresql://127.0.0.1:15432/ecommerce_test

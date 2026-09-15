@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * 本店子订单详情响应体（商家订单详情分组：商品快照/金额明细/地址/物流
- * 信息，WU-47 约定形状：GET /seller/orders/{subOrderId}）。
+ * 信息，约定形状：GET /seller/orders/{subOrderId}）。
  * <p>
  * 形态契约：status 为履约状态枚举名；金额一律分（前端换算为元）；
  * waybill 为运单概要——未发货子单为 null（无运单）、已发货子单非空

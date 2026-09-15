@@ -35,12 +35,12 @@ import static org.mockito.Mockito.when;
  *         poll-until PG 镜像收敛（3 行齐 + 99110 不存——tombstone 队列排空），
  *         replica 侧「无写后新行」形态由此确定；</li>
  *     <li>窗口命中用例（专属）：追加插 99110（Apple iPhone 16 Pro）→ MySQL
- *         实时视图（部署位同构 DDL）立即聚合 → primary 通道 total=2
+ *         实时视图（外部同构 DDL）立即聚合 → primary 通道 total=2
  *         （read-your-writes 语义落在主库通道，不依赖 CDC 延迟）；</li>
  *     <li>窗口外/匿名/null/降级四用例：replica 通道断言 total=1（只有 99101
  *         「Apple」命中）——PG 镜像行集由 poll 等待面钉死，确定性成立。</li>
  * </ul>
- * 视图均为部署位真实聚合（PG 镜像视图 / MySQL 实时视图），不再是模拟表承载的
+ * 视图均为真实聚合（PG 镜像视图 / MySQL 实时视图），不再是模拟表承载的
  * 宽松直读——写后可见性（主库视图聚合含新行）与窗口外镜像一致（replica 无新行）
  * 均经真实 SQL 路径。
  * <p>
@@ -53,7 +53,7 @@ import static org.mockito.Mockito.when;
  *     <li>fail：判定设施故障（降级 false 语义）→ replica（可能旧一秒，
  *         可接受）。</li>
  * </ul>
- * 红阶段：窗口路由未实现（UnsupportedOperationException），失败原因 =
+ * 窗口路由未实现（UnsupportedOperationException），失败原因 =
  * 实现缺失，非装配错误。
  *
  * @author nona9961

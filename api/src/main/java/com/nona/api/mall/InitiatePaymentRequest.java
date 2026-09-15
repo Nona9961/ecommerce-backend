@@ -1,7 +1,7 @@
 package com.nona.api.mall;
 
 /**
- * 发起支付请求体（WU-59 回注——形状钉死前端
+ * 发起支付请求体（形状钉死前端
  * mall-trading.types.ts {@code InitiatePaymentRequest}：POST /mall/payments）。
  * <p>
  * 语义对齐 PaymentUseCase.initiatePaymentWithView：按主单定位发起支付。

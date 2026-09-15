@@ -18,7 +18,7 @@ import javax.sql.DataSource;
  * 装配形态决策：<b>replica 以 JdbcTemplate 直连形态暴露</b>，不注册
  * DataSource bean、不建第二套 EntityManagerFactory：
  * <ul>
- *     <li>视图无实体映射：product_search_view 是 PG 内建视图（部署位
+ *     <li>视图无实体映射：product_search_view 是 PG 内建视图（外部
  *         DDL），无 JPA 实体/PO 可挂——EMF 空转且引入实体扫描/租户
  *         resolver 双套配置的复杂度；</li>
  *     <li>SQL 由 MyBatis Dynamic SQL 类型安全生成（官方 support 类 +
@@ -50,7 +50,7 @@ import javax.sql.DataSource;
  *         语义由结构保证（PG 镜像表只服务读场景）。</li>
  * </ul>
  * 配置位：{@code replica.datasource.*}（dev/test 指向 H2 内存模拟库跑
- * 服务语义；prod 指向 PG 读库，见部署位联调说明）。
+ * 服务语义；prod 指向 PG 读库）。
  *
  * @author nona9961
  */

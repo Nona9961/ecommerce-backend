@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 2026-09-11 真视图化修订：test 搜索走真实 PG——不再自建模拟表）。
  * <p>
  * 测试策略（修订契约）：replica 数据源 = 真 PostgreSQL（ecommerce_test 库，
- * application-test.yml），查询对象 = 部署位真实视图 {@code product_search_view}
+ * application-test.yml），查询对象 = 真实视图 {@code product_search_view}
  * （PG DDL：镜像表 JOIN 聚合，在售 × 有货 × 有定价）。fixture 直插镜像底层表
  * （shop/brand/product/product_sku/product_image/inventory_item），由视图执行
  * 真实聚合——聚合/过滤/排序语义与生产同构，不再依赖模拟表承载的宽松列契约。

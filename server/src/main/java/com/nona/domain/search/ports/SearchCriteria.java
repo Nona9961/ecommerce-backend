@@ -8,7 +8,7 @@ package com.nona.domain.search.ports;
  *     <li>keyword：关键词，匹配商品标题/描述（ILIKE，大小写不敏感）；
  *         空白/未传视为不限定；</li>
  *     <li>categoryId / brandId / shopId：平台一级类目/品牌/店铺过滤
- *         （与业务模型分类/品牌/店铺三过滤器一致，D7-srch1）；</li>
+ *         （与业务模型分类/品牌/店铺三过滤器一致）；</li>
  *     <li>minPrice / maxPrice：价格闭区间（分，单位与商品 SKU 价一致；
  *         两端含端点；null=开区间）；</li>
  *     <li>sort：排序（null=默认 TIME_DESC）。</li>
